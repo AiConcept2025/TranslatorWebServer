@@ -1,0 +1,66 @@
+# FastAPI and ASGI server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Pydantic for data validation and serialization
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# File handling and processing
+python-multipart==0.0.6
+aiofiles==23.2.1
+python-magic==0.4.27
+
+# Translation services
+googletrans==4.0.0rc1
+deep-translator==1.11.4
+
+# Payment processing
+stripe==7.8.0
+
+# HTTP client for API calls
+httpx==0.25.2
+aiohttp==3.9.1
+
+# Database (if needed for storing translation history)
+sqlalchemy==2.0.23
+alembic==1.13.1
+asyncpg==0.29.0  # PostgreSQL async driver
+aiomysql==0.2.0  # MySQL async driver
+aiosqlite==0.19.0  # SQLite async driver
+
+# Caching
+redis==5.0.1
+aioredis==2.0.1
+
+# Security and authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Environment configuration
+python-dotenv==1.0.0
+
+# Logging and monitoring
+structlog==23.2.0
+
+# Rate limiting
+slowapi==0.1.9
+
+# CORS support
+python-cors==1.7.0
+
+# Background tasks
+celery==5.3.4
+redis==5.0.1  # For Celery broker
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2  # For testing async endpoints
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
+
+# Documentation
+sphinx==7.2.6

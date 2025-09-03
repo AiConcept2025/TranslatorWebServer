@@ -85,10 +85,10 @@ async def root():
         "environment": settings.environment,
         "documentation": "/docs" if settings.debug else "Documentation disabled in production",
         "endpoints": {
-            "languages": "/api/v1/languages",
-            "files": "/api/v1/files",
-            "translate": "/api/v1/translate",
-            "payments": "/api/v1/payments",
+            "languages": "/api/languages",
+            "upload": "/api/upload",
+            "translate": "/api/translate", 
+            "payment": "/api/payment/create-intent",
             "health": "/health"
         }
     }
@@ -130,15 +130,7 @@ async def api_info():
     return {
         "api_version": "v1",
         "app_version": settings.app_version,
-        "features": {
-            "text_translation": True,
-            "file_translation": True,
-            "batch_translation": True,
-            "language_detection": True,
-            "file_upload": True,
-            "payment_processing": True,
-            "multiple_services": True
-        },
+        "features": {},
         "supported_formats": settings.allowed_file_extensions,
         "max_file_size_mb": round(settings.max_file_size / (1024 * 1024), 2)
     }

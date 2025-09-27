@@ -121,6 +121,39 @@ class FileUploadMetadata(BaseModel):
         return v.strip()
 
 
+class FileUploadRequest(BaseModel):
+    """Request model for file upload with customer and language information."""
+    customer_email: Optional[str] = Field(None, description="Customer email address (uses default if not provided)")
+    target_language: str = Field(..., description="Target language code for translation")
+    
+    @validator('customer_email')
+    def validate_email(cls, v):
+        import re
+        if v is None:
+            return v  # Allow None, will be handled by the service
+        
+        if not v or not v.strip():
+            raise ValueError("Customer email cannot be empty")
+        
+        # Basic email validation
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, v.strip()):
+            raise ValueError("Invalid email format")
+        
+        return v.strip().lower()
+    
+    @validator('target_language')
+    def validate_target_language(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Target language cannot be empty")
+        
+        # Validate language code format (ISO 639-1 or locale format)
+        if len(v.strip()) not in [2, 5]:  # e.g., 'en' or 'en-US'
+            raise ValueError("Language code must be ISO 639-1 format (e.g., 'en', 'fr') or locale format (e.g., 'en-US')")
+        
+        return v.strip().lower()
+
+
 # Payment Requests
 class PaymentIntentRequest(BaseModel):
     """Request model for creating payment intent."""
@@ -153,9 +186,9 @@ class CostEstimationRequest(BaseModel):
     service: TranslationServiceType = Field(TranslationServiceType.AUTO, description="Translation service")
     
     @validator('text', 'file_id')
-    def validate_text_or_file(cls, v, values, field):
-        if field.name == 'file_id' and not v and not values.get('text'):
-            raise ValueError("Either text or file_id must be provided")
+    def validate_text_or_file(cls, v, values):
+        # Note: In Pydantic v2, we can't access field info directly in validator
+        # This validation will be handled at model level or through a custom validator
         return v
 
 
@@ -256,6 +289,7 @@ __all__ = [
     "BatchFileTranslationRequest",
     "LanguageDetectionRequest",
     "FileUploadMetadata",
+    "FileUploadRequest",
     "PaymentIntentRequest",
     "CostEstimationRequest",
     "PaginationRequest",

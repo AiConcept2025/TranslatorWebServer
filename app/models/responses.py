@@ -69,6 +69,18 @@ class Language(BaseModel):
     supported_by: List[str] = Field(default_factory=list, description="Translation services supporting this language")
 
 
+class SimpleLanguage(BaseModel):
+    """Simple language model for supported languages endpoint."""
+    code: str = Field(..., description="Language code")
+    name: str = Field(..., description="Language name")
+
+
+class SupportedLanguagesResponse(BaseModel):
+    """Response model for supported languages endpoint."""
+    success: bool = True
+    data: List[SimpleLanguage]
+
+
 class LanguageListResponse(BaseResponse):
     """Response model for language listing."""
     languages: List[Language]
@@ -97,6 +109,28 @@ class UploadResponse(BaseResponse):
     file_id: str = Field(..., description="Unique file identifier")
     file_info: FileInfo
     upload_url: Optional[str] = None
+
+
+class FileUploadResult(BaseModel):
+    """File upload result for individual files."""
+    filename: str
+    file_id: str
+    status: str  # "success", "failed"
+    message: Optional[str] = None
+    file_size: int
+    content_type: str
+    google_drive_folder: Optional[str] = None
+
+
+class FileUploadResponse(BaseResponse):
+    """Response model for the new /api/upload endpoint."""
+    customer_email: str
+    target_language: str
+    total_files: int
+    successful_uploads: int
+    failed_uploads: int
+    results: List[FileUploadResult]
+    google_drive_folder_path: Optional[str] = None
 
 
 class FileListResponse(BaseResponse):
@@ -312,10 +346,14 @@ __all__ = [
     "ErrorResponse",
     "HealthResponse",
     "Language",
+    "SimpleLanguage",
+    "SupportedLanguagesResponse",
     "LanguageListResponse",
     "LanguageDetectionResponse",
     "FileInfo",
     "UploadResponse",
+    "FileUploadResult",
+    "FileUploadResponse",
     "FileListResponse",
     "TranslationResult",
     "TranslationResponse",

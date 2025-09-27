@@ -4,7 +4,8 @@ Configuration management for the Translation Web Server.
 
 from functools import lru_cache
 from typing import List, Optional
-from pydantic import BaseSettings, validator
+from pydantic_settings import BaseSettings
+from pydantic import validator
 import os
 
 
@@ -44,9 +45,25 @@ class Settings(BaseSettings):
     
     # File Upload Configuration
     max_file_size: int = 10485760  # 10MB
-    allowed_file_types: str = "txt,doc,docx,pdf,rtf,odt"
+    allowed_file_types: str = "txt,doc,docx,pdf,rtf,odt,jpeg,jpg,png,tiff,tif"
     upload_dir: str = "./uploads"
     temp_dir: str = "./uploads/temp"
+    
+    # Document and Image Size Limits
+    max_document_size: int = 104857600  # 100MB for documents
+    max_image_size: int = 52428800      # 50MB for images
+    
+    # Google Drive Configuration
+    google_drive_enabled: bool = True
+    google_drive_credentials_path: str = "./service-account-key.json"
+    google_drive_token_path: str = "./token.json"
+    google_drive_root_folder: str = "IrisSolutions"
+    google_drive_scopes: str = "https://www.googleapis.com/auth/drive"
+    google_drive_application_name: str = "TranslatorWebServer"
+    
+    # Customer Configuration
+    default_customer_email: str = "ben.danishevsky@gmail.com"  # Used for folder names only
+    google_drive_owner_email: str = "danishevsky@gmail.com"    # Actual file owner (.env account)
     
     # Rate Limiting
     rate_limit_requests: int = 100

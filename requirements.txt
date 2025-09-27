@@ -11,6 +11,11 @@ python-multipart==0.0.6
 aiofiles==23.2.1
 python-magic==0.4.27
 
+# Google Drive API
+google-api-python-client==2.108.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.1.0
+
 # Translation services
 googletrans==4.0.0rc1
 deep-translator==1.11.4
@@ -57,10 +62,18 @@ redis==5.0.1  # For Celery broker
 # Development and testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
+pytest-mock==3.12.0  # For mocking utilities
+pytest-cov==4.1.0  # For coverage reporting
+pytest-xdist==3.5.0  # For parallel test execution
+pytest-timeout==2.2.0  # For test timeouts
 httpx==0.25.2  # For testing async endpoints
+requests-mock==1.11.0  # For HTTP request mocking
+factory-boy==3.3.0  # For test data factories
+faker==20.1.0  # For generating fake test data
 black==23.11.0
 flake8==6.1.0
 mypy==1.7.1
+coverage==7.3.2  # Coverage analysis tool
 
 # Documentation
 sphinx==7.2.6

@@ -120,6 +120,8 @@ class FileUploadResult(BaseModel):
     file_size: int
     content_type: str
     google_drive_folder: Optional[str] = None
+    page_count: Optional[int] = Field(None, description="Number of pages in the document (-1 if unsupported format)")
+    supports_page_counting: Optional[bool] = Field(None, description="Whether the file format supports page counting")
 
 
 class FileUploadResponse(BaseResponse):

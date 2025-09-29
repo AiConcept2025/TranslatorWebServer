@@ -40,36 +40,41 @@
 - `files` (required): File[] - Files to upload
 
 **Supported File Types:**
-- Documents: PDF (.pdf), Word (.doc, .docx) - Max 100MB each
+- Documents: PDF (.pdf), Word (.doc, .docx), RTF (.rtf), Text (.txt) - Max 100MB each
 - Images: JPEG (.jpeg, .jpg), PNG (.png), TIFF (.tiff, .tif) - Max 50MB each
+
+**Page Counting Support:**
+All uploaded files must support page counting functionality. Files with unsupported formats will be rejected.
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Files uploaded successfully",
-  "folder_id": "1UyC-P8P44GOpJ7w40cLB2_2L3Pc4qDxv",
-  "folder_path": "IrisSolutions/customer@email.com/Temp",
+  "message": "Upload completed: 1 successful, 0 failed",
   "customer_email": "customer@email.com",
   "target_language": "es",
-  "uploaded_files": [
+  "total_files": 1,
+  "successful_uploads": 1,
+  "failed_uploads": 0,
+  "results": [
     {
-      "file_id": "1TV8LYChypfMm0uH7bSNQfs9KD9zI8ReZ",
       "filename": "document.pdf",
-      "size": 1048576,
-      "status": "uploaded",
-      "google_drive_url": "https://drive.google.com/file/d/1TV8LYChypfMm0uH7bSNQfs9KD9zI8ReZ/view",
-      "target_language": "es"
+      "file_id": "1TV8LYChypfMm0uH7bSNQfs9KD9zI8ReZ",
+      "status": "success",
+      "message": "File uploaded successfully. Pages: 5",
+      "file_size": 1048576,
+      "content_type": "application/pdf",
+      "google_drive_folder": "1UyC-P8P44GOpJ7w40cLB2_2L3Pc4qDxv",
+      "page_count": 5,
+      "supports_page_counting": true
     }
   ],
-  "failed_files": [],
-  "total_uploaded": 1,
-  "total_failed": 0
+  "google_drive_folder_path": "1UyC-P8P44GOpJ7w40cLB2_2L3Pc4qDxv"
 }
 ```
 
 **Errors:**
-- `400` - Invalid request parameters, unsupported file type, file too large
+- `400` - Invalid request parameters, unsupported file type, file too large, file format not supported for page counting
 - `422` - Validation error (invalid email format, missing target_language)
 - `500` - Google Drive service error, upload failed
 
@@ -77,16 +82,34 @@
 ```json
 {
   "success": false,
-  "error": "Error description",
-  "detail": "Detailed error message",
-  "failed_files": [
+  "message": "Upload completed: 0 successful, 1 failed",
+  "customer_email": "customer@email.com",
+  "target_language": "es",
+  "total_files": 1,
+  "successful_uploads": 0,
+  "failed_uploads": 1,
+  "results": [
     {
-      "filename": "file.txt",
-      "error": "Unsupported file type"
+      "filename": "unsupported.xyz",
+      "file_id": "",
+      "status": "failed",
+      "message": "File format not supported for page counting. Supported formats: .doc, .docx, .jpeg, .jpg, .pdf, .png, .rtf, .tiff, .txt",
+      "file_size": 1024,
+      "content_type": "application/octet-stream",
+      "google_drive_folder": null,
+      "page_count": null,
+      "supports_page_counting": false
     }
-  ]
+  ],
+  "google_drive_folder_path": null
 }
 ```
+
+**New Page Counting Features:**
+- Each uploaded file is validated for page counting support
+- Only files with supported formats (.pdf, .doc, .docx, .txt, .rtf, .png, .jpg, .jpeg, .tiff) are accepted
+- Response includes page count for each successfully uploaded file
+- Files with unsupported formats are rejected with descriptive error messages
 
 ## Base URL
 `http://localhost:8000` (development)

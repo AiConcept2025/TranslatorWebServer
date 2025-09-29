@@ -13,6 +13,8 @@ from app.models.requests import FileUploadRequest
 from app.models.responses import FileUploadResponse, FileUploadResult
 from app.utils.file_validation import file_validator
 from app.services.google_drive_service import google_drive_service
+from app.services.file_service import file_service
+from app.services.page_counter_service import page_counter_service
 from app.config import settings
 from app.exceptions.google_drive_exceptions import (
     GoogleDriveError,
@@ -133,6 +135,18 @@ async def upload_files(
             
             print(f"Hello World - File validation passed for: {result.filename}")
             
+            # Check if file format supports page counting
+            supports_page_counting = page_counter_service.is_supported_format(result.filename)
+            result.supports_page_counting = supports_page_counting
+            
+            if not supports_page_counting:
+                result.status = "failed"
+                result.message = f"File format not supported for page counting. Supported formats: {', '.join(page_counter_service.get_supported_formats())}"
+                print(f"Hello World - Page counting validation failed: {result.message}")
+                failed_uploads += 1
+                upload_results.append(result)
+                continue
+            
             # Generate unique file ID
             file_id = str(uuid.uuid4())
             result.file_id = file_id
@@ -180,10 +194,36 @@ async def upload_files(
                 logging.warning(f"Metadata update failed for {file_info['file_id']}: {e.message}")
                 # Continue with success since the file was uploaded
             
+            # Count pages in the uploaded file
+            try:
+                # For stub implementation, we'll simulate page counting based on file extension
+                # In real implementation, we'd save the file locally first, then count pages
+                file_extension = os.path.splitext(result.filename)[1].lower()
+                
+                # Simulate page count based on file type (stub implementation)
+                if file_extension == '.pdf':
+                    page_count = 5  # Simulate 5 pages for PDF
+                elif file_extension in ['.doc', '.docx']:
+                    page_count = 3  # Simulate 3 pages for Word docs
+                elif file_extension == '.txt':
+                    page_count = 2  # Simulate 2 pages for text files
+                elif file_extension == '.rtf':
+                    page_count = 2  # Simulate 2 pages for RTF
+                elif file_extension in ['.png', '.jpg', '.jpeg', '.tiff']:
+                    page_count = 1  # Images are single page
+                else:
+                    page_count = 1  # Default
+                
+                result.page_count = page_count
+                print(f"Hello World - Simulated page count for {result.filename}: {page_count}")
+            except Exception as e:
+                print(f"Hello World - Error counting pages for {result.filename}: {e}")
+                result.page_count = -1
+            
             # Mark as successful
             result.file_id = file_info['file_id']
             result.status = "success"
-            result.message = "File uploaded successfully"
+            result.message = f"File uploaded successfully. Pages: {result.page_count}"
             successful_uploads += 1
             
         except HTTPException as e:
@@ -300,3 +340,5 @@ async def upload_files_legacy(files: List[UploadFile] = File(...)):
             "message": "This endpoint is deprecated. Use /api/upload with customer_email and target_language parameters."
         }
     )
+
+

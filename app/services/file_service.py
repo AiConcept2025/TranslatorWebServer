@@ -4,6 +4,8 @@ File handling service for the Translation Web Server.
 
 import os
 import uuid
+import json
+import aiofiles
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple, BinaryIO
 from fastapi import UploadFile, HTTPException
@@ -11,6 +13,7 @@ from datetime import datetime, timedelta
 
 from app.config import settings
 from app.models.responses import FileInfo, FileType
+from app.services.page_counter_service import page_counter_service
 
 
 class FileService:
@@ -209,6 +212,46 @@ class FileService:
         stub_deleted_count = 3
         print(f"Hello World - Stubbed cleanup deleted {stub_deleted_count} files")
         return stub_deleted_count
+    
+    async def get_page_count(self, file_id: str) -> int:
+        """
+        Get page count for a file by its ID.
+        
+        Args:
+            file_id: The file identifier
+            
+        Returns:
+            Number of pages in the document, -1 if error or unsupported format
+        """
+        try:
+            return await page_counter_service.count_pages_by_file_id(
+                file_id, str(self.upload_dir)
+            )
+        except Exception as e:
+            print(f"Error getting page count for file {file_id}: {e}")
+            return -1
+    
+    async def get_file_info_with_pages(self, file_id: str) -> Dict[str, Any]:
+        """
+        Get file information with page count by ID.
+        
+        Args:
+            file_id: The file identifier
+            
+        Returns:
+            Dictionary with file info and page count
+            
+        Raises:
+            HTTPException: If file not found
+        """
+        file_info = await self.get_file_info(file_id)
+        page_count = await self.get_page_count(file_id)
+        
+        return {
+            'file_info': file_info.dict(),
+            'page_count': page_count,
+            'supports_page_counting': page_counter_service.is_supported_format(file_info.filename)
+        }
     
     async def get_storage_stats(self) -> Dict[str, Any]:
         """

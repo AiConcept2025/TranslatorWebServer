@@ -1,0 +1,3 @@
+[submodule "app/app-counter"]
+	path = app/app-counter
+	url = https://github.com/AiConcept2025/PageCounter

@@ -74,6 +74,17 @@ app.include_router(upload.router)
 app.include_router(translate.router)
 app.include_router(payment.router)
 
+# Compatibility redirects for old endpoints
+@app.post("/translate", tags=["Compatibility"])
+async def translate_redirect():
+    """Redirect old /translate endpoint to new /api/translate endpoint."""
+    logging.warning("DEPRECATED: /translate endpoint called. Use /api/translate instead.")
+    raise HTTPException(
+        status_code=308,  # Permanent redirect
+        detail="This endpoint has moved to /api/translate",
+        headers={"Location": "/api/translate"}
+    )
+
 # Root endpoint
 @app.get("/", tags=["Root"])
 async def root():

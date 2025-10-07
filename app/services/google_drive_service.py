@@ -381,6 +381,153 @@ class GoogleDriveService:
         logging.info(f"Folder info: {folder_info['total_files']} files, {folder_info['total_size_mb']}MB")
         return folder_info
     
+    @handle_google_drive_exceptions("move files to inbox")
+    async def move_files_to_inbox_on_payment_success(self, customer_email: str, file_ids: List[str]) -> Dict[str, Any]:
+        """
+        Move files from Temp to Inbox folder when payment is confirmed.
+        
+        Args:
+            customer_email: Customer's email address
+            file_ids: List of file IDs to move
+            
+        Returns:
+            Dictionary with move operation results
+            
+        Raises:
+            GoogleDriveError: If file movement fails
+        """
+        logging.info(f"Moving {len(file_ids)} files to Inbox for {customer_email}")
+        
+        # Get folder structure
+        root_folder_id = await self._find_or_create_folder(self.root_folder, None)
+        customer_folder_id = await self._find_or_create_folder(customer_email, root_folder_id)
+        
+        # Find or create Inbox folder
+        inbox_folder_id = await self._find_or_create_folder("Inbox", customer_folder_id)
+        
+        moved_files = []
+        failed_moves = []
+        
+        for file_id in file_ids:
+            try:
+                # Move file to Inbox folder
+                file_metadata = {
+                    'addParents': inbox_folder_id,
+                    'removeParents': await self._get_file_parent(file_id)
+                }
+                
+                updated_file = self.service.files().update(
+                    fileId=file_id,
+                    addParents=inbox_folder_id,
+                    removeParents=await self._get_file_parent(file_id),
+                    fields='id,name,parents'
+                ).execute()
+                
+                moved_files.append({
+                    'file_id': file_id,
+                    'status': 'moved',
+                    'new_parent': inbox_folder_id
+                })
+                
+                logging.info(f"Successfully moved file {file_id} to Inbox")
+                
+            except Exception as e:
+                logging.error(f"Failed to move file {file_id}: {e}")
+                failed_moves.append({
+                    'file_id': file_id,
+                    'status': 'failed',
+                    'error': str(e)
+                })
+        
+        result = {
+            'customer_email': customer_email,
+            'total_files': len(file_ids),
+            'moved_successfully': len(moved_files),
+            'failed_moves': len(failed_moves),
+            'moved_files': moved_files,
+            'failed_files': failed_moves,
+            'inbox_folder_id': inbox_folder_id
+        }
+        
+        logging.info(f"Move operation completed: {len(moved_files)}/{len(file_ids)} files moved successfully")
+        return result
+    
+    @handle_google_drive_exceptions("delete files on payment failure")
+    async def delete_files_on_payment_failure(self, customer_email: str, file_ids: List[str]) -> Dict[str, Any]:
+        """
+        Delete files from Temp folder when payment fails.
+        
+        Args:
+            customer_email: Customer's email address
+            file_ids: List of file IDs to delete
+            
+        Returns:
+            Dictionary with deletion operation results
+            
+        Raises:
+            GoogleDriveError: If file deletion fails
+        """
+        logging.info(f"Deleting {len(file_ids)} files for failed payment: {customer_email}")
+        
+        deleted_files = []
+        failed_deletions = []
+        
+        for file_id in file_ids:
+            try:
+                # Delete the file
+                self.service.files().delete(fileId=file_id).execute()
+                
+                deleted_files.append({
+                    'file_id': file_id,
+                    'status': 'deleted'
+                })
+                
+                logging.info(f"Successfully deleted file {file_id}")
+                
+            except Exception as e:
+                logging.error(f"Failed to delete file {file_id}: {e}")
+                failed_deletions.append({
+                    'file_id': file_id,
+                    'status': 'failed',
+                    'error': str(e)
+                })
+        
+        result = {
+            'customer_email': customer_email,
+            'total_files': len(file_ids),
+            'deleted_successfully': len(deleted_files),
+            'failed_deletions': len(failed_deletions),
+            'deleted_files': deleted_files,
+            'failed_files': failed_deletions
+        }
+        
+        logging.info(f"Deletion operation completed: {len(deleted_files)}/{len(file_ids)} files deleted successfully")
+        return result
+    
+    async def _get_file_parent(self, file_id: str) -> str:
+        """
+        Get the parent folder ID of a file.
+        
+        Args:
+            file_id: File ID to get parent for
+            
+        Returns:
+            Parent folder ID
+            
+        Raises:
+            GoogleDriveError: If getting parent fails
+        """
+        file_info = self.service.files().get(
+            fileId=file_id,
+            fields='parents'
+        ).execute()
+        
+        parents = file_info.get('parents', [])
+        if not parents:
+            raise GoogleDriveStorageError(f"File {file_id} has no parent folder")
+        
+        return parents[0]  # Return first parent
+    
     async def _find_or_create_folder(self, name: str, parent_id: Optional[str] = None) -> str:
         """
         Find existing folder or create new one in Google Drive.

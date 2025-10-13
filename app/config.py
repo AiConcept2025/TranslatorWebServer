@@ -27,7 +27,9 @@ class Settings(BaseSettings):
     
     # Database Configuration
     database_url: str = "sqlite:///./translator.db"
-    
+    mongodb_uri: str = "mongodb://iris:Sveta87201120@localhost:27017/translation?authSource=translation"
+    mongodb_database: str = "translation"
+
     # Redis Configuration
     redis_url: str = "redis://localhost:6379/0"
     

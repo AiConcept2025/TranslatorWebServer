@@ -68,7 +68,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         """Log incoming request."""
         
         # Get client info
-        client_ip = request.client.host
+        client_ip = request.client.host if request.client else "unknown"
         forwarded_for = request.headers.get('X-Forwarded-For')
         if forwarded_for:
             client_ip = forwarded_for.split(',')[0].strip()
@@ -217,7 +217,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         return True
     
     async def _get_request_body(self, request: Request) -> Any:
-        """Get request body for logging."""
+        """Get request body for logging with robust encoding handling."""
         try:
             content_type = request.headers.get('Content-Type', '').lower()
             
@@ -230,11 +230,38 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             else:
                 body = await request.body()
                 if len(body) < 1000:  # Only log small text bodies
-                    return body.decode('utf-8', errors='ignore')
+                    return self._safe_decode_body(body)
                 else:
                     return f"<binary data: {len(body)} bytes>"
-        except Exception:
-            return None
+        except Exception as e:
+            return f"<body read error: {str(e)}>"
+    
+    def _safe_decode_body(self, body: bytes) -> str:
+        """Safely decode request body with multiple encoding attempts."""
+        if not body:
+            return ""
+        
+        # Try multiple encodings in order of likelihood
+        encodings = ['utf-8', 'utf-8-sig', 'latin1', 'cp1252', 'iso-8859-1']
+        
+        for encoding in encodings:
+            try:
+                decoded = body.decode(encoding)
+                # Validate the decoded text doesn't contain replacement characters
+                if '\ufffd' not in decoded:
+                    return f"<{encoding}> {decoded}"
+                elif encoding == 'utf-8':
+                    # If UTF-8 fails, log the problematic bytes for debugging
+                    try:
+                        # Find the first problematic byte
+                        body.decode('utf-8')  # This will raise UnicodeDecodeError
+                    except UnicodeDecodeError as e:
+                        logger.warning(f"UTF-8 decode error: {e}")
+            except UnicodeDecodeError:
+                continue
+        
+        # If all encodings fail, return hex representation
+        return f"<hex> {body.hex()[:200]}..." if len(body) > 100 else f"<hex> {body.hex()}"
     
     async def _get_response_body(self, response) -> Any:
         """Get response body for logging."""

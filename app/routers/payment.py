@@ -2,17 +2,20 @@
 Payment API endpoints.
 """
 
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ValidationError
 from typing import Optional, Dict, Any, List
 import uuid
 import time
 import logging
+import json
 
 from app.services.google_drive_service import google_drive_service
 
 router = APIRouter(prefix="/api/payment", tags=["Payments"])
+
+# Simplified payment workflow - no sessions needed
 
 class PaymentIntentRequest(BaseModel):
     amount: int
@@ -28,7 +31,6 @@ class PaymentSuccessRequest(BaseModel):
 
 class PaymentFailureRequest(BaseModel):
     customer_email: EmailStr
-    file_ids: List[str]
     payment_intent_id: str
 
 @router.post("/create-intent")
@@ -126,66 +128,209 @@ async def verify_payment(payment_intent_id: str):
         }
     )
 
+class SimplePaymentSuccessRequest(BaseModel):
+    """Simplified payment success request - accepts camelCase from frontend."""
+    customer_email: Optional[EmailStr] = None
+    payment_intent_id: Optional[str] = None
+    # Accept camelCase fields from frontend
+    paymentIntentId: Optional[str] = None
+    amount: Optional[float] = None
+    currency: Optional[str] = None
+    paymentMethod: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    timestamp: Optional[str] = None
+
+    class Config:
+        # Allow population by field name
+        populate_by_name = True
+
+    def get_payment_intent_id(self) -> str:
+        """Get payment intent ID from either snake_case or camelCase field."""
+        return self.payment_intent_id or self.paymentIntentId or ""
+
+    def get_customer_email(self) -> Optional[str]:
+        """Get customer email from field or metadata."""
+        if self.customer_email:
+            return self.customer_email
+        if self.metadata and 'customer_email' in self.metadata:
+            return self.metadata['customer_email']
+        return None
+
+class SimplifiedPaymentSuccessRequest(BaseModel):
+    """Simplified payment success request using customer email lookup."""
+    customer_email: EmailStr
+    payment_intent_id: str
+
 @router.post("/success")
-async def handle_payment_success(request: PaymentSuccessRequest):
+async def handle_payment_success(raw_request: Request):
     """
-    Handle successful payment - move files from Temp to Inbox folder.
+    SIMPLIFIED PAYMENT SUCCESS WEBHOOK:
+    1. Receive payment confirmation with customer_email
+    2. Find all files for customer with status "awaiting_payment"
+    3. Move files from Temp/ to Inbox/ folder
+    4. Update file status to "payment_confirmed"
     
-    This endpoint is called when payment is confirmed to move files
-    from the temporary storage to the customer's inbox.
+    NO SESSIONS REQUIRED - uses file metadata for linking.
     """
-    logging.info(f"PAYMENT CONFIRMED - Processing success for {request.customer_email}: {len(request.file_ids)} files")
-    logging.info(f"Moving files from TEMP to INBOX folder for customer: {request.customer_email}")
+    print("=" * 80)
+    print("💳 SIMPLIFIED PAYMENT SUCCESS WEBHOOK")
+    print("=" * 80)
     
     try:
-        # Move files from Temp to Inbox
-        result = await google_drive_service.move_files_to_inbox_on_payment_success(
-            customer_email=request.customer_email,
-            file_ids=request.file_ids
+        # Parse request body
+        raw_body = await raw_request.body()
+        print(f"📄 Request body: {raw_body.decode('utf-8') if raw_body else 'EMPTY'}")
+        
+        if not raw_body:
+            raise HTTPException(status_code=400, detail="Empty request body")
+        
+        json_data = json.loads(raw_body)
+        print(f"📋 Parsed data: {json_data}")
+        
+        # Validate request
+        request = SimplePaymentSuccessRequest(**json_data)
+        payment_intent_id = request.get_payment_intent_id()
+        customer_email = request.get_customer_email()
+
+        if not payment_intent_id:
+            raise HTTPException(status_code=400, detail="payment_intent_id or paymentIntentId is required")
+
+        if not customer_email:
+            raise HTTPException(
+                status_code=400,
+                detail="customer_email is required (either as field or in metadata)"
+            )
+
+        print(f"✅ PAYMENT CONFIRMED")
+        print(f"   Customer: {customer_email}")
+        print(f"   Payment Intent: {payment_intent_id}")
+        print(f"   Amount: ${request.amount} {request.currency}")
+        print(f"   Payment Method: {request.paymentMethod}")
+        if request.metadata:
+            print(f"   Metadata: {request.metadata}")
+        
+        # Find files for this customer that are awaiting payment
+        print(f"🔍 Finding files for customer: {customer_email}")
+        files_to_move = await google_drive_service.find_files_by_customer_email(
+            customer_email=customer_email,
+            status="awaiting_payment"
         )
         
-        logging.info(f"✅ PAYMENT SUCCESS: Files moved to Inbox: {result['moved_successfully']}/{result['total_files']}")
-        logging.info(f"Customer {request.customer_email} can now access files in Inbox folder")
+        if not files_to_move:
+            print(f"❌ No files found for customer {customer_email} with status 'awaiting_payment'")
+            raise HTTPException(
+                status_code=404,
+                detail=f"No pending files found for customer {customer_email}"
+            )
+        
+        file_ids = [file_info['file_id'] for file_info in files_to_move]
+        print(f"📁 Found {len(file_ids)} files to move:")
+        for i, file_info in enumerate(files_to_move, 1):
+            print(f"   File {i}: {file_info['filename']} (ID: {file_info['file_id']}, Pages: {file_info['page_count']})")
+        
+        # Move files from Temp to Inbox
+        print(f"📦 Moving files from Temp/ to Inbox/...")
+        result = await google_drive_service.move_files_to_inbox_on_payment_success(
+            customer_email=customer_email,
+            file_ids=file_ids
+        )
+        
+        # Update file status to payment_confirmed
+        print(f"🔄 Updating file status to 'payment_confirmed'...")
+        for file_id in file_ids:
+            try:
+                await google_drive_service.update_file_status(
+                    file_id=file_id,
+                    new_status="payment_confirmed",
+                    payment_intent_id=payment_intent_id
+                )
+                print(f"   Updated status for file: {file_id}")
+            except Exception as e:
+                print(f"   Failed to update status for file {file_id}: {e}")
+        
+        print(f"✅ PAYMENT SUCCESS COMPLETE")
+        print(f"   Customer: {customer_email}")
+        print(f"   Files moved: {result['moved_successfully']}/{result['total_files']}")
+        print(f"   Inbox folder: {result['inbox_folder_id']}")
         
         return JSONResponse(
             content={
                 "success": True,
                 "message": f"Payment confirmed. {result['moved_successfully']} files moved to Inbox.",
                 "data": {
-                    "customer_email": request.customer_email,
-                    "payment_intent_id": request.payment_intent_id,
+                    "customer_email": customer_email,
+                    "payment_intent_id": payment_intent_id,
                     "total_files": result['total_files'],
                     "moved_successfully": result['moved_successfully'],
                     "failed_moves": result['failed_moves'],
                     "inbox_folder_id": result['inbox_folder_id'],
-                    "moved_files": result['moved_files']
+                    "moved_files": result['moved_files'],
+                    "workflow": "simplified_no_sessions"
                 },
                 "error": None
             }
         )
         
+    except HTTPException:
+        raise
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON parsing error: {e}")
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValidationError as e:
+        print(f"❌ Validation error: {e.errors()}")
+        raise HTTPException(status_code=422, detail=f"Validation error: {e.errors()}")
     except Exception as e:
-        logging.error(f"❌ PAYMENT SUCCESS FAILED: Error moving files to Inbox: {e}")
+        print(f"❌ Payment success processing error: {e}")
+        logging.error(f"Payment success error for {customer_email if 'customer_email' in locals() else 'unknown'}: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to move files to Inbox: {str(e)}"
+            detail=f"Failed to process payment success: {str(e)}"
         )
 
 @router.post("/failure")
 async def handle_payment_failure(request: PaymentFailureRequest):
     """
-    Handle failed payment - delete files from Temp folder.
-    
-    This endpoint is called when payment fails to clean up
-    temporary files that were uploaded.
+    SIMPLIFIED PAYMENT FAILURE HANDLER:
+    1. Find all files for customer with status "awaiting_payment"
+    2. Delete files from Temp folder
+    3. No sessions required - uses file metadata
     """
-    logging.warning(f"❌ PAYMENT FAILED - Processing failure for {request.customer_email}: {len(request.file_ids)} files to delete")
+    logging.warning(f"❌ PAYMENT FAILED for {request.customer_email}")
     
     try:
+        # Find files for this customer that are awaiting payment
+        print(f"🔍 Finding files for failed payment: {request.customer_email}")
+        files_to_delete = await google_drive_service.find_files_by_customer_email(
+            customer_email=request.customer_email,
+            status="awaiting_payment"
+        )
+        
+        if not files_to_delete:
+            print(f"ℹ️ No files found for customer {request.customer_email} to clean up")
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "message": "No files found to clean up",
+                    "data": {
+                        "customer_email": request.customer_email,
+                        "payment_intent_id": request.payment_intent_id,
+                        "total_files": 0,
+                        "deleted_successfully": 0,
+                        "failed_deletions": 0,
+                        "deleted_files": []
+                    }
+                }
+            )
+        
+        file_ids = [file_info['file_id'] for file_info in files_to_delete]
+        print(f"🗑️ Found {len(file_ids)} files to delete for failed payment")
+        for i, file_info in enumerate(files_to_delete, 1):
+            print(f"   File {i}: {file_info['filename']} (ID: {file_info['file_id']})")
+        
         # Delete files from Temp folder
         result = await google_drive_service.delete_files_on_payment_failure(
             customer_email=request.customer_email,
-            file_ids=request.file_ids
+            file_ids=file_ids
         )
         
         logging.info(f"Payment failure cleanup: {result['deleted_successfully']}/{result['total_files']} files deleted from Temp")
@@ -200,7 +345,8 @@ async def handle_payment_failure(request: PaymentFailureRequest):
                     "total_files": result['total_files'],
                     "deleted_successfully": result['deleted_successfully'],
                     "failed_deletions": result['failed_deletions'],
-                    "deleted_files": result['deleted_files']
+                    "deleted_files": result['deleted_files'],
+                    "workflow": "simplified_no_sessions"
                 },
                 "error": None
             }

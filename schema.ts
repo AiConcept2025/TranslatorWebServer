@@ -137,23 +137,7 @@ const translationSchema = {
         created_at: { type: "Date", default: "now" },
         updated_at: { type: "Date", default: "now" }
       },
-      indexes: [
-        { fields: { company_id: 1 } },
-        { fields: { company_id: 1, status: 1 } },
-        { fields: { status: 1 } }
-      ],
-      businessLogic: {
-        onTransactionCreate: "Decrement units_remaining in current usage_period",
-        onPeriodEnd: "Create new usage_period if subscription is active",
-        onStatusChange: "Add entry to history array"
-      },
-      apiEndpoints: {
-        list: "GET /api/companies/:companyId/subscriptions",
-        get: "GET /api/subscriptions/:id",
-        create: "POST /api/companies/:companyId/subscriptions",
-        update: "PUT /api/subscriptions/:id",
-        cancel: "POST /api/subscriptions/:id/cancel"
-      }
+      
     },
 
     invoices: {
@@ -317,4 +301,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = translationSchema;
 }
 
-
+ Create plan to add button "Confirm and Submit" to confirm agreement with the cost and submit the transaction and "Decline" button to remove uplaoded file
+  Create new endpoint which will call Googel Drive function to move the files to Incoming directory
+  "Decline" button should call endpoint to remove files from Temp  and delete record from the

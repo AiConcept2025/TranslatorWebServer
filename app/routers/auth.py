@@ -1,18 +1,21 @@
 """
-Authentication API endpoints.
+Authentication API endpoints with MongoDB integration.
+
+Provides corporate login, logout, and session verification endpoints
+with full MongoDB database authentication.
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
-import json
 import logging
-import secrets
-import hashlib
-from datetime import datetime, timedelta
 
+from app.services.auth_service import auth_service, AuthenticationError
+
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/login", tags=["Authentication"])
+
 
 class CorporateLoginRequest(BaseModel):
     """Corporate login request model."""
@@ -23,121 +26,279 @@ class CorporateLoginRequest(BaseModel):
     login_date_time: str = Field(..., alias='loginDateTime')
 
     model_config = {
-        'populate_by_name': True  # Accept both camelCase and snake_case
+        'populate_by_name': True
     }
+
 
 class CorporateLoginResponse(BaseModel):
     """Corporate login response model."""
     success: bool
     message: str
-    data: dict
+    data: Optional[dict] = None
+    error: Optional[dict] = None
 
-@router.post("/corporate")
-async def corporate_login(raw_request: Request):
+
+@router.post("/corporate", response_model=CorporateLoginResponse)
+async def corporate_login(request: CorporateLoginRequest):
     """
-    Corporate login endpoint.
+    Corporate login endpoint with MongoDB authentication.
 
-    Authenticates corporate users and returns an authentication token.
+    Authenticates against MongoDB users and companies collections.
+    Returns session token stored in MongoDB sessions collection.
+
+    Request body:
+    ```json
+    {
+        "companyName": "Iris Trading",
+        "password": "userpassword",
+        "userFullName": "Vladimir Danishevsky",
+        "userEmail": "danishevsky@gmail.com",
+        "loginDateTime": "2025-10-13T10:30:00Z"
+    }
+    ```
+
+    Response:
+    ```json
+    {
+        "success": true,
+        "message": "Corporate login successful",
+        "data": {
+            "authToken": "session-token-here",
+            "tokenType": "Bearer",
+            "expiresIn": 28800,
+            "expiresAt": "2025-10-13T18:30:00Z",
+            "user": {
+                "user_id": "user_XXXXXXXX",
+                "user_name": "Vladimir Danishevsky",
+                "email": "danishevsky@gmail.com",
+                "company_name": "Iris Trading",
+                "permission_level": "admin"
+            },
+            "loginDateTime": "2025-10-13T10:30:00Z"
+        }
+    }
+    ```
     """
-    print("\n" + "=" * 80)
-    print("🔐 CORPORATE LOGIN - INCOMING REQUEST")
-    print("=" * 80)
-
-    # Log raw incoming request
-    try:
-        raw_body = await raw_request.body()
-        raw_json = raw_body.decode('utf-8')
-        print("📥 INCOMING PAYLOAD:")
-        print(raw_json)
-
-        # Parse JSON
-        json_data = json.loads(raw_json)
-        print("\n📋 PARSED JSON:")
-        print(json.dumps(json_data, indent=2))
-
-    except Exception as e:
-        print(f"❌ ERROR reading request: {e}")
-        raise HTTPException(status_code=400, detail="Invalid request format")
-
-    # Validate with Pydantic model
-    try:
-        request = CorporateLoginRequest(**json_data)
-    except Exception as e:
-        print(f"❌ VALIDATION ERROR: {e}")
-        raise HTTPException(status_code=422, detail=str(e))
-
-    print("\n" + "-" * 80)
-    print("✅ PARSED FIELDS:")
-    print("-" * 80)
-    print(f"Company Name:      {request.company_name}")
-    print(f"User Full Name:    {request.user_full_name}")
-    print(f"User Email:        {request.user_email}")
-    print(f"Login Date/Time:   {request.login_date_time}")
-    print(f"Password:          {'*' * len(request.password)} (hidden)")
-    print("-" * 80)
+    logger.info("=" * 80)
+    logger.info(f"🔐 CORPORATE LOGIN REQUEST")
+    logger.info("=" * 80)
+    logger.info(f"  Company: {request.company_name}")
+    logger.info(f"  Email: {request.user_email}")
+    logger.info(f"  User: {request.user_full_name}")
+    logger.info(f"  Login Time: {request.login_date_time}")
+    logger.info("=" * 80)
 
     try:
-        # Generate authentication token
-        # Using a combination of user info and timestamp for uniqueness
-        token_base = f"{request.user_email}:{request.company_name}:{request.login_date_time}:{secrets.token_urlsafe(32)}"
-        auth_token = hashlib.sha256(token_base.encode()).hexdigest()
+        # Authenticate user via MongoDB
+        auth_result = await auth_service.authenticate_user(
+            company_name=request.company_name,
+            password=request.password,
+            user_name=request.user_full_name,
+            email=request.user_email
+        )
 
-        # Calculate token expiration (24 hours from now)
-        expiration_time = datetime.utcnow() + timedelta(hours=24)
-
-        print(f"\n🔑 AUTHENTICATION TOKEN GENERATED")
-        print(f"   Token: {auth_token[:16]}...{auth_token[-16:]}")
-        print(f"   Expires: {expiration_time.isoformat()}Z")
-
-        # Log authentication success
-        logging.info(f"Corporate login successful - Company: {request.company_name}, User: {request.user_email}")
-
-        # Prepare response
+        # Prepare successful response
         response_content = {
             "success": True,
             "message": "Corporate login successful",
             "data": {
-                "authToken": auth_token,
+                "authToken": auth_result["session_token"],
                 "tokenType": "Bearer",
-                "expiresIn": 86400,  # 24 hours in seconds
-                "expiresAt": expiration_time.isoformat() + "Z",
-                "user": {
-                    "fullName": request.user_full_name,
-                    "email": request.user_email,
-                    "company": request.company_name
-                },
+                "expiresIn": 28800,  # 8 hours in seconds
+                "expiresAt": auth_result["expires_at"],
+                "user": auth_result["user"],
                 "loginDateTime": request.login_date_time
             }
         }
 
-        print("\n" + "=" * 80)
-        print("📤 OUTGOING RESPONSE:")
-        print("=" * 80)
-        print(json.dumps(response_content, indent=2))
-        print("=" * 80 + "\n")
+        logger.info("=" * 80)
+        logger.info("✅ LOGIN SUCCESSFUL")
+        logger.info("=" * 80)
+        logger.info(f"  User: {auth_result['user']['email']}")
+        logger.info(f"  Company: {auth_result['user']['company_name']}")
+        logger.info(f"  Token expires: {auth_result['expires_at']}")
+        logger.info("=" * 80)
 
         return JSONResponse(content=response_content)
 
-    except Exception as e:
-        print(f"\n❌ UNEXPECTED ERROR: {e}")
-        logging.error(f"Corporate login error: {e}", exc_info=True)
+    except AuthenticationError as e:
+        logger.warning("=" * 80)
+        logger.warning(f"❌ AUTHENTICATION FAILED")
+        logger.warning("=" * 80)
+        logger.warning(f"  Reason: {str(e)}")
+        logger.warning(f"  Company: {request.company_name}")
+        logger.warning(f"  Email: {request.user_email}")
+        logger.warning("=" * 80)
 
         error_response = {
             "success": False,
+            "message": "Authentication failed",
             "error": {
-                "code": 500,
-                "message": f"Login processing failed: {str(e)}",
-                "type": "internal_error"
+                "code": "AUTH_FAILED",
+                "message": str(e)
             }
         }
 
-        print("\n" + "=" * 80)
-        print("📤 OUTGOING ERROR RESPONSE:")
-        print("=" * 80)
-        print(json.dumps(error_response, indent=2))
-        print("=" * 80 + "\n")
+        raise HTTPException(status_code=401, detail=str(e))
 
+    except Exception as e:
+        logger.error("=" * 80)
+        logger.error(f"💥 UNEXPECTED ERROR")
+        logger.error("=" * 80)
+        logger.error(f"  Error: {e}", exc_info=True)
+        logger.error("=" * 80)
+
+        error_response = {
+            "success": False,
+            "message": "Login processing failed",
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred during login"
+            }
+        }
+
+        raise HTTPException(status_code=500, detail="Login processing failed")
+
+
+@router.post("/logout")
+async def logout(authorization: Optional[str] = Header(None)):
+    """
+    Logout endpoint - invalidates session token.
+
+    Expects: `Authorization: Bearer {token}` header
+
+    Request:
+    ```
+    POST /login/logout
+    Authorization: Bearer session-token-here
+    ```
+
+    Response:
+    ```json
+    {
+        "success": true,
+        "message": "Logged out successfully"
+    }
+    ```
+    """
+    logger.info("=" * 80)
+    logger.info("🚪 LOGOUT REQUEST")
+    logger.info("=" * 80)
+
+    if not authorization or not authorization.startswith("Bearer "):
+        logger.warning("❌ Missing or invalid Authorization header")
         raise HTTPException(
-            status_code=500,
-            detail=f"Login processing failed: {str(e)}"
+            status_code=401,
+            detail="Missing or invalid authorization header. Expected: Authorization: Bearer {token}"
         )
+
+    session_token = authorization.replace("Bearer ", "")
+    logger.info(f"  Token: {session_token[:8]}...{session_token[-8:]}")
+
+    try:
+        success = await auth_service.invalidate_session(session_token)
+
+        if success:
+            logger.info("=" * 80)
+            logger.info("✅ LOGOUT SUCCESSFUL")
+            logger.info("=" * 80)
+            return JSONResponse(content={
+                "success": True,
+                "message": "Logged out successfully"
+            })
+        else:
+            logger.warning("=" * 80)
+            logger.warning("❌ LOGOUT FAILED - Session not found")
+            logger.warning("=" * 80)
+            raise HTTPException(status_code=404, detail="Session not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("=" * 80)
+        logger.error(f"💥 LOGOUT ERROR: {e}", exc_info=True)
+        logger.error("=" * 80)
+        raise HTTPException(status_code=500, detail="Logout failed")
+
+
+@router.get("/verify")
+async def verify_session(authorization: Optional[str] = Header(None)):
+    """
+    Verify session token and return user data.
+
+    Expects: `Authorization: Bearer {token}` header
+
+    Request:
+    ```
+    GET /login/verify
+    Authorization: Bearer session-token-here
+    ```
+
+    Response (success):
+    ```json
+    {
+        "success": true,
+        "valid": true,
+        "user": {
+            "user_id": "user_XXXXXXXX",
+            "user_name": "Vladimir Danishevsky",
+            "email": "danishevsky@gmail.com",
+            "company_name": "Iris Trading",
+            "permission_level": "admin"
+        }
+    }
+    ```
+
+    Response (failure):
+    ```json
+    {
+        "success": false,
+        "valid": false,
+        "error": "Invalid or expired session"
+    }
+    ```
+    """
+    logger.info("=" * 80)
+    logger.info("🔍 SESSION VERIFICATION REQUEST")
+    logger.info("=" * 80)
+
+    if not authorization or not authorization.startswith("Bearer "):
+        logger.warning("❌ Missing or invalid Authorization header")
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid authorization header. Expected: Authorization: Bearer {token}"
+        )
+
+    session_token = authorization.replace("Bearer ", "")
+    logger.info(f"  Token: {session_token[:8]}...{session_token[-8:]}")
+
+    try:
+        user_data = await auth_service.verify_session(session_token)
+
+        if user_data:
+            logger.info("=" * 80)
+            logger.info("✅ SESSION VALID")
+            logger.info("=" * 80)
+            logger.info(f"  User: {user_data['email']}")
+            logger.info(f"  Company: {user_data['company_name']}")
+            logger.info(f"  Permission: {user_data['permission_level']}")
+            logger.info("=" * 80)
+
+            return JSONResponse(content={
+                "success": True,
+                "valid": True,
+                "user": user_data
+            })
+        else:
+            logger.warning("=" * 80)
+            logger.warning("❌ SESSION INVALID OR EXPIRED")
+            logger.warning("=" * 80)
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("=" * 80)
+        logger.error(f"💥 VERIFICATION ERROR: {e}", exc_info=True)
+        logger.error("=" * 80)
+        raise HTTPException(status_code=500, detail="Verification failed")

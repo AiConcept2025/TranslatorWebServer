@@ -26,10 +26,24 @@ class EncodingFixMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next):
         """Fix encoding issues in request before processing."""
-        
+
+        # Log entry for debugging - CHANGED TO INFO to ensure visibility
+        logger.info(f"[ENCODING FIX] Processing: {request.method} {request.url.path}")
+        print(f"[ENCODING FIX] Processing: {request.method} {request.url.path}")
+
+        # IMPORTANT: Skip auth, translate, and transaction endpoints to avoid consuming request body
+        # Consuming the body stream causes Pydantic validation to hang
+        # These endpoints handle large payloads that should be parsed by Pydantic directly
+        if (request.url.path.startswith('/login/') or
+            request.url.path == '/translate' or
+            request.url.path.startswith('/api/transactions/')):
+            logger.info(f"[ENCODING FIX] Skipping body consumption for: {request.url.path}")
+            print(f"[ENCODING FIX] SKIPPING /api/transactions/* - Body NOT consumed")
+            return await call_next(request)
+
         # Only process specific content types
         content_type = request.headers.get('Content-Type', '').lower().split(';')[0]
-        
+
         if content_type in self.content_types_to_fix:
             try:
                 # Read the raw request body
@@ -45,7 +59,7 @@ class EncodingFixMiddleware(BaseHTTPMiddleware):
                         request = self._create_request_with_fixed_body(request, fixed_body)
             
             except Exception as e:
-                logger.error(f"Error fixing request encoding: {e}")
+                logger.error(f"Error fixing request encoding for {request.url.path}: {e}", exc_info=True)
                 # Continue with original request if fixing fails
                 pass
         

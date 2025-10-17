@@ -2,7 +2,7 @@
 Main FastAPI application for the Translation Web Server.
 """
 
-from fastapi import FastAPI, Request, HTTPException, Depends, Body
+from fastapi import FastAPI, Request, HTTPException, Depends, Body, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -636,11 +636,154 @@ class TransactionActionRequest(BaseModel):
 
 
 # ============================================================================
+# Background Task for Transaction Confirmation
+# ============================================================================
+async def process_transaction_confirmation_background(
+    transaction_ids: List[str],
+    customer_email: str,
+    company_name: Optional[str],
+    file_ids: List[str]
+):
+    """
+    Background task to move files from Temp to Inbox and update transaction status.
+    Runs asynchronously without blocking HTTP response.
+    """
+    import time
+    task_start = time.time()
+
+    try:
+        from app.database import database
+        from app.services.google_drive_service import google_drive_service
+        from app.services.subscription_service import subscription_service
+        from app.models.subscription import UsageUpdate
+        from datetime import datetime, timezone
+
+        print("\n" + "=" * 80)
+        print("🔄 BACKGROUND TASK STARTED - Transaction Confirmation")
+        print("=" * 80)
+        print(f"⏱️  Started at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📋 Task Details:")
+        print(f"   Customer: {customer_email}")
+        print(f"   Company: {company_name or 'Individual'}")
+        print(f"   Transactions: {len(transaction_ids)}")
+        print(f"   Files to move: {len(file_ids)}")
+        print("=" * 80)
+
+        # Move files from Temp to Inbox
+        print(f"\n📁 Step 1: Moving files from Temp to Inbox...")
+        move_start = time.time()
+        move_result = await google_drive_service.move_files_to_inbox_on_payment_success(
+            customer_email=customer_email,
+            file_ids=file_ids,
+            company_name=company_name
+        )
+        move_time = (time.time() - move_start) * 1000
+        print(f"⏱️  File move completed in {move_time:.2f}ms")
+        print(f"✅ Moved: {move_result['moved_successfully']}/{move_result['total_files']} files")
+
+        # Verify files in Inbox
+        print(f"\n🔍 Step 2: Verifying files in Inbox...")
+        inbox_folder_id = move_result['inbox_folder_id']
+        verified_count = 0
+
+        for moved_file in move_result.get('moved_files', []):
+            file_id = moved_file['file_id']
+            try:
+                file_info_raw = await asyncio.to_thread(
+                    lambda: google_drive_service.service.files().get(
+                        fileId=file_id,
+                        fields='id,name,parents'
+                    ).execute()
+                )
+                current_parents = file_info_raw.get('parents', [])
+                is_in_inbox = inbox_folder_id in current_parents
+
+                if is_in_inbox:
+                    verified_count += 1
+                    print(f"   ✅ File {file_id[:20]}... verified in Inbox")
+                else:
+                    print(f"   ⚠️  File {file_id[:20]}... NOT in Inbox")
+
+            except Exception as e:
+                print(f"   ❌ Failed to verify file {file_id[:20]}...: {e}")
+
+        print(f"✅ Verified: {verified_count}/{len(move_result.get('moved_files', []))} files")
+
+        # Update transaction status
+        print(f"\n🔄 Step 3: Updating transaction status...")
+        for txn_id in transaction_ids:
+            await database.translation_transactions.update_one(
+                {"transaction_id": txn_id},
+                {
+                    "$set": {
+                        "status": "confirmed",
+                        "updated_at": datetime.now(timezone.utc)
+                    }
+                }
+            )
+            print(f"   ✓ Transaction {txn_id} confirmed")
+
+        # Update subscription usage
+        print(f"\n💳 Step 4: Updating subscription usage...")
+        transactions = []
+        for txn_id in transaction_ids:
+            txn = await database.translation_transactions.find_one({"transaction_id": txn_id})
+            if txn:
+                transactions.append(txn)
+
+        subscription_updates = {}
+        for txn in transactions:
+            subscription_id = txn.get("subscription_id")
+            units_count = txn.get("units_count", 0)
+
+            if subscription_id and units_count > 0:
+                sub_id_str = str(subscription_id)
+                if sub_id_str not in subscription_updates:
+                    subscription_updates[sub_id_str] = 0
+                subscription_updates[sub_id_str] += units_count
+
+        if subscription_updates:
+            for subscription_id_str, total_units in subscription_updates.items():
+                try:
+                    usage_update = UsageUpdate(
+                        units_to_add=total_units,
+                        use_promotional_units=False
+                    )
+                    await subscription_service.record_usage(
+                        subscription_id=subscription_id_str,
+                        usage_data=usage_update
+                    )
+                    print(f"   ✅ Subscription {subscription_id_str}: +{total_units} units")
+                except Exception as e:
+                    print(f"   ⚠️  Subscription update failed for {subscription_id_str}: {e}")
+        else:
+            print(f"   ℹ️  No subscription updates needed (individual customer)")
+
+        total_time = (time.time() - task_start) * 1000
+        print(f"\n✅ BACKGROUND TASK COMPLETE")
+        print(f"⏱️  TOTAL TASK TIME: {total_time:.2f}ms")
+        print(f"📊 Results: {verified_count}/{len(file_ids)} files verified in Inbox")
+        print("=" * 80 + "\n")
+
+        logging.info(f"Background task completed for {customer_email}: {verified_count}/{len(file_ids)} files verified in {total_time:.2f}ms")
+
+    except Exception as e:
+        total_time = (time.time() - task_start) * 1000
+        print(f"\n❌ BACKGROUND TASK ERROR")
+        print(f"⏱️  Failed after: {total_time:.2f}ms")
+        print(f"💥 Error type: {type(e).__name__}")
+        print(f"💥 Error message: {str(e)}")
+        print("=" * 80 + "\n")
+        logging.error(f"Background confirmation error for {customer_email}: {e}", exc_info=True)
+
+
+# ============================================================================
 # Transaction Confirmation Endpoint
 # ============================================================================
 @app.post("/api/transactions/confirm", tags=["Transactions"])
 async def confirm_transactions(
-    request: TransactionActionRequest = Body(...),
+    request: TransactionActionRequest,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -722,226 +865,41 @@ async def confirm_transactions(
         print(f"[CONFIRM DEBUG] Total file IDs extracted: {len(file_ids)}")
         print(f"[CONFIRM DEBUG] File IDs: {file_ids}")
 
+        # Log what we're about to do (fast - logging only)
         if company_name:
-            logging.info(f"[CONFIRM] Moving {len(file_ids)} files from {company_name}/{customer_email}/Temp/ to {company_name}/{customer_email}/Inbox/")
-            print(f"[CONFIRM] Moving {len(file_ids)} files from {company_name}/{customer_email}/Temp/ to Inbox/")
+            logging.info(f"[CONFIRM] Scheduling background task to move {len(file_ids)} files from {company_name}/{customer_email}/Temp/ to Inbox/")
+            print(f"[CONFIRM] Scheduling background task: {len(file_ids)} files from {company_name}/{customer_email}/Temp/ to Inbox/")
         else:
-            logging.info(f"[CONFIRM] Moving {len(file_ids)} files from {customer_email}/Temp/ to {customer_email}/Inbox/")
-            print(f"[CONFIRM] Moving {len(file_ids)} files from {customer_email}/Temp/ to Inbox/")
+            logging.info(f"[CONFIRM] Scheduling background task to move {len(file_ids)} files from {customer_email}/Temp/ to Inbox/")
+            print(f"[CONFIRM] Scheduling background task: {len(file_ids)} files from {customer_email}/Temp/ to Inbox/")
 
-        # Move files using existing Google Drive service function
-        move_result = await google_drive_service.move_files_to_inbox_on_payment_success(
+        # Schedule background task for file move, verification, and updates
+        print(f"[CONFIRM] Adding background task to queue...")
+        background_tasks.add_task(
+            process_transaction_confirmation_background,
+            transaction_ids=request.transaction_ids,
             customer_email=customer_email,
-            file_ids=file_ids,
-            company_name=company_name
+            company_name=company_name,
+            file_ids=file_ids
         )
+        print(f"[CONFIRM] ✅ Background task scheduled successfully")
 
-        # Verify files are actually in the Inbox folder
-        print(f"[CONFIRM VERIFY] Verifying {len(move_result['moved_files'])} files in Inbox...")
-        inbox_folder_id = move_result['inbox_folder_id']
-        verified_files = []
-
-        for moved_file in move_result['moved_files']:
-            file_id = moved_file['file_id']
-            try:
-                # Query Google Drive to verify file is in Inbox
-                file_info_raw = await asyncio.to_thread(
-                    lambda: google_drive_service.service.files().get(
-                        fileId=file_id,
-                        fields='id,name,parents,webViewLink,webContentLink'
-                    ).execute()
-                )
-
-                current_parents = file_info_raw.get('parents', [])
-                is_in_inbox = inbox_folder_id in current_parents
-
-                file_url = file_info_raw.get('webViewLink', f"https://drive.google.com/file/d/{file_id}/view")
-
-                verified_files.append({
-                    'file_id': file_id,
-                    'file_name': moved_file.get('file_name', file_info_raw.get('name', 'Unknown')),
-                    'status': 'verified_in_inbox' if is_in_inbox else 'move_reported_but_not_verified',
-                    'google_drive_url': file_url,
-                    'direct_link': file_url,
-                    'is_in_inbox': is_in_inbox,
-                    'current_parents': current_parents
-                })
-
-                if is_in_inbox:
-                    print(f"[CONFIRM VERIFY] ✅ File {file_id} VERIFIED in Inbox")
-                    print(f"[CONFIRM VERIFY]    URL: {file_url}")
-                else:
-                    print(f"[CONFIRM VERIFY] ⚠️ File {file_id} NOT in Inbox (parents: {current_parents})")
-
-            except Exception as e:
-                print(f"[CONFIRM VERIFY] ❌ Failed to verify file {file_id}: {e}")
-                verified_files.append({
-                    'file_id': file_id,
-                    'file_name': moved_file.get('file_name', 'Unknown'),
-                    'status': 'verification_failed',
-                    'error': str(e)
-                })
-
-        # Update transaction status to "confirmed"
-        for txn_id in request.transaction_ids:
-            await database.translation_transactions.update_one(
-                {"transaction_id": txn_id},
-                {
-                    "$set": {
-                        "status": "confirmed",
-                        "updated_at": datetime.now(timezone.utc)
-                    }
-                }
-            )
-            logging.info(f"[CONFIRM] Transaction {txn_id} status updated to 'confirmed'")
-            print(f"[CONFIRM] Transaction {txn_id} confirmed")
-
-        # Update subscription usage for enterprise transactions
-        print("=" * 80)
-        print(f"[SUBSCRIPTION UPDATE] Starting subscription usage tracking...")
-        logging.info(f"[SUBSCRIPTION] Starting usage tracking for {len(transactions)} transaction(s)")
-
-        from app.services.subscription_service import subscription_service
-        from app.models.subscription import UsageUpdate
-
-        subscription_updates = {}  # Track subscription_id -> total units
-
-        # Step 1: Analyze transactions and accumulate units per subscription
-        print(f"[SUBSCRIPTION UPDATE] Step 1: Analyzing {len(transactions)} transaction(s)...")
-        for i, txn in enumerate(transactions, 1):
-            txn_id = txn.get("transaction_id", "UNKNOWN")
-            subscription_id = txn.get("subscription_id")
-            units_count = txn.get("units_count", 0)
-            unit_type = txn.get("unit_type", "unknown")
-
-            print(f"[SUBSCRIPTION UPDATE] Transaction {i}/{len(transactions)}: {txn_id}")
-            print(f"[SUBSCRIPTION UPDATE]   - subscription_id: {subscription_id}")
-            print(f"[SUBSCRIPTION UPDATE]   - units_count: {units_count} {unit_type}(s)")
-            print(f"[SUBSCRIPTION UPDATE]   - file_name: {txn.get('file_name', 'N/A')}")
-
-            if subscription_id and units_count > 0:
-                # Accumulate units per subscription
-                sub_id_str = str(subscription_id)
-                if sub_id_str not in subscription_updates:
-                    subscription_updates[sub_id_str] = 0
-                    print(f"[SUBSCRIPTION UPDATE]   ✅ New subscription to track: {sub_id_str}")
-                subscription_updates[sub_id_str] += units_count
-                print(f"[SUBSCRIPTION UPDATE]   ✅ Added {units_count} units → Total for {sub_id_str}: {subscription_updates[sub_id_str]} units")
-                logging.info(f"[SUBSCRIPTION] Transaction {txn_id}: +{units_count} {unit_type}(s) for subscription {sub_id_str}")
-            elif not subscription_id:
-                print(f"[SUBSCRIPTION UPDATE]   ⚠️ No subscription_id - Individual customer transaction")
-            elif units_count <= 0:
-                print(f"[SUBSCRIPTION UPDATE]   ⚠️ Invalid units_count: {units_count}")
-
-        # Step 2: Apply subscription updates to database
-        if subscription_updates:
-            print(f"[SUBSCRIPTION UPDATE] Step 2: Applying updates to {len(subscription_updates)} subscription(s)...")
-            logging.info(f"[SUBSCRIPTION] Updating {len(subscription_updates)} subscription(s)")
-
-            for subscription_id_str, total_units in subscription_updates.items():
-                print(f"[SUBSCRIPTION UPDATE] Processing subscription: {subscription_id_str}")
-                print(f"[SUBSCRIPTION UPDATE]   - Total units to add: {total_units}")
-
-                try:
-                    # Fetch current subscription state BEFORE update
-                    subscription_before = await subscription_service.get_subscription(subscription_id_str)
-                    if subscription_before:
-                        current_period = None
-                        now = datetime.now(timezone.utc)
-                        for period in subscription_before.get("usage_periods", []):
-                            period_start = period["period_start"]
-                            period_end = period["period_end"]
-                            if not period_start.tzinfo:
-                                period_start = period_start.replace(tzinfo=timezone.utc)
-                            if not period_end.tzinfo:
-                                period_end = period_end.replace(tzinfo=timezone.utc)
-                            if period_start <= now <= period_end:
-                                current_period = period
-                                break
-
-                        if current_period:
-                            print(f"[SUBSCRIPTION UPDATE]   - Current period: {current_period['period_start'].strftime('%Y-%m-%d')} to {current_period['period_end'].strftime('%Y-%m-%d')}")
-                            print(f"[SUBSCRIPTION UPDATE]   - Units before: allocated={current_period['units_allocated']}, used={current_period['units_used']}, remaining={current_period['units_remaining']}")
-                        else:
-                            print(f"[SUBSCRIPTION UPDATE]   ⚠️ No active usage period found for current date")
-
-                    # Create usage update request
-                    usage_update = UsageUpdate(
-                        units_to_add=total_units,
-                        use_promotional_units=False  # Use regular units
-                    )
-                    print(f"[SUBSCRIPTION UPDATE]   - Calling subscription_service.record_usage()...")
-
-                    # Update subscription
-                    updated_subscription = await subscription_service.record_usage(
-                        subscription_id=subscription_id_str,
-                        usage_data=usage_update
-                    )
-
-                    # Fetch subscription state AFTER update to verify
-                    if updated_subscription:
-                        for period in updated_subscription.get("usage_periods", []):
-                            period_start = period["period_start"]
-                            period_end = period["period_end"]
-                            if not period_start.tzinfo:
-                                period_start = period_start.replace(tzinfo=timezone.utc)
-                            if not period_end.tzinfo:
-                                period_end = period_end.replace(tzinfo=timezone.utc)
-                            if period_start <= now <= period_end:
-                                print(f"[SUBSCRIPTION UPDATE]   - Units after: allocated={period['units_allocated']}, used={period['units_used']}, remaining={period['units_remaining']}")
-                                print(f"[SUBSCRIPTION UPDATE]   ✅ Successfully updated: {period['units_used'] - current_period['units_used'] if current_period else 'N/A'} units added")
-                                break
-
-                    logging.info(f"[SUBSCRIPTION] Successfully updated {subscription_id_str}: +{total_units} units")
-                    print(f"[SUBSCRIPTION UPDATE]   ✅ Database update completed successfully")
-                    print(f"[SUBSCRIPTION UPDATE] ✅ Subscription {subscription_id_str}: +{total_units} units recorded")
-
-                except Exception as e:
-                    # Log error but don't fail the transaction
-                    error_msg = str(e)
-                    logging.error(f"[SUBSCRIPTION] Failed to update {subscription_id_str}: {e}", exc_info=True)
-                    print(f"[SUBSCRIPTION UPDATE]   ❌ Error updating subscription: {error_msg}")
-                    print(f"[SUBSCRIPTION UPDATE]   ❌ Transaction confirmed but subscription NOT updated")
-                    if "Insufficient units" in error_msg:
-                        print(f"[SUBSCRIPTION UPDATE]   ⚠️ Subscription may have run out of allocated units")
-                    elif "No active usage period" in error_msg:
-                        print(f"[SUBSCRIPTION UPDATE]   ⚠️ No active usage period for current date")
-        else:
-            print(f"[SUBSCRIPTION UPDATE] Step 2: No subscription updates needed")
-            print(f"[SUBSCRIPTION UPDATE]   - Reason: Individual customer (no subscription) or invalid data")
-            logging.info(f"[SUBSCRIPTION] No subscription updates needed")
-
-        print(f"[SUBSCRIPTION UPDATE] Subscription usage tracking complete")
-        print("=" * 80)
-
-        verified_count = len([f for f in verified_files if f.get('is_in_inbox', False)])
-
+        # Return IMMEDIATELY (< 1 second) - background task will handle everything else
         response = {
             "success": True,
-            "message": f"Successfully confirmed {len(request.transaction_ids)} transaction(s)",
+            "message": f"Transactions confirmed. Files are being moved to Inbox in the background.",
             "data": {
                 "confirmed_transactions": len(request.transaction_ids),
                 "total_files": len(file_ids),
-                "moved_files": move_result['moved_successfully'],
-                "verified_in_inbox": verified_count,
-                "failed_moves": move_result['failed_moves'],
-                "inbox_folder_id": inbox_folder_id,
-                "inbox_folder_url": f"https://drive.google.com/drive/folders/{inbox_folder_id}",
-                "files": verified_files,
-                "move_details": move_result,
-                "subscription_updates": {
-                    "updated_subscriptions": len(subscription_updates),
-                    "details": [
-                        {"subscription_id": sub_id, "units_added": units}
-                        for sub_id, units in subscription_updates.items()
-                    ]
-                } if subscription_updates else None
+                "status": "processing",
+                "customer_email": customer_email,
+                "company_name": company_name if company_name else None,
+                "processing_note": "Files are being moved and verified in the background. This may take 30-90 seconds to complete."
             }
         }
 
-        logging.info(f"[CONFIRM] Success: {len(request.transaction_ids)} transactions confirmed, {verified_count}/{len(file_ids)} files verified in Inbox")
-        print(f"[CONFIRM] Complete: {len(request.transaction_ids)} transactions confirmed, {verified_count}/{len(file_ids)} files VERIFIED in Inbox")
-        print(f"[CONFIRM] Inbox URL: https://drive.google.com/drive/folders/{inbox_folder_id}")
+        logging.info(f"[CONFIRM] Immediate response sent: {len(request.transaction_ids)} transactions scheduled for processing")
+        print(f"[CONFIRM] ⚡ INSTANT RESPONSE: {len(request.transaction_ids)} transactions scheduled (background processing started)")
 
         return JSONResponse(content=response)
 

@@ -31,38 +31,19 @@ class EncodingFixMiddleware(BaseHTTPMiddleware):
         logger.info(f"[ENCODING FIX] Processing: {request.method} {request.url.path}")
         print(f"[ENCODING FIX] Processing: {request.method} {request.url.path}")
 
-        # IMPORTANT: Skip auth, translate, and transaction endpoints to avoid consuming request body
-        # Consuming the body stream causes Pydantic validation to hang
-        # These endpoints handle large payloads that should be parsed by Pydantic directly
-        if (request.url.path.startswith('/login/') or
-            request.url.path == '/translate' or
-            request.url.path.startswith('/api/transactions/')):
-            logger.info(f"[ENCODING FIX] Skipping body consumption for: {request.url.path}")
-            print(f"[ENCODING FIX] SKIPPING /api/transactions/* - Body NOT consumed")
-            return await call_next(request)
+        # CRITICAL FIX: DO NOT consume request body in middleware
+        # BaseHTTPMiddleware + body reading causes stream corruption and ClientDisconnect errors
+        # FastAPI/Pydantic handles encoding perfectly - this middleware is unnecessary
+        #
+        # Previous behavior: Tried to read body to fix encoding issues
+        # Problem: Consuming body stream causes it to be unavailable to endpoints
+        # Result: FastAPI waits indefinitely for body data, causing 90s timeouts
+        #
+        # Solution: Skip body processing entirely, let FastAPI handle it
 
-        # Only process specific content types
-        content_type = request.headers.get('Content-Type', '').lower().split(';')[0]
+        logger.info(f"[ENCODING FIX] Skipping body processing for: {request.url.path}")
+        print(f"[ENCODING FIX] SKIPPING {request.url.path} - Body NOT consumed (middleware disabled)")
 
-        if content_type in self.content_types_to_fix:
-            try:
-                # Read the raw request body
-                body = await request.body()
-                
-                if body:
-                    # Fix encoding issues in the body
-                    fixed_body = self._fix_body_encoding(body, content_type)
-                    
-                    if fixed_body != body:
-                        # Create a new request with the fixed body
-                        logger.info(f"Fixed encoding issues in {content_type} request")
-                        request = self._create_request_with_fixed_body(request, fixed_body)
-            
-            except Exception as e:
-                logger.error(f"Error fixing request encoding for {request.url.path}: {e}", exc_info=True)
-                # Continue with original request if fixing fails
-                pass
-        
         return await call_next(request)
     
     def _fix_body_encoding(self, body: bytes, content_type: str) -> bytes:

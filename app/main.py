@@ -24,7 +24,7 @@ from app.routers import payment_simplified as payment
 # Rate limiting removed per user request
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.encoding_fix import EncodingFixMiddleware
-from app.middleware.auth_middleware import get_current_user
+from app.middleware.auth_middleware import get_current_user, get_optional_user
 from app.utils.health import health_checker
 
 
@@ -70,14 +70,17 @@ app = FastAPI(
 # 1. timeout_middleware (decorator - outermost)
 # 2. LoggingMiddleware
 # 3. EncodingFixMiddleware
-# 4. CORSMiddleware (innermost - adds headers last)
-# 5. Endpoint
+# 4. RequestBodyDebugMiddleware (for payment endpoints debugging)
+# 5. CORSMiddleware (innermost - adds headers last)
+# 6. Endpoint
 #
 # IMPORTANT: CORSMiddleware must be innermost so it processes responses
 # from ALL sources including timeout errors from outer middleware
 # ============================================================================
 
 # Add custom middleware FIRST (so they execute in the middle)
+# DISABLED: RequestBodyDebugMiddleware causes body stream corruption
+# app.add_middleware(RequestBodyDebugMiddleware)
 app.add_middleware(EncodingFixMiddleware)
 app.add_middleware(LoggingMiddleware)
 
@@ -100,7 +103,7 @@ app.include_router(subscriptions.router)
 
 # Import models for /translate endpoint
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 class FileInfo(BaseModel):
     id: str
@@ -203,7 +206,7 @@ async def create_transaction_record(
 @app.post("/translate", tags=["Translation"])
 async def translate_files(
     request: TranslateRequest = Body(...),
-    current_user: dict = Depends(get_current_user)
+    current_user: Optional[dict] = Depends(get_optional_user)
 ):
     # DEBUG: This line should appear immediately after Pydantic validation succeeds
     print("🔵 DEBUG: Endpoint function STARTED - Pydantic validation PASSED")
@@ -222,9 +225,9 @@ async def translate_files(
     # ============================================================================
     print("=" * 100)
     print("[RAW INCOMING DATA] /translate ENDPOINT REACHED - Pydantic validation passed")
-    print(f"[RAW INCOMING DATA] Authenticated User: {current_user.get('email', 'N/A')}")
-    print(f"[RAW INCOMING DATA] Company ID: {current_user.get('company_id', 'N/A')}")
-    print(f"[RAW INCOMING DATA] Permission: {current_user.get('permission_level', 'N/A')}")
+    print(f"[RAW INCOMING DATA] Authenticated User: {current_user.get('email', 'N/A') if current_user else 'None (Individual User)'}")
+    print(f"[RAW INCOMING DATA] Company ID: {current_user.get('company_id', 'N/A') if current_user else 'None (Individual User)'}")
+    print(f"[RAW INCOMING DATA] Permission: {current_user.get('permission_level', 'N/A') if current_user else 'None (Individual User)'}")
     print(f"[RAW INCOMING DATA] Request Data:")
     print(f"[RAW INCOMING DATA]   - Customer Email: {request.email}")
     print(f"[RAW INCOMING DATA]   - Source Language: {request.sourceLanguage}")
@@ -248,7 +251,7 @@ async def translate_files(
         logging.info(msg)
         print(msg)
 
-    log_step("REQUEST RECEIVED", f"User: {current_user.get('email')}, Company: {current_user.get('company_id')}")
+    log_step("REQUEST RECEIVED", f"User: {current_user.get('email') if current_user else 'Individual'}, Company: {current_user.get('company_id') if current_user else 'None'}")
     log_step("REQUEST DETAILS", f"Email: {request.email}, {request.sourceLanguage} -> {request.targetLanguage}, Files: {len(request.files)}")
 
     # Log request payload
@@ -335,7 +338,7 @@ async def translate_files(
 
     # Detect customer type (enterprise with company_id vs individual without)
     # IMPORTANT: Do this BEFORE creating folders so we know which structure to create
-    company_id = current_user.get("company_id")
+    company_id = current_user.get("company_id") if current_user else None
     is_enterprise = company_id is not None
     company_name = None
     log_step("CUSTOMER TYPE DETECTED", f"{'Enterprise' if is_enterprise else 'Individual'} (company_id: {company_id})")
@@ -793,6 +796,124 @@ async def confirm_transactions(
             logging.info(f"[CONFIRM] Transaction {txn_id} status updated to 'confirmed'")
             print(f"[CONFIRM] Transaction {txn_id} confirmed")
 
+        # Update subscription usage for enterprise transactions
+        print("=" * 80)
+        print(f"[SUBSCRIPTION UPDATE] Starting subscription usage tracking...")
+        logging.info(f"[SUBSCRIPTION] Starting usage tracking for {len(transactions)} transaction(s)")
+
+        from app.services.subscription_service import subscription_service
+        from app.models.subscription import UsageUpdate
+
+        subscription_updates = {}  # Track subscription_id -> total units
+
+        # Step 1: Analyze transactions and accumulate units per subscription
+        print(f"[SUBSCRIPTION UPDATE] Step 1: Analyzing {len(transactions)} transaction(s)...")
+        for i, txn in enumerate(transactions, 1):
+            txn_id = txn.get("transaction_id", "UNKNOWN")
+            subscription_id = txn.get("subscription_id")
+            units_count = txn.get("units_count", 0)
+            unit_type = txn.get("unit_type", "unknown")
+
+            print(f"[SUBSCRIPTION UPDATE] Transaction {i}/{len(transactions)}: {txn_id}")
+            print(f"[SUBSCRIPTION UPDATE]   - subscription_id: {subscription_id}")
+            print(f"[SUBSCRIPTION UPDATE]   - units_count: {units_count} {unit_type}(s)")
+            print(f"[SUBSCRIPTION UPDATE]   - file_name: {txn.get('file_name', 'N/A')}")
+
+            if subscription_id and units_count > 0:
+                # Accumulate units per subscription
+                sub_id_str = str(subscription_id)
+                if sub_id_str not in subscription_updates:
+                    subscription_updates[sub_id_str] = 0
+                    print(f"[SUBSCRIPTION UPDATE]   ✅ New subscription to track: {sub_id_str}")
+                subscription_updates[sub_id_str] += units_count
+                print(f"[SUBSCRIPTION UPDATE]   ✅ Added {units_count} units → Total for {sub_id_str}: {subscription_updates[sub_id_str]} units")
+                logging.info(f"[SUBSCRIPTION] Transaction {txn_id}: +{units_count} {unit_type}(s) for subscription {sub_id_str}")
+            elif not subscription_id:
+                print(f"[SUBSCRIPTION UPDATE]   ⚠️ No subscription_id - Individual customer transaction")
+            elif units_count <= 0:
+                print(f"[SUBSCRIPTION UPDATE]   ⚠️ Invalid units_count: {units_count}")
+
+        # Step 2: Apply subscription updates to database
+        if subscription_updates:
+            print(f"[SUBSCRIPTION UPDATE] Step 2: Applying updates to {len(subscription_updates)} subscription(s)...")
+            logging.info(f"[SUBSCRIPTION] Updating {len(subscription_updates)} subscription(s)")
+
+            for subscription_id_str, total_units in subscription_updates.items():
+                print(f"[SUBSCRIPTION UPDATE] Processing subscription: {subscription_id_str}")
+                print(f"[SUBSCRIPTION UPDATE]   - Total units to add: {total_units}")
+
+                try:
+                    # Fetch current subscription state BEFORE update
+                    subscription_before = await subscription_service.get_subscription(subscription_id_str)
+                    if subscription_before:
+                        current_period = None
+                        now = datetime.now(timezone.utc)
+                        for period in subscription_before.get("usage_periods", []):
+                            period_start = period["period_start"]
+                            period_end = period["period_end"]
+                            if not period_start.tzinfo:
+                                period_start = period_start.replace(tzinfo=timezone.utc)
+                            if not period_end.tzinfo:
+                                period_end = period_end.replace(tzinfo=timezone.utc)
+                            if period_start <= now <= period_end:
+                                current_period = period
+                                break
+
+                        if current_period:
+                            print(f"[SUBSCRIPTION UPDATE]   - Current period: {current_period['period_start'].strftime('%Y-%m-%d')} to {current_period['period_end'].strftime('%Y-%m-%d')}")
+                            print(f"[SUBSCRIPTION UPDATE]   - Units before: allocated={current_period['units_allocated']}, used={current_period['units_used']}, remaining={current_period['units_remaining']}")
+                        else:
+                            print(f"[SUBSCRIPTION UPDATE]   ⚠️ No active usage period found for current date")
+
+                    # Create usage update request
+                    usage_update = UsageUpdate(
+                        units_to_add=total_units,
+                        use_promotional_units=False  # Use regular units
+                    )
+                    print(f"[SUBSCRIPTION UPDATE]   - Calling subscription_service.record_usage()...")
+
+                    # Update subscription
+                    updated_subscription = await subscription_service.record_usage(
+                        subscription_id=subscription_id_str,
+                        usage_data=usage_update
+                    )
+
+                    # Fetch subscription state AFTER update to verify
+                    if updated_subscription:
+                        for period in updated_subscription.get("usage_periods", []):
+                            period_start = period["period_start"]
+                            period_end = period["period_end"]
+                            if not period_start.tzinfo:
+                                period_start = period_start.replace(tzinfo=timezone.utc)
+                            if not period_end.tzinfo:
+                                period_end = period_end.replace(tzinfo=timezone.utc)
+                            if period_start <= now <= period_end:
+                                print(f"[SUBSCRIPTION UPDATE]   - Units after: allocated={period['units_allocated']}, used={period['units_used']}, remaining={period['units_remaining']}")
+                                print(f"[SUBSCRIPTION UPDATE]   ✅ Successfully updated: {period['units_used'] - current_period['units_used'] if current_period else 'N/A'} units added")
+                                break
+
+                    logging.info(f"[SUBSCRIPTION] Successfully updated {subscription_id_str}: +{total_units} units")
+                    print(f"[SUBSCRIPTION UPDATE]   ✅ Database update completed successfully")
+                    print(f"[SUBSCRIPTION UPDATE] ✅ Subscription {subscription_id_str}: +{total_units} units recorded")
+
+                except Exception as e:
+                    # Log error but don't fail the transaction
+                    error_msg = str(e)
+                    logging.error(f"[SUBSCRIPTION] Failed to update {subscription_id_str}: {e}", exc_info=True)
+                    print(f"[SUBSCRIPTION UPDATE]   ❌ Error updating subscription: {error_msg}")
+                    print(f"[SUBSCRIPTION UPDATE]   ❌ Transaction confirmed but subscription NOT updated")
+                    if "Insufficient units" in error_msg:
+                        print(f"[SUBSCRIPTION UPDATE]   ⚠️ Subscription may have run out of allocated units")
+                    elif "No active usage period" in error_msg:
+                        print(f"[SUBSCRIPTION UPDATE]   ⚠️ No active usage period for current date")
+        else:
+            print(f"[SUBSCRIPTION UPDATE] Step 2: No subscription updates needed")
+            print(f"[SUBSCRIPTION UPDATE]   - Reason: Individual customer (no subscription) or invalid data")
+            logging.info(f"[SUBSCRIPTION] No subscription updates needed")
+
+        print(f"[SUBSCRIPTION UPDATE] Subscription usage tracking complete")
+        print("=" * 80)
+
         verified_count = len([f for f in verified_files if f.get('is_in_inbox', False)])
 
         response = {
@@ -807,7 +928,14 @@ async def confirm_transactions(
                 "inbox_folder_id": inbox_folder_id,
                 "inbox_folder_url": f"https://drive.google.com/drive/folders/{inbox_folder_id}",
                 "files": verified_files,
-                "move_details": move_result
+                "move_details": move_result,
+                "subscription_updates": {
+                    "updated_subscriptions": len(subscription_updates),
+                    "details": [
+                        {"subscription_id": sub_id, "units_added": units}
+                        for sub_id, units in subscription_updates.items()
+                    ]
+                } if subscription_updates else None
             }
         }
 
@@ -1150,6 +1278,8 @@ async def timeout_middleware(request: Request, call_next):
             timeout = 300  # 5 minutes for file uploads
         elif "/translate" in str(request.url):
             timeout = 120  # 2 minutes for translations
+        elif "/api/payment/" in str(request.url):
+            timeout = 90   # 90 seconds for payment processing (Google Drive operations)
         elif "/login/" in str(request.url):
             timeout = 60   # 1 minute for authentication
         else:

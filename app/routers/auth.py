@@ -38,6 +38,140 @@ class CorporateLoginResponse(BaseModel):
     error: Optional[dict] = None
 
 
+class IndividualLoginRequest(BaseModel):
+    """Individual login request model (no company, no password)."""
+    user_full_name: str = Field(..., alias='userFullName', min_length=1)
+    user_email: EmailStr = Field(..., alias='userEmail')
+    login_date_time: str = Field(..., alias='loginDateTime')
+
+    model_config = {
+        'populate_by_name': True
+    }
+
+
+class IndividualLoginResponse(BaseModel):
+    """Individual login response model."""
+    success: bool
+    message: str
+    data: Optional[dict] = None
+    error: Optional[dict] = None
+
+
+@router.post("/individual", response_model=IndividualLoginResponse)
+async def individual_login(request: IndividualLoginRequest):
+    """
+    Individual user login endpoint (no company, no password).
+
+    Creates user if doesn't exist. Returns JWT token.
+
+    Request body:
+    ```json
+    {
+        "userFullName": "John Doe",
+        "userEmail": "john@example.com",
+        "loginDateTime": "2025-10-15T10:30:00Z"
+    }
+    ```
+
+    Response:
+    ```json
+    {
+        "success": true,
+        "message": "Individual login successful",
+        "data": {
+            "authToken": "jwt-token-here",
+            "tokenType": "Bearer",
+            "expiresIn": 28800,
+            "expiresAt": "2025-10-15T18:30:00Z",
+            "user": {
+                "user_id": "user_XXXXXXXX",
+                "user_name": "John Doe",
+                "email": "john@example.com",
+                "company_name": null,
+                "permission_level": "user"
+            },
+            "loginDateTime": "2025-10-15T10:30:00Z"
+        }
+    }
+    ```
+    """
+    logger.info("=" * 80)
+    logger.info(f"👤 INDIVIDUAL LOGIN REQUEST")
+    logger.info("=" * 80)
+    logger.info(f"  Email: {request.user_email}")
+    logger.info(f"  User: {request.user_full_name}")
+    logger.info(f"  Login Time: {request.login_date_time}")
+    logger.info("=" * 80)
+
+    try:
+        # Authenticate individual user via MongoDB (creates if doesn't exist)
+        auth_result = await auth_service.authenticate_individual_user(
+            user_name=request.user_full_name,
+            email=request.user_email
+        )
+
+        # Prepare successful response
+        response_content = {
+            "success": True,
+            "message": "Individual login successful",
+            "data": {
+                "authToken": auth_result["session_token"],
+                "tokenType": "Bearer",
+                "expiresIn": 28800,  # 8 hours in seconds
+                "expiresAt": auth_result["expires_at"],
+                "user": auth_result["user"],
+                "loginDateTime": request.login_date_time
+            }
+        }
+
+        logger.info("=" * 80)
+        logger.info("✅ INDIVIDUAL LOGIN SUCCESSFUL")
+        logger.info("=" * 80)
+        logger.info(f"  User: {auth_result['user']['email']}")
+        logger.info(f"  User Type: Individual (no company)")
+        logger.info(f"  Token expires: {auth_result['expires_at']}")
+        logger.info("=" * 80)
+
+        return JSONResponse(content=response_content)
+
+    except AuthenticationError as e:
+        logger.warning("=" * 80)
+        logger.warning(f"❌ AUTHENTICATION FAILED")
+        logger.warning("=" * 80)
+        logger.warning(f"  Reason: {str(e)}")
+        logger.warning(f"  Email: {request.user_email}")
+        logger.warning("=" * 80)
+
+        error_response = {
+            "success": False,
+            "message": "Authentication failed",
+            "error": {
+                "code": "AUTH_FAILED",
+                "message": str(e)
+            }
+        }
+
+        raise HTTPException(status_code=401, detail=str(e))
+
+    except Exception as e:
+        logger.error("=" * 80)
+        logger.error(f"💥 UNEXPECTED ERROR")
+        logger.error("=" * 80)
+        logger.error(f"  Error: {e}", exc_info=True)
+        logger.error("=" * 80)
+
+        error_response = {
+            "success": False,
+            "message": "Login processing failed",
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred during login"
+            }
+        }
+
+        raise HTTPException(status_code=500, detail="Login processing failed")
+
+
 @router.post("/corporate", response_model=CorporateLoginResponse)
 async def corporate_login(request: CorporateLoginRequest):
     """

@@ -550,45 +550,105 @@ class GoogleDriveService:
         
         moved_files = []
         failed_moves = []
-        
-        for i, file_id in enumerate(file_ids, 1):
-            try:
-                print(f"   Moving file {i}/{len(file_ids)}: {file_id}")
-                
-                # Get current parent folder (should be Temp folder)
-                current_parent = await self._get_file_parent(file_id)
-                print(f"   Current parent folder: {current_parent}")
 
-                # Move file to Inbox folder - use default arguments to capture loop variables
+        # OPTIMIZATION: Fetch all file parents in parallel
+        print(f"📊 OPTIMIZATION: Fetching {len(file_ids)} file parents in parallel...")
+        parent_fetch_start = asyncio.get_event_loop().time()
+
+        async def get_file_info(file_id: str, index: int) -> tuple:
+            """Get file parent and name in parallel."""
+            try:
+                parent = await self._get_file_parent(file_id)
+                return (file_id, index, parent, None)
+            except Exception as e:
+                return (file_id, index, None, str(e))
+
+        # Fetch all parents concurrently
+        file_info_results = await asyncio.gather(
+            *[get_file_info(fid, i) for i, fid in enumerate(file_ids, 1)],
+            return_exceptions=True
+        )
+
+        parent_fetch_elapsed = asyncio.get_event_loop().time() - parent_fetch_start
+        print(f"📊 Fetched {len(file_ids)} file parents in {parent_fetch_elapsed:.2f}s (parallel)")
+
+        # OPTIMIZATION: Move all files in parallel
+        print(f"📦 OPTIMIZATION: Moving {len(file_ids)} files in parallel...")
+        move_start = asyncio.get_event_loop().time()
+
+        async def move_single_file(file_info_result) -> dict:
+            """Move a single file to Inbox."""
+            if isinstance(file_info_result, Exception):
+                return {
+                    'file_id': 'unknown',
+                    'status': 'failed',
+                    'error': str(file_info_result)
+                }
+
+            file_id, index, current_parent, error = file_info_result
+
+            if error:
+                print(f"   File {index}/{len(file_ids)}: Failed to get parent for {file_id}: {error}")
+                return {
+                    'file_id': file_id,
+                    'status': 'failed',
+                    'error': f"Failed to get parent: {error}"
+                }
+
+            try:
+                print(f"   Moving file {index}/{len(file_ids)}: {file_id}")
+
+                # Move file to Inbox folder
                 updated_file = await asyncio.to_thread(
-                    lambda fid=file_id, inbox=inbox_folder_id, parent=current_parent:
-                        self.service.files().update(
-                            fileId=fid,
-                            addParents=inbox,
-                            removeParents=parent,
-                            fields='id,name,parents'
-                        ).execute()
+                    lambda: self.service.files().update(
+                        fileId=file_id,
+                        addParents=inbox_folder_id,
+                        removeParents=current_parent,
+                        fields='id,name,parents'
+                    ).execute()
                 )
 
-                moved_files.append({
+                print(f"   Successfully moved file {index}/{len(file_ids)}: {file_id} -> Inbox")
+                logging.info(f"Successfully moved file {file_id} to Inbox")
+
+                return {
                     'file_id': file_id,
                     'status': 'moved',
                     'new_parent': inbox_folder_id,
                     'old_parent': current_parent,
                     'file_name': updated_file.get('name', 'Unknown')
-                })
+                }
 
-                print(f"   Successfully moved file: {file_id} -> Inbox")
-                logging.info(f"Successfully moved file {file_id} to Inbox")
-                
             except Exception as e:
-                print(f"   Failed to move file {file_id}: {e}")
+                print(f"   Failed to move file {index}/{len(file_ids)} ({file_id}): {e}")
                 logging.error(f"Failed to move file {file_id}: {e}")
-                failed_moves.append({
+                return {
                     'file_id': file_id,
                     'status': 'failed',
                     'error': str(e)
+                }
+
+        # Move all files concurrently
+        move_results = await asyncio.gather(
+            *[move_single_file(result) for result in file_info_results],
+            return_exceptions=True
+        )
+
+        move_elapsed = asyncio.get_event_loop().time() - move_start
+        print(f"📦 Moved {len(file_ids)} files in {move_elapsed:.2f}s (parallel)")
+
+        # Categorize results
+        for result in move_results:
+            if isinstance(result, Exception):
+                failed_moves.append({
+                    'file_id': 'unknown',
+                    'status': 'failed',
+                    'error': str(result)
                 })
+            elif result['status'] == 'moved':
+                moved_files.append(result)
+            else:
+                failed_moves.append(result)
         
         result = {
             'customer_email': customer_email,

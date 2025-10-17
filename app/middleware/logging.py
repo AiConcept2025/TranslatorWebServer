@@ -211,27 +211,16 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     
     def _should_log_body(self, request: Request) -> bool:
         """Determine if request body should be logged."""
-        # IMPORTANT: Don't consume request body for auth endpoints
-        # Consuming the body stream causes Pydantic validation to hang
-        if request.url.path.startswith('/login/'):
-            return False
+        # CRITICAL: Don't consume request body for ANY endpoint with Pydantic validation
+        # BaseHTTPMiddleware + body reading causes stream corruption and ClientDisconnect errors
+        # FastAPI/Pydantic handles body parsing - middleware should NOT consume it
+        #
+        # Previous behavior: Only skipped /login/, causing 90s timeouts on other POST endpoints
+        # New behavior: Skip ALL endpoints to let FastAPI handle body parsing
 
-        content_type = request.headers.get('Content-Type', '').lower()
-
-        # Don't log file uploads or binary content
-        if ('multipart/form-data' in content_type or
-            'application/octet-stream' in content_type or
-            'image/' in content_type or
-            'video/' in content_type or
-            'audio/' in content_type):
-            return False
-
-        # Don't log very large bodies
-        content_length = request.headers.get('Content-Length')
-        if content_length and int(content_length) > 10000:  # 10KB limit
-            return False
-
-        return True
+        # Skip ALL POST/PUT/PATCH endpoints to avoid consuming body stream
+        # Endpoints log their own body AFTER Pydantic validation succeeds
+        return False
     
     def _should_log_response_body(self, response) -> bool:
         """Determine if response body should be logged."""

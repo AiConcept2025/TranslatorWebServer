@@ -2,11 +2,10 @@
 Simplified Payment API endpoints - No sessions, just customer email lookup.
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, Dict, Any
-import json
 import logging
 
 from app.services.google_drive_service import google_drive_service
@@ -58,175 +57,209 @@ class PaymentSuccessRequest(BaseModel):
             raise ValueError("payment_intent_id is required")
         return self.payment_intent_id
 
-@router.post("/success")
-async def handle_payment_success(raw_request: Request):
+async def process_payment_files_background(
+    customer_email: str,
+    payment_intent_id: str,
+    amount: Optional[float],
+    currency: Optional[str]
+):
     """
-    Payment success webhook - moves files from Temp to Inbox.
-    Accepts customer_email in root or metadata.
+    Background task to move files from Temp to Inbox.
+    Runs asynchronously without blocking HTTP response.
     """
-    print("\n" + "=" * 80)
-    print("💳 PAYMENT SUCCESS WEBHOOK - INCOMING REQUEST")
-    print("=" * 80)
-
-    # Log raw incoming request
-    try:
-        raw_body = await raw_request.body()
-        raw_json = raw_body.decode('utf-8')
-        print("📥 INCOMING PAYLOAD:")
-        print(raw_json)
-
-        # Parse JSON
-        json_data = json.loads(raw_json)
-        print("\n📋 PARSED JSON:")
-        print(json.dumps(json_data, indent=2))
-
-    except Exception as e:
-        print(f"❌ ERROR reading request: {e}")
-        raise HTTPException(status_code=400, detail="Invalid request format")
-
-    # Validate with Pydantic model
-    try:
-        request = PaymentSuccessRequest(**json_data)
-    except Exception as e:
-        print(f"❌ VALIDATION ERROR: {e}")
-        raise HTTPException(status_code=422, detail=str(e))
-
-    print("\n" + "-" * 80)
-    print("✅ PARSED FIELDS:")
-    print("-" * 80)
+    import time
+    task_start = time.time()
 
     try:
-        # Extract required fields
-        customer_email = request.get_customer_email()
-        payment_intent_id = request.get_payment_intent_id()
-
-        # Log all parsed fields
-        print(f"Customer Email:    {customer_email}")
-        print(f"Payment Intent ID: {payment_intent_id}")
-        print(f"Amount:            ${request.amount} {request.currency}")
-        print(f"Payment Method:    {request.payment_method}")
-        print(f"Timestamp:         {request.timestamp}")
-
-        if request.metadata:
-            print(f"\nMetadata:")
-            print(f"  Status:         {request.metadata.status}")
-            print(f"  Card Brand:     {request.metadata.cardBrand}")
-            print(f"  Last 4 Digits:  {request.metadata.last4}")
-            print(f"  Receipt Number: {request.metadata.receiptNumber}")
-            print(f"  Created:        {request.metadata.created}")
-            print(f"  Simulated:      {request.metadata.simulated}")
-
-        print("-" * 80)
-
-    except ValueError as e:
-        print(f"❌ VALIDATION ERROR: {e}")
+        print("\n" + "=" * 80)
+        print("🔄 BACKGROUND TASK STARTED")
         print("=" * 80)
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"⏱️  Started at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📋 Task Details:")
+        print(f"   Customer: {customer_email}")
+        print(f"   Payment ID: {payment_intent_id}")
+        print(f"   Amount: ${amount} {currency}")
+        print("=" * 80)
 
-    try:
         # Find files awaiting payment
+        print(f"\n🔍 Step 1: Finding files for customer...")
+        find_start = time.time()
         files_to_move = await google_drive_service.find_files_by_customer_email(
             customer_email=customer_email,
             status="awaiting_payment"
         )
+        find_time = (time.time() - find_start) * 1000
+        print(f"⏱️  File search completed in {find_time:.2f}ms")
 
         if not files_to_move:
-            print(f"\n⚠️  No pending files found for customer")
-
-            response_content = {
-                "success": True,
-                "message": f"Payment confirmed but no pending files found",
-                "data": {
-                    "customer_email": customer_email,
-                    "payment_intent_id": payment_intent_id,
-                    "files_moved": 0
-                }
-            }
-
-            print("\n" + "=" * 80)
-            print("📤 OUTGOING RESPONSE:")
-            print("=" * 80)
-            print(json.dumps(response_content, indent=2))
+            print(f"⚠️  No pending files found for {customer_email}")
+            total_time = (time.time() - task_start) * 1000
+            print(f"⏱️  BACKGROUND TASK TOTAL TIME: {total_time:.2f}ms")
             print("=" * 80 + "\n")
+            return
 
-            return JSONResponse(content=response_content)
-
-        print(f"\n✅ Found {len(files_to_move)} files to move")
+        print(f"\n✅ Found {len(files_to_move)} files to move:")
         for i, file_info in enumerate(files_to_move, 1):
-            print(f"   {i}. {file_info.get('filename')} (ID: {file_info.get('file_id')})")
+            print(f"   {i}. {file_info.get('filename')} (ID: {file_info.get('file_id')[:20]}...)")
 
         # Move files from Temp to Inbox
-        print(f"\n📁 Moving files from Temp to Inbox...")
+        print(f"\n📁 Step 2: Moving files from Temp to Inbox...")
+        move_start = time.time()
         file_ids = [f['file_id'] for f in files_to_move]
         result = await google_drive_service.move_files_to_inbox_on_payment_success(
             customer_email=customer_email,
             file_ids=file_ids
         )
+        move_time = (time.time() - move_start) * 1000
+        print(f"⏱️  File move completed in {move_time:.2f}ms")
+        print(f"✅ Moved: {result['moved_successfully']}/{result['total_files']} files")
+        print(f"📂 Inbox folder ID: {result.get('inbox_folder_id', 'N/A')}")
 
-        # Update file status
-        print(f"🔄 Updating file statuses...")
-        for file_id in file_ids:
+        # Update file statuses - ONLY for successfully moved files
+        print(f"\n🔄 Step 3: Updating file statuses (only for successfully moved files)...")
+        update_start = time.time()
+        success_count = 0
+        error_count = 0
+
+        # Extract IDs of successfully moved files
+        successfully_moved_file_ids = [f['file_id'] for f in result.get('moved_files', [])]
+
+        # Only update status for files that were actually moved
+        for i, file_id in enumerate(successfully_moved_file_ids, 1):
             try:
                 await google_drive_service.update_file_status(
                     file_id=file_id,
                     new_status="payment_confirmed",
                     payment_intent_id=payment_intent_id
                 )
-                print(f"   ✓ Updated: {file_id}")
+                success_count += 1
+                print(f"   {i}/{len(successfully_moved_file_ids)} ✓ Updated: {file_id[:20]}...")
             except Exception as e:
-                print(f"   ⚠️  Warning: Failed to update {file_id}: {e}")
+                error_count += 1
+                print(f"   {i}/{len(successfully_moved_file_ids)} ⚠️  Failed: {file_id[:20]}... - {str(e)[:50]}")
 
-        print(f"\n✅ SUCCESS: {result['moved_successfully']}/{result['total_files']} files moved to Inbox")
+        # Log files that failed to move (status remains 'awaiting_payment' for retry)
+        failed_move_count = result.get('failed_moves', 0)
+        if failed_move_count > 0:
+            print(f"\n⚠️  {failed_move_count} files failed to move - status NOT updated (will retry on next payment)")
+            for failed_file in result.get('failed_files', []):
+                print(f"      ❌ {failed_file['file_id'][:20]}...: {failed_file.get('error', 'Unknown error')[:60]}")
 
-        response_content = {
-            "success": True,
-            "message": f"Payment confirmed. {result['moved_successfully']} files moved to Inbox.",
-            "data": {
-                "customer_email": customer_email,
-                "payment_intent_id": payment_intent_id,
-                "total_files": result['total_files'],
-                "moved_successfully": result['moved_successfully'],
-                "inbox_folder_id": result['inbox_folder_id']
-            }
-        }
+        update_time = (time.time() - update_start) * 1000
+        print(f"⏱️  Status updates completed in {update_time:.2f}ms")
+        print(f"✅ Updated: {success_count}/{len(successfully_moved_file_ids)} successfully moved files")
+        if error_count > 0:
+            print(f"⚠️  Status update errors: {error_count}/{len(successfully_moved_file_ids)} files")
 
-        print("\n" + "=" * 80)
-        print("📤 OUTGOING RESPONSE:")
-        print("=" * 80)
-        print(json.dumps(response_content, indent=2))
+        total_time = (time.time() - task_start) * 1000
+        print(f"\n✅ BACKGROUND TASK COMPLETE")
+        print(f"⏱️  TOTAL TASK TIME: {total_time:.2f}ms")
+        print(f"   - File search: {find_time:.2f}ms")
+        print(f"   - File move: {move_time:.2f}ms")
+        print(f"   - Status updates: {update_time:.2f}ms")
         print("=" * 80 + "\n")
 
-        return JSONResponse(content=response_content)
-
-    except HTTPException as he:
-        # Log HTTP exceptions before re-raising
-        print(f"\n❌ HTTP EXCEPTION: {he.status_code} - {he.detail}")
-        print("=" * 80 + "\n")
-        raise
+        logging.info(f"Background task completed for {customer_email}: {result['moved_successfully']}/{result['total_files']} files moved in {total_time:.2f}ms")
 
     except Exception as e:
-        print(f"\n❌ UNEXPECTED ERROR: {e}")
-        logging.error(f"Payment success error: {e}", exc_info=True)
+        total_time = (time.time() - task_start) * 1000
+        print(f"\n❌ BACKGROUND TASK ERROR")
+        print(f"⏱️  Failed after: {total_time:.2f}ms")
+        print(f"💥 Error type: {type(e).__name__}")
+        print(f"💥 Error message: {str(e)}")
+        print("=" * 80 + "\n")
+        logging.error(f"Background file processing error for {customer_email}: {e}", exc_info=True)
 
-        error_response = {
-            "success": False,
-            "error": {
-                "code": 500,
-                "message": f"Failed to process payment: {str(e)}",
-                "type": "internal_error"
-            }
-        }
 
-        print("\n" + "=" * 80)
-        print("📤 OUTGOING ERROR RESPONSE:")
-        print("=" * 80)
-        print(json.dumps(error_response, indent=2))
+@router.post("/success")
+async def handle_payment_success(
+    request: PaymentSuccessRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    INSTANT payment success webhook - returns immediately.
+    Files are moved in background (non-blocking).
+    """
+    import time
+    start_time = time.time()
+
+    print("\n" + "=" * 80)
+    print("⚡ INSTANT PAYMENT SUCCESS WEBHOOK")
+    print("=" * 80)
+    print(f"⏱️  Request received at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    try:
+        # Log raw request data
+        print("\n📥 RAW REQUEST DATA:")
+        print(f"   payment_intent_id (snake_case): {request.payment_intent_id}")
+        print(f"   customer_email (root): {request.customer_email}")
+        print(f"   amount: {request.amount}")
+        print(f"   currency: {request.currency}")
+        print(f"   payment_method: {request.payment_method}")
+        print(f"   timestamp: {request.timestamp}")
+
+        if request.metadata:
+            print(f"\n📋 METADATA:")
+            print(f"   status: {request.metadata.status}")
+            print(f"   cardBrand: {request.metadata.cardBrand}")
+            print(f"   last4: {request.metadata.last4}")
+            print(f"   receiptNumber: {request.metadata.receiptNumber}")
+            print(f"   created: {request.metadata.created}")
+            print(f"   simulated: {request.metadata.simulated}")
+            print(f"   customer_email (metadata): {request.metadata.customer_email}")
+
+        # Extract required fields (FAST - no I/O)
+        parse_start = time.time()
+        customer_email = request.get_customer_email()
+        payment_intent_id = request.get_payment_intent_id()
+        parse_time = (time.time() - parse_start) * 1000
+
+        print(f"\n✅ EXTRACTED FIELDS (took {parse_time:.2f}ms):")
+        print(f"   Customer: {customer_email}")
+        print(f"   Payment ID: {payment_intent_id}")
+        print(f"   Amount: ${request.amount} {request.currency}")
+        print(f"   Payment Method: {request.payment_method}")
+
+        # Schedule background file processing
+        task_schedule_start = time.time()
+        background_tasks.add_task(
+            process_payment_files_background,
+            customer_email=customer_email,
+            payment_intent_id=payment_intent_id,
+            amount=request.amount,
+            currency=request.currency
+        )
+        task_schedule_time = (time.time() - task_schedule_start) * 1000
+
+        total_time = (time.time() - start_time) * 1000
+        print(f"\n⚡ INSTANT RESPONSE - Background task scheduled (took {task_schedule_time:.2f}ms)")
+        print(f"⏱️  TOTAL PROCESSING TIME: {total_time:.2f}ms")
         print("=" * 80 + "\n")
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to process payment: {str(e)}"
+        # Return IMMEDIATELY (< 100ms)
+        return JSONResponse(
+            content={
+                "success": True,
+                "message": "Payment confirmed. Files are being processed in the background.",
+                "data": {
+                    "customer_email": customer_email,
+                    "payment_intent_id": payment_intent_id,
+                    "status": "processing",
+                    "processing_time_ms": round(total_time, 2)
+                }
+            }
         )
+
+    except ValueError as e:
+        print(f"❌ VALIDATION ERROR: {e}")
+        print("=" * 80 + "\n")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception as e:
+        print(f"❌ UNEXPECTED ERROR: {e}")
+        print("=" * 80 + "\n")
+        logging.error(f"Payment success error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/failure")
 async def handle_payment_failure(customer_email: EmailStr, payment_intent_id: str):

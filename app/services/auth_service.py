@@ -341,6 +341,162 @@ class AuthService:
         logger.warning(f"[AUTH]   Token: {session_token[:8]}...{session_token[-8:]}")
         return False
 
+    async def authenticate_individual_user(
+        self,
+        user_name: str,
+        email: str
+    ) -> Dict[str, Any]:
+        """
+        Authenticate individual user (no company, no password).
+        Creates user if doesn't exist.
+
+        Args:
+            user_name: Full name of the user
+            email: User email address
+
+        Returns:
+            dict: {session_token, user_data, expires_at}
+
+        Raises:
+            AuthenticationError: If authentication fails
+        """
+        logger.info("=" * 80)
+        logger.info(f"[AUTH INDIVIDUAL] {datetime.now(timezone.utc).isoformat()} - Individual login attempt")
+        logger.info(f"[AUTH INDIVIDUAL] Email: {email}")
+        logger.info(f"[AUTH INDIVIDUAL] User Name: {user_name}")
+        logger.info("=" * 80)
+
+        # Check database connection
+        if not database.is_connected:
+            logger.error("[AUTH INDIVIDUAL] FAILED - MongoDB not connected")
+            raise AuthenticationError("Service temporarily unavailable")
+
+        # Step 1: Find or create individual user
+        logger.info(f"[AUTH INDIVIDUAL] Step 1: Looking up individual user by email...")
+        user = await database.users.find_one({
+            "email": email,
+            "company_id": None  # Individual users have no company
+        })
+
+        if user:
+            logger.info(f"[AUTH INDIVIDUAL] SUCCESS - Existing user found")
+            logger.info(f"[AUTH INDIVIDUAL]   User ID: {user.get('user_id')}")
+            logger.info(f"[AUTH INDIVIDUAL]   User Name: {user.get('user_name')}")
+            logger.info(f"[AUTH INDIVIDUAL]   Email: {user.get('email')}")
+            logger.info(f"[AUTH INDIVIDUAL]   Status: {user.get('status')}")
+
+            # Update user name if changed
+            if user.get('user_name') != user_name:
+                logger.info(f"[AUTH INDIVIDUAL] Updating user name: {user.get('user_name')} -> {user_name}")
+                now = datetime.now(timezone.utc)
+                await database.users.update_one(
+                    {"_id": user["_id"]},
+                    {
+                        "$set": {
+                            "user_name": user_name,
+                            "last_login": now,
+                            "updated_at": now
+                        }
+                    }
+                )
+                user["user_name"] = user_name
+            else:
+                # Just update last_login
+                now = datetime.now(timezone.utc)
+                await database.users.update_one(
+                    {"_id": user["_id"]},
+                    {
+                        "$set": {
+                            "last_login": now,
+                            "updated_at": now
+                        }
+                    }
+                )
+        else:
+            # Create new individual user
+            logger.info(f"[AUTH INDIVIDUAL] User not found - Creating new individual user...")
+            import uuid
+            now = datetime.now(timezone.utc)
+            user_id = f"user_{uuid.uuid4().hex[:16]}"
+
+            user_doc = {
+                "user_id": user_id,
+                "user_name": user_name,
+                "email": email,
+                "company_id": None,  # No company for individual users
+                "permission_level": "user",  # Individual users are regular users
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+                "last_login": now
+            }
+
+            result = await database.users.insert_one(user_doc)
+            user_doc["_id"] = result.inserted_id
+            user = user_doc
+
+            logger.info(f"[AUTH INDIVIDUAL] SUCCESS - New user created")
+            logger.info(f"[AUTH INDIVIDUAL]   User ID: {user_id}")
+            logger.info(f"[AUTH INDIVIDUAL]   Email: {email}")
+            logger.info(f"[AUTH INDIVIDUAL]   Status: active")
+
+        # Step 2: Check user status
+        logger.info(f"[AUTH INDIVIDUAL] Step 2: Checking user status...")
+        if user.get("status") != "active":
+            logger.warning(f"[AUTH INDIVIDUAL] FAILED - User account is not active")
+            logger.warning(f"[AUTH INDIVIDUAL]   Current status: {user.get('status')}")
+            raise AuthenticationError("User account is not active")
+
+        logger.info(f"[AUTH INDIVIDUAL] SUCCESS - User status is active")
+
+        # Step 3: Create JWT token (NO DATABASE STORAGE - self-contained!)
+        logger.info(f"[AUTH INDIVIDUAL] Step 3: Creating JWT access token...")
+        from app.services.jwt_service import jwt_service
+        from datetime import timedelta
+
+        user_token_data = {
+            "user_id": user.get("user_id"),
+            "email": user.get("email"),
+            "user_name": user.get("user_name"),
+            "company_id": None,  # No company for individual users
+            "company_name": None,  # No company for individual users
+            "permission_level": "user"  # Individual users are regular users
+        }
+
+        # Create JWT token with 8-hour expiration
+        expires_delta = timedelta(hours=self.SESSION_EXPIRATION_HOURS)
+        access_token = jwt_service.create_access_token(user_token_data, expires_delta)
+
+        expires_at = datetime.now(timezone.utc) + expires_delta
+
+        logger.info(f"[AUTH INDIVIDUAL] SUCCESS - JWT token created")
+        logger.info(f"[AUTH INDIVIDUAL]   Token type: JWT (self-contained, NO database lookup needed)")
+        logger.info(f"[AUTH INDIVIDUAL]   Token: {access_token[:16]}...{access_token[-8:]}")
+        logger.info(f"[AUTH INDIVIDUAL]   Expires: {expires_at.isoformat()}")
+
+        # Prepare user data response (exclude sensitive fields)
+        user_data = {
+            "user_id": user.get("user_id"),
+            "user_name": user.get("user_name"),
+            "email": user.get("email"),
+            "company_name": None,  # Individual users have no company
+            "permission_level": "user"
+        }
+
+        logger.info("=" * 80)
+        logger.info(f"[AUTH INDIVIDUAL] AUTHENTICATION SUCCESSFUL")
+        logger.info(f"[AUTH INDIVIDUAL] User: {email}")
+        logger.info(f"[AUTH INDIVIDUAL] User Type: Individual (no company)")
+        logger.info(f"[AUTH INDIVIDUAL] Token expires: {expires_at.isoformat()}")
+        logger.info(f"[AUTH INDIVIDUAL] Token type: JWT (NO database queries on subsequent requests!)")
+        logger.info("=" * 80)
+
+        return {
+            "session_token": access_token,  # JWT token
+            "user": user_token_data,
+            "expires_at": expires_at.isoformat()
+        }
+
 
 # Global auth service instance
 auth_service = AuthService()

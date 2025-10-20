@@ -1,0 +1,27 @@
+"""
+⚠️ DEPRECATED - DO NOT USE THIS FILE ⚠️
+
+This router is DEPRECATED and should NOT be used or imported.
+
+REASON FOR DEPRECATION:
+- Contains STUB page counting (hardcoded 1 page per file)
+- Does not handle file content (no base64 decoding)
+- Does not perform subscription validation correctly
+- Frontend does NOT call this endpoint
+
+CORRECT ENDPOINT:
+The production endpoint is in app/main.py:
+- Route: POST /translate (NOT /api/translate)
+- Has accurate page counting via page_counter_service
+- Handles file content properly
+- Performs accurate subscription validation
+
+This file was renamed from translate.py to prevent accidental use.
+
+DATE DEPRECATED: 2025-01-18
+DEPRECATED BY: Claude Code debugging session
+ISSUE: Subscription validation using stub page counts (1 page/file)
+"""
+
+# OLD STUB IMPLEMENTATION REMOVED
+# See app/main.py POST /translate for correct implementation

@@ -163,12 +163,14 @@ class AuthService:
         from app.services.jwt_service import jwt_service
         from datetime import timedelta
 
+        # Include both internal JWT fields and frontend-facing fields
         user_token_data = {
-            "user_id": user.get("user_id"),
+            "user_id": user.get("user_id"),  # Required by JWT service
             "email": user.get("email"),
-            "user_name": user.get("user_name"),
-            "company_id": str(company_id),
-            "company_name": company_name,
+            "fullName": user.get("user_name"),  # Frontend expects this
+            "company": company_name,  # Frontend expects this
+            "company_id": str(company_id),  # Backend needs ObjectId as string for enterprise detection
+            "company_name": company_name,  # JWT service expects this field name
             "permission_level": user.get("permission_level", "user")
         }
 
@@ -212,11 +214,11 @@ class AuthService:
         logger.info(f"[AUTH] SUCCESS - Last login updated to {now.isoformat()}")
 
         # Prepare user data response (exclude sensitive fields)
+        # Field names match frontend expectations (fullName, company)
         user_data = {
-            "user_id": user.get("user_id"),
-            "user_name": user.get("user_name"),
+            "fullName": user.get("user_name"),
             "email": user.get("email"),
-            "company_name": company_name,
+            "company": company_name,
             "permission_level": user.get("permission_level", "user")
         }
 
@@ -454,12 +456,12 @@ class AuthService:
         from app.services.jwt_service import jwt_service
         from datetime import timedelta
 
+        # Include both internal JWT fields and frontend-facing fields
         user_token_data = {
-            "user_id": user.get("user_id"),
+            "user_id": user.get("user_id"),  # Required by JWT service
             "email": user.get("email"),
-            "user_name": user.get("user_name"),
-            "company_id": None,  # No company for individual users
-            "company_name": None,  # No company for individual users
+            "fullName": user.get("user_name"),  # Frontend expects this
+            "company": None,  # No company for individual users
             "permission_level": "user"  # Individual users are regular users
         }
 

@@ -1,196 +1,249 @@
-# CLAUDE.md
+# CLAUDE.md - FastAPI Backend
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+**Stack:** Python 3.11+, FastAPI 0.104+, Pydantic v2, Uvicorn, pytest-asyncio, httpx
 
-## Project Overview
-
-TranslatorWebServer - A FastAPI-based translation service with **STUB IMPLEMENTATIONS** for development and demonstration purposes.
-
-**Important**: This is a fully implemented FastAPI project with stub functions that use "Hello World" print statements instead of actual translation, file processing, and payment functionality.
-
-## Development Commands
-
-### Setup
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Copy environment configuration
-cp .env.example .env
+## Structure
 ```
-
-### Running the Application
-```bash
-# Run with Python
-python -m app.main
-
-# Or run with uvicorn directly
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### Testing
-```bash
-# Install test dependencies
-pip install pytest pytest-asyncio httpx
-
-# Run tests
-pytest
-```
-
-### Code Quality
-```bash
-# Format code
-black app/
-
-# Lint code
-flake8 app/
-
-# Type checking
-mypy app/
-```
-
-## Project Architecture
-
-### Technology Stack
-- **Framework**: FastAPI (Python async web framework)
-- **Validation**: Pydantic models for request/response validation
-- **Configuration**: Environment-based configuration with pydantic-settings
-- **File Upload**: Multipart file handling with aiofiles
-- **Middleware**: Custom logging and rate limiting middleware
-- **Health Checks**: Comprehensive health monitoring
-- **Documentation**: Auto-generated OpenAPI/Swagger documentation
-
-### Project Structure
-```
-TranslatorWebServer/
+server/
 ├── app/
-│   ├── main.py                 # FastAPI application entry point
-│   ├── config.py              # Configuration management
-│   ├── models/                # Pydantic models
-│   │   ├── requests.py        # Request models with validation
-│   │   └── responses.py       # Response models
-│   ├── routers/               # API route handlers
-│   │   ├── translate.py       # Translation endpoints (STUBBED)
-│   │   ├── upload.py          # File upload endpoints (STUBBED)
-│   │   ├── languages.py       # Language endpoints (STUBBED)
-│   │   └── payment.py         # Payment endpoints (STUBBED)
-│   ├── services/              # Business logic services
-│   │   ├── translation_service.py  # Translation service (STUBBED)
-│   │   ├── file_service.py         # File handling service (STUBBED)
-│   │   └── payment_service.py      # Payment processing (STUBBED)
-│   ├── middleware/            # Custom middleware
-│   │   ├── logging.py         # Request/response logging (FUNCTIONAL)
-│   │   └── rate_limiting.py   # Rate limiting (FUNCTIONAL)
-│   └── utils/                 # Utility functions
-│       └── health.py          # Health check utilities (STUBBED)
-├── uploads/                   # File upload directory
-├── requirements.txt           # Python dependencies
-├── .env.example              # Environment configuration template
-├── .gitignore                # Git ignore rules
-└── README.md                 # Project documentation
+│   ├── main.py              # FastAPI app + lifespan
+│   ├── core/                # config, security, deps
+│   ├── api/v1/              # versioned routes
+│   ├── services/            # business logic
+│   ├── models/              # Pydantic schemas
+│   ├── db/                  # models, session, repos
+│   └── middleware/          # logging, CORS, rate limiting
+├── tests/                   # unit, integration, fixtures
+└── alembic/                 # migrations
 ```
 
-## Implementation Status
+**Quick Start:**
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+uvicorn app.main:app --reload
+pytest -v --cov=app
+```
 
-### ✅ Fully Implemented (Functional)
-- FastAPI application setup and configuration
-- Request/response models with validation
-- API routing and endpoint structure
-- Middleware (logging, rate limiting, CORS)
-- Health check endpoints
-- Environment configuration management
-- OpenAPI/Swagger documentation
-- Error handling and exception management
+## Plugin System (wshobson/agents)
 
-### 🔄 Stub Implementations (Print "Hello World")
-- **Translation Services**: Google Translate, DeepL, Azure Translator
-- **File Processing**: Text extraction from DOC, DOCX, PDF, RTF, ODT
-- **Payment Processing**: Stripe integration and webhooks
-- **Language Detection**: Automatic language identification
-- **File Upload**: Actual file storage and metadata
-- **Database Operations**: User history and persistent storage
+**Install:**
+```bash
+/plugin marketplace add wshobson/agents
+/plugin install backend-development database-development debugging-toolkit security-scanning testing-automation
+```
 
-## Key Features
+**Key Plugins:**
+- `backend-development` - API design, architecture, docs
+- `database-development` - Schema, migrations, optimization
+- `debugging-toolkit` - Bug investigation, incidents
+- `security-scanning` - Audits, OWASP compliance
+- `testing-automation` - Test generation, coverage
 
-### API Endpoints
-- **Translation**: `/api/v1/translate/*` - Text and file translation (stubbed)
-- **File Upload**: `/api/v1/files/*` - File upload and management (stubbed)
-- **Languages**: `/api/v1/languages/*` - Language support and detection (stubbed)
-- **Payments**: `/api/v1/payments/*` - Payment processing (stubbed)
-- **Health**: `/health` - Application health monitoring (functional with stub metrics)
+**Core Agents:**
+| Agent | Purpose |
+|-------|---------|
+| `backend-architect` | API/system design |
+| `database-architect` | Schema design |
+| `python-backend-engineer` | FastAPI implementation |
+| `database-admin` | Migrations, setup |
+| `database-optimizer` | Query optimization, indexing |
+| `test-automator` | Test generation |
+| `security-auditor` | Security scanning |
+| `performance-engineer` | Performance profiling |
+| `incident-responder` | Production debugging |
+| `code-reviewer` | Code quality review |
 
-### Middleware Features
-- **Request Logging**: Comprehensive request/response logging with sanitization
-- **Rate Limiting**: Configurable rate limiting with different limits per endpoint
-- **CORS Support**: Cross-origin request handling
-- **Error Handling**: Consistent error responses with request IDs
+## Agent Usage
 
-### Configuration
-- Environment-based configuration with validation
-- Support for multiple translation service API keys
-- Configurable file upload limits and storage paths
-- Rate limiting configuration
-- Logging configuration
+**Decision Tree:**
+- Architecture/Design → `backend-architect`, `database-architect`
+- Implementation → `python-backend-engineer`, `database-admin`
+- Testing → `test-automator`
+- Security → `security-auditor`, `backend-security-coder`
+- Performance → `performance-engineer`, `database-optimizer`
+- Incidents → `incident-responder`
 
-## Working with Stubs
+**Invocation:**
+```bash
+# Natural language (auto-select)
+"Design REST API for document translation"
 
-### Understanding Stub Behavior
-All stub functions:
-1. Print "Hello World" messages to console with operation details
-2. Return realistic-looking response data
-3. Don't perform actual external API calls
-4. Don't process real files or payments
+# Explicit
+"Use backend-architect to design authentication API with OAuth2"
 
-### Replacing Stubs with Real Implementation
-To replace stubs with real functionality:
-1. **Translation Services**: Implement actual API calls to Google, DeepL, Azure
-2. **File Processing**: Add real text extraction using libraries like PyPDF2, python-docx
-3. **Payment Processing**: Implement actual Stripe API calls
-4. **Database**: Add SQLAlchemy models and database operations
-5. **Storage**: Implement real file storage and metadata persistence
+# Plugin workflow
+/backend-development:api-design "document translation service"
 
-### Example Stub Pattern
+# Multi-agent chain
+"Implement payment feature"
+→ backend-architect → python-backend-engineer → test-automator → security-auditor
+```
+
+**Always Include:**
+1. Context (file structure, dependencies, existing behavior)
+2. Acceptance criteria (status codes, schemas, performance targets)
+3. Constraints (what not to change, compatibility)
+4. For bugs: test case, logs, steps to reproduce
+
+## Database Development
+
+**MCP Setup** (`~/.claude.json`):
+```json
+{
+  "mcpServers": {
+    "postgresql": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": {"POSTGRES_CONNECTION_STRING": "postgresql://user:pass@localhost:5432/db"}
+    }
+  }
+}
+```
+
+**Usage:**
+```bash
+# Direct queries
+"Show all tables" | "Get schema for users table"
+
+# With agents
+"Use database-optimizer to analyze query performance for documents table"
+```
+
+## Workflows
+
+**New Feature:**
+```
+1. backend-architect: Design API spec
+2. database-architect: Schema design (if needed)
+3. python-backend-engineer: Implement
+4. test-automator: Create tests
+5. security-auditor: Security review
+6. performance-engineer: Profile (target: p95 <200ms)
+7. code-reviewer: Final review
+```
+
+**Production Incident:**
+```
+1. incident-responder: Triage
+2. debugger: Root cause analysis
+3. python-backend-engineer: Fix
+4. test-automator: Regression test
+5. deployment-engineer: Deploy
+```
+
+## Quality Gates (Mandatory)
+```bash
+pytest -v --cov=app --cov-report=term-missing  # 80% coverage
+mypy app --strict
+ruff check app tests --fix
+black app tests --check
+bandit -r app -ll
+pip-audit
+```
+
+## FastAPI Patterns
+
+**App Factory:**
 ```python
-async def translate_text(text: str, target_lang: str) -> str:
-    print(f"Hello World - Translation stub: '{text[:30]}...' to {target_lang}")
-    return f"[STUB] Translated '{text[:30]}...' to {target_lang}"
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: init DB pool, cache
+    yield
+    # Shutdown: close connections
+
+def create_app() -> FastAPI:
+    app = FastAPI(lifespan=lifespan)
+    # Add middleware, routers
+    return app
 ```
 
-## Development Guidelines
+**Thin Controllers:**
+```python
+@router.post("/", response_model=TranslationResponse, status_code=202)
+async def create_translation(
+    file: UploadFile = File(...),
+    service: TranslationService = Depends(get_translation_service),
+    current_user = Depends(get_current_user),
+) -> TranslationResponse:
+    result = await service.create_translation_job(file, current_user.id)
+    return result
+```
 
-### When Extending Functionality
-1. Follow the existing pattern of separating routers, services, and models
-2. Add proper request/response validation using Pydantic
-3. Include appropriate error handling
-4. Add logging for debugging
-5. Update health checks if adding external dependencies
-6. Maintain the stub pattern for non-essential services during development
+**Service Layer:**
+```python
+class TranslationService:
+    def __init__(self, db: AsyncSession):
+        self.repo = TranslationRepository(db)
+    
+    async def create_translation_job(self, file: UploadFile, user_id: str):
+        file_data = await file.read()
+        await self._validate_file(file_data)
+        return await self.repo.create_job(user_id=user_id)
+```
 
-### Testing Strategy
-- Test API endpoints for proper request/response handling
-- Test validation logic in Pydantic models
-- Test middleware functionality
-- Mock external services for unit tests
-- Use stub responses for integration tests
+**Repository:**
+```python
+class TranslationRepository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+    
+    async def get_by_id(self, job_id: str) -> Translation | None:
+        result = await self.db.execute(
+            select(Translation).where(Translation.id == job_id)
+        )
+        return result.scalar_one_or_none()
+```
 
-### Performance Considerations
-- Use async/await throughout for I/O operations
-- Implement proper connection pooling when adding real database/API clients
-- Consider caching strategies for translation results
-- Monitor memory usage with file uploads
-- Implement proper cleanup for temporary files
+## Performance Budgets
+| Endpoint | P95 Target |
+|----------|------------|
+| GET /health | <20ms |
+| GET /api/v1/translations | <100ms |
+| POST /api/v1/translate | <200ms |
 
-## Deployment Notes
+## Agent Templates
 
-For production deployment (after implementing real functionality):
-1. Set `DEBUG=False` and `ENVIRONMENT=production`
-2. Configure proper secret keys and API credentials
-3. Set up PostgreSQL or other production database
-4. Configure Redis for caching and session storage
-5. Use proper logging configuration (structured logging)
-6. Implement monitoring and alerting
-7. Use a production ASGI server like Gunicorn with Uvicorn workers
+**API Design:**
+```
+"Use backend-architect to design auth API:
+- POST /api/v1/auth/login, /refresh
+- JWT RS256, 15min access, 7d refresh
+- Rate limit: 5/min
+→ Spec, errors, security, examples"
+```
+
+**DB Optimization:**
+```
+"Use database-optimizer for translations query (850ms → <200ms):
+[query]
+→ Query plan, indexes, rewrite, metrics, test"
+```
+
+**Security:**
+```
+"Use security-auditor for app/core/security.py:
+- OWASP Top 10, hardcoded secrets, SQL injection
+→ Vulnerability report, fixes, tests"
+```
+
+## Commands
+```bash
+# Dev
+uvicorn app.main:app --reload
+
+# Test
+pytest -v --cov=app
+pytest tests/integration/test_translate.py -v
+
+# Lint
+ruff check app tests --fix && black app tests && mypy app --strict
+
+# DB
+alembic revision --autogenerate -m "msg"
+alembic upgrade head
+```
+

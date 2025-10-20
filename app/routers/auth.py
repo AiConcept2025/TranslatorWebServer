@@ -3,6 +3,8 @@ Authentication API endpoints with MongoDB integration.
 
 Provides corporate login, logout, and session verification endpoints
 with full MongoDB database authentication.
+
+Also provides simple user signup and login endpoints for users_login collection.
 """
 
 from fastapi import APIRouter, HTTPException, Header
@@ -10,8 +12,19 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 import logging
+import bcrypt
+import asyncio
+from functools import partial
+from datetime import datetime, timezone
 
 from app.services.auth_service import auth_service, AuthenticationError
+from app.models.auth_models import (
+    UserSignupRequest,
+    UserSignupResponse,
+    UserLoginRequest,
+    UserLoginResponse
+)
+from app.database.mongodb import database
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/login", tags=["Authentication"])
@@ -249,7 +262,7 @@ async def corporate_login(request: CorporateLoginRequest):
         logger.info("✅ LOGIN SUCCESSFUL")
         logger.info("=" * 80)
         logger.info(f"  User: {auth_result['user']['email']}")
-        logger.info(f"  Company: {auth_result['user']['company_name']}")
+        logger.info(f"  Company: {auth_result['user']['company']}")
         logger.info(f"  Token expires: {auth_result['expires_at']}")
         logger.info("=" * 80)
 
@@ -436,3 +449,255 @@ async def verify_session(authorization: Optional[str] = Header(None)):
         logger.error(f"💥 VERIFICATION ERROR: {e}", exc_info=True)
         logger.error("=" * 80)
         raise HTTPException(status_code=500, detail="Verification failed")
+
+
+# ============================================================================
+# Simple User Authentication Endpoints (users_login collection)
+# ============================================================================
+
+@router.post("/api/auth/signup", response_model=UserSignupResponse, tags=["User Auth"])
+async def user_signup(request: UserSignupRequest):
+    """
+    Create new user account in users_login collection.
+
+    **Request Body:**
+    ```json
+    {
+        "user_name": "John Doe",
+        "user_email": "john@example.com",
+        "password": "SecurePass123"
+    }
+    ```
+
+    **Response (201 Created):**
+    ```json
+    {
+        "success": true,
+        "message": "User created successfully",
+        "user": {
+            "user_name": "John Doe",
+            "user_email": "john@example.com"
+        }
+    }
+    ```
+
+    **Error Responses:**
+    - 400: Email/username already exists, validation errors
+    - 500: Server error
+    """
+    logger.info("=" * 80)
+    logger.info(f"🆕 USER SIGNUP REQUEST")
+    logger.info("=" * 80)
+    logger.info(f"  Email: {request.user_email}")
+    logger.info(f"  Username: {request.user_name}")
+    logger.info("=" * 80)
+
+    try:
+        # Check database connection
+        if not database.is_connected:
+            logger.error("[SIGNUP] MongoDB not connected")
+            raise HTTPException(status_code=500, detail="Service temporarily unavailable")
+
+        # Check if user already exists (by email or username)
+        logger.info(f"[SIGNUP] Checking if user exists...")
+        existing_user_email = await database.users_login.find_one({"user_email": request.user_email})
+        if existing_user_email:
+            logger.warning(f"[SIGNUP] User with email {request.user_email} already exists")
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        existing_user_name = await database.users_login.find_one({"user_name": request.user_name})
+        if existing_user_name:
+            logger.warning(f"[SIGNUP] User with username {request.user_name} already exists")
+            raise HTTPException(status_code=400, detail="Username already taken")
+
+        # Hash password with bcrypt (12 rounds)
+        logger.info(f"[SIGNUP] Hashing password with bcrypt (12 rounds)...")
+        password_bytes = request.password.encode('utf-8')[:72]  # bcrypt limit is 72 bytes
+
+        # Run bcrypt in thread pool to avoid blocking event loop
+        loop = asyncio.get_event_loop()
+        salt = await loop.run_in_executor(None, bcrypt.gensalt, 12)
+        password_hash = await loop.run_in_executor(
+            None,
+            partial(bcrypt.hashpw, password_bytes, salt)
+        )
+        password_hash_str = password_hash.decode('utf-8')
+        logger.info(f"[SIGNUP] Password hashed successfully")
+
+        # Create user document
+        now = datetime.now(timezone.utc)
+        user_doc = {
+            "user_name": request.user_name,
+            "user_email": request.user_email,
+            "password": password_hash_str,  # Store hashed password
+            "created_at": now,
+            "updated_at": now,
+            "last_login": None  # Will be set on first login
+        }
+
+        # Insert into database
+        logger.info(f"[SIGNUP] Inserting user into users_login collection...")
+        result = await database.users_login.insert_one(user_doc)
+        logger.info(f"[SIGNUP] User created with ID: {result.inserted_id}")
+
+        # Prepare response with data structure matching frontend expectations (exclude password)
+        response_data = {
+            "success": True,
+            "message": "User created successfully",
+            "data": {
+                "user_id": str(result.inserted_id),
+                "user_name": request.user_name,
+                "user_email": request.user_email,
+                "created_at": now.isoformat()
+            }
+        }
+
+        logger.info("=" * 80)
+        logger.info("✅ USER SIGNUP SUCCESSFUL")
+        logger.info("=" * 80)
+        logger.info(f"  Email: {request.user_email}")
+        logger.info(f"  Username: {request.user_name}")
+        logger.info(f"  User ID: {str(result.inserted_id)}")
+        logger.info("=" * 80)
+
+        return JSONResponse(content=response_data, status_code=201)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("=" * 80)
+        logger.error(f"💥 SIGNUP ERROR: {e}", exc_info=True)
+        logger.error("=" * 80)
+        raise HTTPException(status_code=500, detail=f"Signup failed: {str(e)}")
+
+
+@router.post("/api/auth/login", response_model=UserLoginResponse, tags=["User Auth"])
+async def user_login(request: UserLoginRequest):
+    """
+    Authenticate user from users_login collection.
+
+    **Request Body:**
+    ```json
+    {
+        "email": "john@example.com",
+        "password": "SecurePass123"
+    }
+    ```
+
+    **Response (200 OK):**
+    ```json
+    {
+        "success": true,
+        "message": "Login successful",
+        "user": {
+            "user_name": "John Doe",
+            "user_email": "john@example.com",
+            "last_login": "2025-10-18T12:00:00Z"
+        }
+    }
+    ```
+
+    **Error Responses:**
+    - 401: Invalid credentials
+    - 500: Server error
+    """
+    logger.info("=" * 80)
+    logger.info(f"🔐 USER LOGIN REQUEST")
+    logger.info("=" * 80)
+    logger.info(f"  Email: {request.email}")
+    logger.info("=" * 80)
+
+    try:
+        # Check database connection
+        if not database.is_connected:
+            logger.error("[LOGIN] MongoDB not connected")
+            raise HTTPException(status_code=500, detail="Service temporarily unavailable")
+
+        # Find user by email
+        logger.info(f"[LOGIN] Looking up user by email...")
+        user = await database.users_login.find_one({"user_email": request.email})
+
+        if not user:
+            logger.warning(f"[LOGIN] User not found: {request.email}")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        logger.info(f"[LOGIN] User found: {user.get('user_name')}")
+
+        # Verify password with bcrypt
+        logger.info(f"[LOGIN] Verifying password...")
+        password_hash = user.get("password")
+        if not password_hash:
+            logger.error(f"[LOGIN] No password hash found for user")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        try:
+            # Run bcrypt verification in thread pool
+            password_bytes = request.password.encode('utf-8')[:72]
+            loop = asyncio.get_event_loop()
+            password_valid = await loop.run_in_executor(
+                None,
+                partial(bcrypt.checkpw, password_bytes, password_hash.encode('utf-8'))
+            )
+            logger.info(f"[LOGIN] Password verification completed")
+        except Exception as e:
+            logger.error(f"[LOGIN] Password verification error: {e}")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        if not password_valid:
+            logger.warning(f"[LOGIN] Invalid password for user: {request.email}")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        logger.info(f"[LOGIN] Password verified successfully")
+
+        # Update last_login timestamp
+        now = datetime.now(timezone.utc)
+        logger.info(f"[LOGIN] Updating last_login timestamp...")
+        await database.users_login.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"last_login": now, "updated_at": now}}
+        )
+        logger.info(f"[LOGIN] Last login updated")
+
+        # Generate session token (simple token for now, can be JWT in production)
+        import secrets
+        session_token = secrets.token_urlsafe(32)
+
+        # Calculate expiration (8 hours from now)
+        from datetime import timedelta
+        expires_at = now + timedelta(hours=8)
+        expires_in = 28800  # 8 hours in seconds
+
+        # Prepare response with data structure matching frontend expectations
+        response_data = {
+            "success": True,
+            "message": "Login successful",
+            "data": {
+                "user_id": str(user["_id"]),
+                "user_name": user.get("user_name"),
+                "user_email": user.get("user_email"),
+                "session_token": session_token,
+                "token_type": "Bearer",
+                "expires_in": expires_in,
+                "expires_at": expires_at.isoformat()
+            }
+        }
+
+        logger.info("=" * 80)
+        logger.info("✅ USER LOGIN SUCCESSFUL")
+        logger.info("=" * 80)
+        logger.info(f"  Email: {request.email}")
+        logger.info(f"  Username: {user.get('user_name')}")
+        logger.info(f"  User ID: {str(user['_id'])}")
+        logger.info(f"  Session token: {session_token[:16]}...")
+        logger.info(f"  Expires at: {expires_at.isoformat()}")
+        logger.info("=" * 80)
+
+        return JSONResponse(content=response_data, status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("=" * 80)
+        logger.error(f"💥 LOGIN ERROR: {e}", exc_info=True)
+        logger.error("=" * 80)
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")

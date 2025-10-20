@@ -161,6 +161,15 @@ class MongoDB:
             await self.db.subscriptions.create_indexes(subscriptions_indexes)
             logger.info("[MongoDB] Subscriptions indexes created")
 
+            # Users login collection indexes (for simple user auth)
+            users_login_indexes = [
+                IndexModel([("user_email", ASCENDING)], unique=True, name="user_email_unique"),
+                IndexModel([("user_name", ASCENDING)], unique=True, name="user_name_unique"),
+                IndexModel([("created_at", ASCENDING)], name="created_at_asc")
+            ]
+            await self.db.users_login.create_indexes(users_login_indexes)
+            logger.info("[MongoDB] Users login indexes created")
+
             # Translation transactions collection indexes
             translation_transactions_indexes = [
                 IndexModel([("transaction_id", ASCENDING)], unique=True, name="transaction_id_unique"),
@@ -211,6 +220,11 @@ class MongoDB:
     def translation_transactions(self):
         """Get translation_transactions collection."""
         return self.db.translation_transactions if self.db is not None else None
+
+    @property
+    def users_login(self):
+        """Get users_login collection for simple user authentication."""
+        return self.db.users_login if self.db is not None else None
 
 
 # Global database instance

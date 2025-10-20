@@ -341,8 +341,20 @@ async def translate_files(
     company_id = current_user.get("company_id") if current_user else None
     is_enterprise = company_id is not None
     company_name = None
+
+    # Enhanced customer type logging
     log_step("CUSTOMER TYPE DETECTED", f"{'Enterprise' if is_enterprise else 'Individual'} (company_id: {company_id})")
-    logging.info(f"Customer type: {'enterprise' if is_enterprise else 'individual'}, company_id: {company_id}")
+    logging.info(f"[CUSTOMER TYPE] {'✓ Enterprise' if is_enterprise else '○ Individual'}")
+    logging.info(f"[CUSTOMER TYPE]   User Email: {request.email}")
+    if current_user:
+        logging.info(f"[CUSTOMER TYPE]   User ID: {current_user.get('user_id')}")
+        logging.info(f"[CUSTOMER TYPE]   User Name: {current_user.get('user_name', 'N/A')}")
+    logging.info(f"[CUSTOMER TYPE]   Company ID: {company_id if company_id else 'N/A (individual customer)'}")
+
+    print(f"\n👤 Customer Type: {'Enterprise' if is_enterprise else 'Individual'}")
+    if is_enterprise:
+        print(f"   Company ID: {company_id}")
+    print(f"   User: {current_user.get('user_name', 'N/A')} ({request.email})")
 
     # For enterprise users, get company name from database
     if is_enterprise:
@@ -519,11 +531,64 @@ async def translate_files(
                 price_per_page = float(price_value.to_decimal())
             else:
                 price_per_page = float(price_value)
-            log_step("SUBSCRIPTION FOUND", f"Price: ${price_per_page} per {subscription.get('subscription_unit')}")
-            logging.info(f"Using subscription pricing: ${price_per_page} per {subscription.get('subscription_unit')}")
+
+            # Enhanced subscription logging - Calculate totals from usage_periods
+            usage_periods = subscription.get("usage_periods", [])
+            total_allocated = sum(p.get("units_allocated", 0) for p in usage_periods)
+            total_used = sum(p.get("units_used", 0) for p in usage_periods)
+            total_remaining = sum(p.get("units_remaining", 0) for p in usage_periods)
+            subscription_unit = subscription.get("subscription_unit", "page")
+            status = subscription.get("status", "unknown")
+
+            log_step("SUBSCRIPTION FOUND", f"Status: {status}, Price: ${price_per_page} per {subscription_unit}")
+            logging.info(f"[SUBSCRIPTION] ✓ Active subscription found for company {company_id}")
+            logging.info(f"[SUBSCRIPTION]   Subscription ID: {subscription.get('_id')}")
+            logging.info(f"[SUBSCRIPTION]   Status: {status}")
+            logging.info(f"[SUBSCRIPTION]   Price: ${price_per_page} per {subscription_unit}")
+            logging.info(f"[SUBSCRIPTION]   Total Allocated: {total_allocated} {subscription_unit}s")
+            logging.info(f"[SUBSCRIPTION]   Used Units: {total_used} {subscription_unit}s")
+            logging.info(f"[SUBSCRIPTION]   Remaining Units: {total_remaining} {subscription_unit}s")
+
+            print(f"\n📊 Subscription Details:")
+            print(f"   Status: {status}")
+            print(f"   Total Allocated: {total_allocated} {subscription_unit}s")
+            print(f"   Used Units: {total_used} {subscription_unit}s")
+            print(f"   Remaining Units: {total_remaining} {subscription_unit}s")
+            print(f"   Price: ${price_per_page} per {subscription_unit}")
         else:
             log_step("SUBSCRIPTION NOT FOUND", f"Using default pricing for company {company_id}")
-            logging.warning(f"No active subscription found for company {company_id}, using default pricing")
+            logging.warning(f"[SUBSCRIPTION] ⚠ No active subscription found for company {company_id}, using default pricing")
+            print(f"\n⚠️  No active subscription found - will require payment")
+            # Set default values for when subscription doesn't exist
+            total_remaining = 0
+
+    # Determine if payment is required based on enterprise subscription
+    payment_required = True
+    if is_enterprise and subscription:
+        # Check if enterprise has enough units
+        if total_remaining >= total_pages:
+            payment_required = False
+            log_step("PAYMENT BYPASS", f"Enterprise has {total_remaining} units remaining (needs {total_pages})")
+            logging.info(f"[PAYMENT] ✓ Payment NOT required - using subscription units")
+            logging.info(f"[PAYMENT]   Required: {total_pages} {subscription_unit}s")
+            logging.info(f"[PAYMENT]   Available: {total_remaining} {subscription_unit}s")
+            print(f"\n✅ Payment NOT required - using subscription units")
+            print(f"   Required: {total_pages} {subscription_unit}s")
+            print(f"   Available: {total_remaining} {subscription_unit}s")
+        else:
+            log_step("PAYMENT REQUIRED", f"Insufficient units: {total_remaining} remaining, {total_pages} needed")
+            logging.warning(f"[PAYMENT] ⚠ Payment required - insufficient subscription units")
+            logging.warning(f"[PAYMENT]   Required: {total_pages} {subscription_unit}s")
+            logging.warning(f"[PAYMENT]   Available: {total_remaining} {subscription_unit}s")
+            logging.warning(f"[PAYMENT]   Shortfall: {total_pages - total_remaining} {subscription_unit}s")
+            print(f"\n⚠️  Payment required - insufficient subscription units")
+            print(f"   Required: {total_pages} {subscription_unit}s")
+            print(f"   Available: {total_remaining} {subscription_unit}s")
+            print(f"   Shortfall: {total_pages - total_remaining} {subscription_unit}s")
+    else:
+        log_step("PAYMENT REQUIRED", "Individual customer or no subscription")
+        logging.info(f"[PAYMENT] Payment required for {'individual customer' if not is_enterprise else 'enterprise without subscription'}")
+        print(f"\n💳 Payment required: {'Individual customer' if not is_enterprise else 'Enterprise without subscription'}")
 
     # Create transaction records for ALL uploaded files (enterprise + individual)
     successful_stored_files = [f for f in stored_files if f["status"] == "stored"]
@@ -546,6 +611,24 @@ async def translate_files(
                 log_step("TRANSACTION CREATED", f"ID: {transaction_id} for {stored_file['filename']}")
 
     log_step("TRANSACTION CREATE COMPLETE", f"Created {len(transaction_ids)} transaction(s)")
+
+    # Extract user information from JWT token (if authenticated)
+    user_info = None
+    if current_user:
+        user_info = {
+            "permission_level": current_user.get("permission_level", "user"),
+            "email": current_user.get("email", request.email),
+            "full_name": current_user.get("fullName") or current_user.get("user_name", "Unknown User")
+        }
+        log_step("USER INFO", f"Permission: {user_info['permission_level']}, Email: {user_info['email']}, Name: {user_info['full_name']}")
+    else:
+        # Individual user (not authenticated via corporate login)
+        user_info = {
+            "permission_level": "user",
+            "email": request.email,
+            "full_name": "Individual User"
+        }
+        log_step("USER INFO", "Individual user (no corporate authentication)")
 
     # Prepare and log response
     log_step("RESPONSE PREPARE", f"Success: {successful_uploads}/{len(request.files)} files, {total_pages} pages, ${total_pages * price_per_page:.2f}")
@@ -586,11 +669,14 @@ async def translate_files(
 
                 # Payment information
                 "payment": {
-                    "required": True,
-                    "amount_cents": int(total_pages * price_per_page * 100),  # Dynamic: Convert to cents
+                    "required": payment_required,  # Dynamic: based on subscription units
+                    "amount_cents": int(total_pages * price_per_page * 100) if payment_required else 0,  # 0 if using subscription
                     "description": f"Translation service: {successful_uploads} files, {total_pages} pages",
                     "customer_email": request.email
-                }
+                },
+
+                # User information (permission level and identity)
+                "user": user_info
             },
             "error": None
         }
@@ -623,6 +709,10 @@ async def translate_files(
     print(f"[RAW OUTGOING DATA] Customer: {response_data['data']['customer']['email']}")
     print(f"[RAW OUTGOING DATA] Payment Required: {response_data['data']['payment']['required']}")
     print(f"[RAW OUTGOING DATA] Payment Amount (cents): {response_data['data']['payment']['amount_cents']}")
+    print(f"[RAW OUTGOING DATA] User Information:")
+    print(f"[RAW OUTGOING DATA]   - Permission Level: {response_data['data']['user']['permission_level']}")
+    print(f"[RAW OUTGOING DATA]   - Email: {response_data['data']['user']['email']}")
+    print(f"[RAW OUTGOING DATA]   - Full Name: {response_data['data']['user']['full_name']}")
     print("=" * 100)
 
     return JSONResponse(content=response_data)

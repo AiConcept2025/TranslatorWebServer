@@ -1,0 +1,265 @@
+================================================================================
+USER TRANSACTION HELPER MODULE - ARCHITECTURE
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            FastAPI Application                              │
+│                                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐          │
+│  │  POST /trans    │  │  GET /trans/:id │  │  GET /users/:id │          │
+│  │  Create TX      │  │  Get TX         │  │  User History   │          │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘          │
+│           │                    │                     │                     │
+└───────────┼────────────────────┼─────────────────────┼─────────────────────┘
+            │                    │                     │
+            ▼                    ▼                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    User Transaction Helper Module                           │
+│                   app/utils/user_transaction_helper.py                      │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  async def create_user_transaction(...)                               │ │
+│  │    - Validate unit_type & status                                      │ │
+│  │    - Calculate total_cost (Decimal precision)                         │ │
+│  │    - Set timestamps (created_at, updated_at)                          │ │
+│  │    - Insert into MongoDB                                              │ │
+│  │    - Handle duplicate square_transaction_id                           │ │
+│  │    → Returns: square_transaction_id | None                            │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  async def update_user_transaction_status(...)                        │ │
+│  │    - Validate new_status                                              │ │
+│  │    - Update status field                                              │ │
+│  │    - Update updated_at timestamp                                      │ │
+│  │    - Optionally add error_message                                     │ │
+│  │    → Returns: True | False                                            │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  async def get_user_transactions_by_email(...)                        │ │
+│  │    - Query by user_email (indexed)                                    │ │
+│  │    - Optional status filter                                           │ │
+│  │    - Sort by date DESC (most recent first)                            │ │
+│  │    - Convert ObjectId to string                                       │ │
+│  │    → Returns: List[Dict] | []                                         │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  async def get_user_transaction(...)                                  │ │
+│  │    - Query by square_transaction_id (unique index)                    │ │
+│  │    - Convert ObjectId to string                                       │ │
+│  │    → Returns: Dict | None                                             │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+└─────────────────────────────┬───────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         MongoDB Connection Layer                            │
+│                        app/database/mongodb.py                              │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  class MongoDB:                                                       │  │
+│  │    - client: AsyncIOMotorClient                                       │  │
+│  │    - db: AsyncIOMotorDatabase                                         │  │
+│  │                                                                       │  │
+│  │  @property user_transactions:                                         │  │
+│  │    → Returns: AsyncIOMotorCollection                                  │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  Global Instance: database = MongoDB()                                      │
+│                                                                             │
+└─────────────────────────────┬───────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           MongoDB Database                                  │
+│                         Database: translation                               │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  Collection: user_transactions                                        │  │
+│  │                                                                       │  │
+│  │  Indexes:                                                             │  │
+│  │    • square_transaction_id (UNIQUE)  ← O(1) lookup                   │  │
+│  │    • user_email                      ← O(log n) user queries         │  │
+│  │    • date (DESC)                     ← Chronological sort            │  │
+│  │    • user_email + date               ← Compound index                │  │
+│  │    • status                          ← Status filtering              │  │
+│  │    • created_at                      ← Audit trail                   │  │
+│  │                                                                       │  │
+│  │  Document Schema:                                                     │  │
+│  │  {                                                                    │  │
+│  │    _id: ObjectId,                                                     │  │
+│  │    user_name: string,                                                 │  │
+│  │    user_email: string,                                                │  │
+│  │    document_url: string,                                              │  │
+│  │    number_of_units: int,                                              │  │
+│  │    unit_type: "page" | "word" | "character",                         │  │
+│  │    cost_per_unit: decimal,                                            │  │
+│  │    source_language: string,                                           │  │
+│  │    target_language: string,                                           │  │
+│  │    square_transaction_id: string (UNIQUE),                            │  │
+│  │    date: datetime,                                                    │  │
+│  │    status: "processing" | "completed" | "failed",                    │  │
+│  │    total_cost: decimal (calculated),                                  │  │
+│  │    error_message: string (optional),                                  │  │
+│  │    created_at: datetime,                                              │  │
+│  │    updated_at: datetime                                               │  │
+│  │  }                                                                    │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+DATA FLOW EXAMPLE: Create Transaction
+================================================================================
+
+1. User makes Square payment
+   │
+   ├─> Square API returns payment_id: "sq_payment_12345"
+   │
+2. FastAPI endpoint receives payment confirmation
+   │
+   ├─> POST /api/v1/transactions
+   │   {
+   │     "user_email": "john@example.com",
+   │     "document_url": "https://drive.google.com/file/d/abc123",
+   │     "number_of_units": 10,
+   │     "unit_type": "page",
+   │     "cost_per_unit": 5.99,
+   │     "square_transaction_id": "sq_payment_12345",
+   │     ...
+   │   }
+   │
+3. Helper function: create_user_transaction()
+   │
+   ├─> Validates input: unit_type ∈ {"page", "word", "character"}
+   ├─> Validates input: status ∈ {"processing", "completed", "failed"}
+   ├─> Calculates: total_cost = 10 × 5.99 = 59.90 (Decimal precision)
+   ├─> Sets: created_at = now(UTC)
+   ├─> Sets: updated_at = now(UTC)
+   │
+4. MongoDB insert_one()
+   │
+   ├─> Checks unique constraint: square_transaction_id
+   ├─> Inserts document into user_transactions collection
+   ├─> Triggers index updates
+   │
+5. Returns success
+   │
+   └─> Return: "sq_payment_12345" (transaction ID)
+
+
+================================================================================
+ERROR HANDLING FLOW
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Try Block                                                                  │
+│  ├─> Validate inputs                                                        │
+│  │   └─> Invalid? → Log error → Return None/False/[]                       │
+│  │                                                                           │
+│  ├─> Perform database operation                                             │
+│  │   └─> DuplicateKeyError?                                                 │
+│  │       ├─> Log warning                                                    │
+│  │       └─> Return None/False                                              │
+│  │                                                                           │
+│  │   └─> PyMongoError?                                                      │
+│  │       ├─> Log error with traceback                                       │
+│  │       └─> Return None/False/[]                                           │
+│  │                                                                           │
+│  │   └─> Other Exception?                                                   │
+│  │       ├─> Log error with full traceback                                  │
+│  │       └─> Return None/False/[]                                           │
+│  │                                                                           │
+│  └─> Success                                                                │
+│      ├─> Log info                                                           │
+│      └─> Return result                                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+FILES STRUCTURE
+================================================================================
+
+server/
+├── app/
+│   ├── utils/
+│   │   ├── user_transaction_helper.py       ← Core module (336 lines)
+│   │   ├── USER_TRANSACTION_HELPER.md      ← Full documentation
+│   │   └── USER_TRANSACTION_QUICK_REF.md   ← Quick reference
+│   │
+│   └── database/
+│       ├── mongodb.py                       ← Database connection
+│       └── __init__.py                      ← Export: database
+│
+├── test_user_transaction_helper.py          ← Test suite (160 lines)
+└── IMPLEMENTATION_SUMMARY.md                ← This summary
+
+Total: 1,235+ lines of code and documentation
+
+
+================================================================================
+USAGE PATTERNS
+================================================================================
+
+Pattern 1: Payment Flow
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Square Payment → create_user_transaction() → Start Translation
+                                    ↓
+                         Queue Background Job
+                                    ↓
+                   update_status("processing")
+                                    ↓
+                        Translation Complete?
+                          ↙         ↘
+                  Success           Failure
+                     ↓                  ↓
+    update_status("completed")   update_status("failed")
+                                  + error_message
+
+
+Pattern 2: User Dashboard
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  GET /users/{email}/dashboard
+           ↓
+  get_user_transactions_by_email(email)
+           ↓
+    ┌──────┴──────┐
+    │  Results    │
+    ├─────────────┤
+    │ Total: 42   │
+    │ Completed:  │
+    │   35 (83%)  │
+    │ Failed:     │
+    │   7 (17%)   │
+    │ Total $:    │
+    │   $1,234.56 │
+    └─────────────┘
+
+
+Pattern 3: Transaction Receipt
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  GET /transactions/{square_transaction_id}
+           ↓
+  get_user_transaction(square_transaction_id)
+           ↓
+    ┌──────────────────────────────────┐
+    │  Transaction Receipt             │
+    ├──────────────────────────────────┤
+    │  ID: sq_payment_12345            │
+    │  User: john@example.com          │
+    │  Document: Annual_Report.pdf     │
+    │  Units: 10 pages                 │
+    │  Cost: $59.90                    │
+    │  Status: Completed               │
+    │  Date: 2025-10-20                │
+    └──────────────────────────────────┘
+
+
+================================================================================

@@ -179,6 +179,18 @@ class MongoDB:
             await self.db.translation_transactions.create_indexes(translation_transactions_indexes)
             logger.info("[MongoDB] Translation transactions indexes created")
 
+            # User transactions collection indexes (for individual users)
+            user_transactions_indexes = [
+                IndexModel([("square_transaction_id", ASCENDING)], unique=True, name="square_transaction_id_unique"),
+                IndexModel([("user_email", ASCENDING)], name="user_email_idx"),
+                IndexModel([("date", ASCENDING)], name="date_desc_idx"),
+                IndexModel([("user_email", ASCENDING), ("date", ASCENDING)], name="user_email_date_idx"),
+                IndexModel([("status", ASCENDING)], name="status_idx"),
+                IndexModel([("created_at", ASCENDING)], name="created_at_asc")
+            ]
+            await self.db.user_transactions.create_indexes(user_transactions_indexes)
+            logger.info("[MongoDB] User transactions indexes created")
+
             logger.info("[MongoDB] All indexes created successfully")
 
         except OperationFailure as e:
@@ -225,6 +237,11 @@ class MongoDB:
     def users_login(self):
         """Get users_login collection for simple user authentication."""
         return self.db.users_login if self.db is not None else None
+
+    @property
+    def user_transactions(self):
+        """Get user_transactions collection for individual users."""
+        return self.db.user_transactions if self.db is not None else None
 
 
 # Global database instance

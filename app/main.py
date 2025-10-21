@@ -17,7 +17,7 @@ import asyncio
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions
+from app.routers import languages, upload, auth, subscriptions, translate_user
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities (will create these next)
@@ -100,6 +100,7 @@ app.include_router(upload.router)
 app.include_router(payment.router)
 app.include_router(auth.router)
 app.include_router(subscriptions.router)
+app.include_router(translate_user.router)
 
 # Import models for /translate endpoint
 from pydantic import BaseModel, EmailStr

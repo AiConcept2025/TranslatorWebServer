@@ -21,6 +21,7 @@ class PaymentMetadata(BaseModel):
     created: Optional[str] = None
     simulated: Optional[bool] = None
     customer_email: Optional[EmailStr] = None
+    square_transaction_id: Optional[str] = None
 
     model_config = {'populate_by_name': True}
 
@@ -31,6 +32,9 @@ class PaymentSuccessRequest(BaseModel):
 
     # Payment ID (required)
     payment_intent_id: Optional[str] = Field(None, alias='paymentIntentId')
+
+    # Square transaction ID (for user payments)
+    square_transaction_id: Optional[str] = None
 
     # Payment details
     amount: Optional[float] = None
@@ -260,6 +264,338 @@ async def handle_payment_success(
         print("=" * 80 + "\n")
         logging.error(f"Payment success error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def process_user_payment_files_background(
+    customer_email: str,
+    square_transaction_id: str
+):
+    """
+    Background task to move user transaction files from Temp to Inbox.
+    Updates user_transactions collection status to "completed".
+    Runs asynchronously without blocking HTTP response.
+
+    Args:
+        customer_email: User email address
+        square_transaction_id: Square payment transaction ID
+    """
+    import time
+    from app.utils.user_transaction_helper import (
+        get_user_transaction,
+        update_user_transaction_status
+    )
+
+    task_start = time.time()
+
+    try:
+        print("\n" + "=" * 80)
+        print("🔄 USER PAYMENT BACKGROUND TASK STARTED")
+        print("=" * 80)
+        print(f"⏱️  Started at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📋 Task Details:")
+        print(f"   Customer: {customer_email}")
+        print(f"   Square Transaction ID: {square_transaction_id}")
+        print("=" * 80)
+
+        # Step 1: Get transaction from user_transactions collection
+        print(f"\n🔍 Step 1: Fetching user transaction...")
+        fetch_start = time.time()
+        transaction = await get_user_transaction(square_transaction_id)
+        fetch_time = (time.time() - fetch_start) * 1000
+        print(f"⏱️  Transaction fetch completed in {fetch_time:.2f}ms")
+
+        if not transaction:
+            print(f"⚠️  Transaction not found: {square_transaction_id}")
+            total_time = (time.time() - task_start) * 1000
+            print(f"⏱️  BACKGROUND TASK TOTAL TIME: {total_time:.2f}ms")
+            print("=" * 80 + "\n")
+            logging.warning(
+                f"User payment background task: Transaction not found - {square_transaction_id}"
+            )
+            return
+
+        print(f"✅ Transaction found:")
+        print(f"   User: {transaction.get('user_name')} ({transaction.get('user_email')})")
+        print(f"   Document: {transaction.get('document_url')}")
+        print(f"   Status: {transaction.get('status')}")
+        print(f"   Total Cost: ${transaction.get('total_cost')}")
+
+        # Step 2: Extract file_id from document_url
+        print(f"\n📁 Step 2: Extracting file information...")
+        document_url = transaction.get('document_url', '')
+
+        # Extract file_id from Google Drive URL
+        # Format: https://drive.google.com/file/d/{FILE_ID}/view or similar
+        file_id = None
+        if '/file/d/' in document_url:
+            parts = document_url.split('/file/d/')
+            if len(parts) > 1:
+                file_id = parts[1].split('/')[0]
+
+        if not file_id:
+            error_msg = f"Could not extract file_id from document_url: {document_url}"
+            print(f"❌ {error_msg}")
+            await update_user_transaction_status(
+                square_transaction_id=square_transaction_id,
+                new_status="failed",
+                error_message=error_msg
+            )
+            total_time = (time.time() - task_start) * 1000
+            print(f"⏱️  BACKGROUND TASK TOTAL TIME: {total_time:.2f}ms")
+            print("=" * 80 + "\n")
+            logging.error(f"User payment background task: {error_msg}")
+            return
+
+        print(f"✅ Extracted file_id: {file_id[:20]}...")
+
+        # Step 3: Move file from Temp to Inbox
+        print(f"\n📂 Step 3: Moving file from Temp to Inbox...")
+        move_start = time.time()
+
+        try:
+            result = await google_drive_service.move_files_to_inbox_on_payment_success(
+                customer_email=customer_email,
+                file_ids=[file_id]
+            )
+            move_time = (time.time() - move_start) * 1000
+            print(f"⏱️  File move completed in {move_time:.2f}ms")
+            print(f"✅ Moved: {result['moved_successfully']}/{result['total_files']} files")
+            print(f"📂 Inbox folder ID: {result.get('inbox_folder_id', 'N/A')}")
+
+            if result['moved_successfully'] == 0:
+                error_msg = "File move failed - no files moved successfully"
+                if result.get('failed_files'):
+                    error_details = result['failed_files'][0].get('error', 'Unknown error')
+                    error_msg = f"File move failed: {error_details}"
+
+                print(f"❌ {error_msg}")
+                await update_user_transaction_status(
+                    square_transaction_id=square_transaction_id,
+                    new_status="failed",
+                    error_message=error_msg
+                )
+                total_time = (time.time() - task_start) * 1000
+                print(f"⏱️  BACKGROUND TASK TOTAL TIME: {total_time:.2f}ms")
+                print("=" * 80 + "\n")
+                logging.error(f"User payment background task: {error_msg}")
+                return
+
+        except Exception as move_error:
+            error_msg = f"Google Drive move error: {str(move_error)}"
+            print(f"❌ {error_msg}")
+            await update_user_transaction_status(
+                square_transaction_id=square_transaction_id,
+                new_status="failed",
+                error_message=error_msg
+            )
+            total_time = (time.time() - task_start) * 1000
+            print(f"⏱️  BACKGROUND TASK TOTAL TIME: {total_time:.2f}ms")
+            print("=" * 80 + "\n")
+            logging.error(f"User payment background task: {error_msg}", exc_info=True)
+            return
+
+        # Step 4: Update transaction status to "completed"
+        print(f"\n🔄 Step 4: Updating transaction status to 'completed'...")
+        update_start = time.time()
+
+        success = await update_user_transaction_status(
+            square_transaction_id=square_transaction_id,
+            new_status="completed"
+        )
+
+        update_time = (time.time() - update_start) * 1000
+        print(f"⏱️  Status update completed in {update_time:.2f}ms")
+
+        if success:
+            print(f"✅ Transaction status updated to 'completed'")
+        else:
+            print(f"⚠️  Failed to update transaction status (transaction may not exist)")
+
+        # Step 5: Update file status in Google Drive metadata
+        print(f"\n🔄 Step 5: Updating file status in Google Drive metadata...")
+        status_start = time.time()
+
+        try:
+            await google_drive_service.update_file_status(
+                file_id=file_id,
+                new_status="payment_confirmed",
+                payment_intent_id=square_transaction_id
+            )
+            status_time = (time.time() - status_start) * 1000
+            print(f"⏱️  File status update completed in {status_time:.2f}ms")
+            print(f"✅ File status updated to 'payment_confirmed'")
+        except Exception as status_error:
+            print(f"⚠️  Failed to update file status: {str(status_error)[:60]}")
+            logging.warning(
+                f"User payment: Failed to update file status for {file_id}: {status_error}"
+            )
+
+        total_time = (time.time() - task_start) * 1000
+        print(f"\n✅ USER PAYMENT BACKGROUND TASK COMPLETE")
+        print(f"⏱️  TOTAL TASK TIME: {total_time:.2f}ms")
+        print(f"   - Transaction fetch: {fetch_time:.2f}ms")
+        print(f"   - File move: {move_time:.2f}ms")
+        print(f"   - Status update: {update_time:.2f}ms")
+        print("=" * 80 + "\n")
+
+        logging.info(
+            f"User payment background task completed for {customer_email}: "
+            f"transaction {square_transaction_id} processed in {total_time:.2f}ms"
+        )
+
+    except Exception as e:
+        total_time = (time.time() - task_start) * 1000
+        print(f"\n❌ USER PAYMENT BACKGROUND TASK ERROR")
+        print(f"⏱️  Failed after: {total_time:.2f}ms")
+        print(f"💥 Error type: {type(e).__name__}")
+        print(f"💥 Error message: {str(e)}")
+        print("=" * 80 + "\n")
+
+        # Attempt to mark transaction as failed
+        try:
+            from app.utils.user_transaction_helper import update_user_transaction_status
+            await update_user_transaction_status(
+                square_transaction_id=square_transaction_id,
+                new_status="failed",
+                error_message=str(e)
+            )
+        except Exception as update_error:
+            logging.error(
+                f"Failed to update transaction status after error: {update_error}"
+            )
+
+        logging.error(
+            f"User payment background task error for {customer_email}: {e}",
+            exc_info=True
+        )
+
+
+@router.post("/user-success")
+async def handle_user_payment_success(
+    request: PaymentSuccessRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    INSTANT user payment success webhook for individual users.
+    Returns immediately, processes user transaction files in background.
+
+    Updates user_transactions collection and moves files from Temp to Inbox.
+
+    Expected request format:
+    {
+        "customerEmail": "user@example.com",
+        "square_transaction_id": "txn_abc123",  // Can be in root or metadata
+        "amount": 10.00,
+        "currency": "USD",
+        "paymentMethod": "square",
+        "metadata": {
+            "square_transaction_id": "txn_abc123"  // Alternative location
+        }
+    }
+    """
+    import time
+    start_time = time.time()
+
+    print("\n" + "=" * 80)
+    print("⚡ INSTANT USER PAYMENT SUCCESS WEBHOOK")
+    print("=" * 80)
+    print(f"⏱️  Request received at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    try:
+        # Log raw request data
+        print("\n📥 RAW REQUEST DATA:")
+        print(f"   customer_email (root): {request.customer_email}")
+        print(f"   payment_intent_id: {request.payment_intent_id}")
+        print(f"   amount: {request.amount}")
+        print(f"   currency: {request.currency}")
+        print(f"   payment_method: {request.payment_method}")
+        print(f"   timestamp: {request.timestamp}")
+
+        # Extract square_transaction_id from request or metadata
+        square_transaction_id = None
+
+        # Try to get from root level first (check if request has square_transaction_id attribute)
+        if hasattr(request, 'square_transaction_id') and getattr(request, 'square_transaction_id'):
+            square_transaction_id = getattr(request, 'square_transaction_id')
+            print(f"   square_transaction_id (root): {square_transaction_id}")
+
+        # Try metadata next
+        if not square_transaction_id and request.metadata:
+            print(f"\n📋 METADATA:")
+            print(f"   status: {request.metadata.status}")
+            print(f"   cardBrand: {request.metadata.cardBrand}")
+            print(f"   last4: {request.metadata.last4}")
+            print(f"   receiptNumber: {request.metadata.receiptNumber}")
+            print(f"   created: {request.metadata.created}")
+            print(f"   simulated: {request.metadata.simulated}")
+            print(f"   customer_email (metadata): {request.metadata.customer_email}")
+
+            # Check for square_transaction_id in metadata
+            if hasattr(request.metadata, 'square_transaction_id'):
+                square_transaction_id = getattr(request.metadata, 'square_transaction_id')
+                print(f"   square_transaction_id (metadata): {square_transaction_id}")
+
+        # Validate square_transaction_id
+        if not square_transaction_id:
+            error_msg = "square_transaction_id not found in request or metadata"
+            print(f"❌ VALIDATION ERROR: {error_msg}")
+            print("=" * 80 + "\n")
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        # Extract customer email (FAST - no I/O)
+        parse_start = time.time()
+        customer_email = request.get_customer_email()
+        parse_time = (time.time() - parse_start) * 1000
+
+        print(f"\n✅ EXTRACTED FIELDS (took {parse_time:.2f}ms):")
+        print(f"   Customer: {customer_email}")
+        print(f"   Square Transaction ID: {square_transaction_id}")
+        print(f"   Amount: ${request.amount} {request.currency}")
+        print(f"   Payment Method: {request.payment_method}")
+
+        # Schedule background file processing for user transaction
+        task_schedule_start = time.time()
+        background_tasks.add_task(
+            process_user_payment_files_background,
+            customer_email=customer_email,
+            square_transaction_id=square_transaction_id
+        )
+        task_schedule_time = (time.time() - task_schedule_start) * 1000
+
+        total_time = (time.time() - start_time) * 1000
+        print(f"\n⚡ INSTANT RESPONSE - User payment background task scheduled (took {task_schedule_time:.2f}ms)")
+        print(f"⏱️  TOTAL PROCESSING TIME: {total_time:.2f}ms")
+        print("=" * 80 + "\n")
+
+        # Return IMMEDIATELY (< 100ms)
+        return JSONResponse(
+            content={
+                "success": True,
+                "message": "Payment confirmed. Files are being processed in the background.",
+                "data": {
+                    "customer_email": customer_email,
+                    "square_transaction_id": square_transaction_id,
+                    "status": "processing",
+                    "processing_time_ms": round(total_time, 2)
+                }
+            }
+        )
+
+    except ValueError as e:
+        print(f"❌ VALIDATION ERROR: {e}")
+        print("=" * 80 + "\n")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except HTTPException:
+        # Re-raise HTTP exceptions without wrapping
+        raise
+
+    except Exception as e:
+        print(f"❌ UNEXPECTED ERROR: {e}")
+        print("=" * 80 + "\n")
+        logging.error(f"User payment success error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/failure")
 async def handle_payment_failure(customer_email: EmailStr, payment_intent_id: str):

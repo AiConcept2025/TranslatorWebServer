@@ -11,7 +11,20 @@ import os
 # Add parent directory to path to import test_data
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from test_data import TestDataGenerator
+# Try to import test_data, but don't fail if not found
+try:
+    from test_data import TestDataGenerator
+except ModuleNotFoundError:
+    # Add manual test directory to path
+    manual_test_dir = os.path.join(os.path.dirname(__file__), 'manual')
+    if os.path.exists(manual_test_dir):
+        sys.path.insert(0, manual_test_dir)
+        try:
+            from test_data import TestDataGenerator
+        except ModuleNotFoundError:
+            TestDataGenerator = None
+    else:
+        TestDataGenerator = None
 
 # MongoDB Configuration
 MONGODB_URI = "mongodb://iris:Sveta87201120@localhost:27017/translation?authSource=translation"

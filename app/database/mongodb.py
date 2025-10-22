@@ -135,16 +135,30 @@ class MongoDB:
             await self.db.users.create_indexes(users_indexes)
             logger.info("[MongoDB] Users indexes created")
 
-            # Sessions collection indexes
-            sessions_indexes = [
-                IndexModel([("session_token", ASCENDING)], unique=True, name="session_token_unique"),
-                IndexModel([("user_id", ASCENDING)], name="user_id_idx"),
-                IndexModel([("expires_at", ASCENDING)], name="expires_at_idx"),
-                IndexModel([("is_active", ASCENDING)], name="is_active_idx"),
+            # Company users collection indexes (for enterprise/corporate users)
+            company_users_indexes = [
+                IndexModel([("user_id", ASCENDING)], unique=True, name="user_id_unique"),
+                IndexModel([("email", ASCENDING)], name="email_idx"),
+                IndexModel([("company_id", ASCENDING)], name="company_id_idx"),
+                IndexModel([("email", ASCENDING), ("company_id", ASCENDING)], name="email_company_idx"),
+                IndexModel([("status", ASCENDING)], name="status_idx"),
                 IndexModel([("created_at", ASCENDING)], name="created_at_asc")
             ]
-            await self.db.sessions.create_indexes(sessions_indexes)
-            logger.info("[MongoDB] Sessions indexes created")
+            await self.db.company_users.create_indexes(company_users_indexes)
+            logger.info("[MongoDB] Company users indexes created")
+
+            # Sessions collection indexes
+            # COMMENTED OUT - Short-term solution: Sessions table updates disabled
+            # sessions_indexes = [
+            #     IndexModel([("session_token", ASCENDING)], unique=True, name="session_token_unique"),
+            #     IndexModel([("user_id", ASCENDING)], name="user_id_idx"),
+            #     IndexModel([("expires_at", ASCENDING)], name="expires_at_idx"),
+            #     IndexModel([("is_active", ASCENDING)], name="is_active_idx"),
+            #     IndexModel([("created_at", ASCENDING)], name="created_at_asc")
+            # ]
+            # await self.db.sessions.create_indexes(sessions_indexes)
+            # logger.info("[MongoDB] Sessions indexes created")
+            logger.info("[MongoDB] Sessions indexes SKIPPED (commented out for short-term solution)")
 
             # TTL index creation removed - conflicted with existing expires_at_idx
             # MongoDB will handle expiration based on expires_at field
@@ -215,8 +229,13 @@ class MongoDB:
 
     @property
     def users(self):
-        """Get users collection."""
+        """Get users collection (for individual users and new enterprise users)."""
         return self.db.users if self.db is not None else None
+
+    @property
+    def company_users(self):
+        """Get company_users collection (for enterprise/corporate users)."""
+        return self.db.company_users if self.db is not None else None
 
     @property
     def sessions(self):

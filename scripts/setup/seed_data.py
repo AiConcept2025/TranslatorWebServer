@@ -29,7 +29,7 @@ def seed():
 
     user = {
         "user_id": "jane.smith@acme.com",
-        "customer_id": company_id,
+        "company_id": company_id,  # Fixed: was 'customer_id', now 'company_id' for consistency
         "user_name": "Jane Smith",
         "email": "jane.smith@acme.com",
         "phone_number": "+1-555-0101",

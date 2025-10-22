@@ -81,24 +81,15 @@ class AuthService:
         logger.info(f"[AUTH]     - company_id: {company_id}")
         logger.info(f"[AUTH]     - user_name: {user_name}")
 
-        # Try 'users' collection first
-        user = await database.users.find_one({
+        # Enterprise users: Use company_users collection ONLY (no fallback to users)
+        logger.info(f"[AUTH]   Looking up enterprise user in 'company_users' collection...")
+        user = await database.company_users.find_one({
             "email": email,
             "company_id": company_id,
             "user_name": user_name
         })
 
-        collection_used = "users"
-
-        # Fallback to 'company_users' collection if users collection doesn't have the user
-        if not user and database.db is not None:
-            logger.info(f"[AUTH]   User not found in 'users' collection, trying 'company_users'...")
-            user = await database.db.company_users.find_one({
-                "email": email,
-                "company_id": company_id,
-                "user_name": user_name
-            })
-            collection_used = "company_users"
+        collection_used = "company_users"
 
         if not user:
             logger.warning(f"[AUTH] FAILED - User not found")
@@ -201,7 +192,8 @@ class AuthService:
                 }
             )
         else:
-            await database.db.company_users.update_one(
+            # Enterprise: Use database.company_users property for consistency
+            await database.company_users.update_one(
                 {"_id": user["_id"]},
                 {
                     "$set": {
@@ -272,9 +264,10 @@ class AuthService:
         }
 
         # Store in MongoDB sessions collection
-        await database.sessions.insert_one(session_doc)
+        # COMMENTED OUT - Short-term solution: Sessions table updates disabled
+        # await database.sessions.insert_one(session_doc)
 
-        logger.info(f"[AUTH] Session document created in MongoDB")
+        logger.info(f"[AUTH] Session document creation SKIPPED (commented out for short-term solution)")
         logger.info(f"[AUTH]   Session token: {session_token[:8]}...{session_token[-8:]}")
         logger.info(f"[AUTH]   User ID: {user_id}")
         logger.info(f"[AUTH]   Created: {created_at.isoformat()}")
@@ -329,19 +322,23 @@ class AuthService:
         """
         logger.info(f"[AUTH] Invalidating session: {session_token[:8]}...{session_token[-8:]}")
 
-        result = await database.sessions.update_one(
-            {"session_token": session_token},
-            {"$set": {"is_active": False}}
-        )
+        # COMMENTED OUT - Short-term solution: Sessions table updates disabled
+        # result = await database.sessions.update_one(
+        #     {"session_token": session_token},
+        #     {"$set": {"is_active": False}}
+        # )
+        #
+        # if result.modified_count > 0:
+        #     logger.info(f"[AUTH] Session invalidated successfully")
+        #     logger.info(f"[AUTH]   Documents modified: {result.modified_count}")
+        #     return True
+        #
+        # logger.warning(f"[AUTH] Session not found for invalidation")
+        # logger.warning(f"[AUTH]   Token: {session_token[:8]}...{session_token[-8:]}")
+        # return False
 
-        if result.modified_count > 0:
-            logger.info(f"[AUTH] Session invalidated successfully")
-            logger.info(f"[AUTH]   Documents modified: {result.modified_count}")
-            return True
-
-        logger.warning(f"[AUTH] Session not found for invalidation")
-        logger.warning(f"[AUTH]   Token: {session_token[:8]}...{session_token[-8:]}")
-        return False
+        logger.info(f"[AUTH] Session invalidation SKIPPED (commented out for short-term solution)")
+        return True  # Return True since JWT is stateless and doesn't need database invalidation
 
     async def authenticate_individual_user(
         self,

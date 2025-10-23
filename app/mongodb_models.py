@@ -98,7 +98,7 @@ class UsagePeriod(BaseModel):
     units_allocated: int
     units_used: int = 0
     units_remaining: int
-    promotional_units_used: int = 0
+    promotional_units: int = 0
     last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 

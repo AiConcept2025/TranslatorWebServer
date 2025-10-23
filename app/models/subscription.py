@@ -16,7 +16,7 @@ class UsagePeriod(BaseModel):
     units_allocated: int = Field(ge=0)
     units_used: int = Field(default=0, ge=0)
     units_remaining: int = Field(ge=0)
-    promotional_units_used: int = Field(default=0, ge=0)
+    promotional_units: int = Field(default=0, ge=0)
     last_updated: datetime = Field(default_factory=datetime.utcnow)
 
     @field_validator('units_remaining')

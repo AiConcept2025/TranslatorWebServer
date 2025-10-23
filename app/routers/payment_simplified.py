@@ -65,10 +65,11 @@ async def process_payment_files_background(
     customer_email: str,
     payment_intent_id: str,
     amount: Optional[float],
-    currency: Optional[str]
+    currency: Optional[str],
+    payment_metadata: Optional[PaymentMetadata] = None
 ):
     """
-    Background task to move files from Temp to Inbox.
+    Background task to move files from Temp to Inbox and persist payment data.
     Runs asynchronously without blocking HTTP response.
     """
     import time
@@ -84,6 +85,45 @@ async def process_payment_files_background(
         print(f"   Payment ID: {payment_intent_id}")
         print(f"   Amount: ${amount} {currency}")
         print("=" * 80)
+
+        # Step 0: Persist payment data to payments collection
+        print(f"\n💾 Step 0: Persisting payment data to database...")
+        persist_start = time.time()
+
+        from app.services.payment_repository import payment_repository
+        from app.models.payment import PaymentCreate
+
+        try:
+            payment_data = PaymentCreate(
+                user_email=customer_email,
+                square_payment_id=payment_intent_id,
+                amount=int((amount or 0) * 100) if amount else 0,  # Convert to cents
+                currency=currency or "USD",
+                payment_status="completed",
+                payment_method="card",
+                payment_source="web",
+                card_brand=payment_metadata.cardBrand if payment_metadata else None,
+                last_4_digits=payment_metadata.last4 if payment_metadata else None,
+                buyer_email_address=payment_metadata.customer_email if payment_metadata and payment_metadata.customer_email else customer_email,
+                square_receipt_url=payment_metadata.receiptNumber if payment_metadata else None,
+                webhook_event_id=None,
+                square_raw_response={
+                    "payment_intent_id": payment_intent_id,
+                    "amount": amount,
+                    "currency": currency,
+                    "metadata": payment_metadata.model_dump() if payment_metadata else {}
+                }
+            )
+
+            payment_id = await payment_repository.create_payment(payment_data)
+            persist_time = (time.time() - persist_start) * 1000
+            print(f"⏱️  Payment persistence completed in {persist_time:.2f}ms")
+            print(f"✅ Payment record created with ID: {payment_id}")
+        except Exception as e:
+            persist_time = (time.time() - persist_start) * 1000
+            print(f"⏱️  Payment persistence attempted in {persist_time:.2f}ms")
+            print(f"⚠️  Failed to persist payment: {str(e)}")
+            logging.warning(f"Failed to persist payment {payment_intent_id}: {e}")
 
         # Find files awaiting payment
         print(f"\n🔍 Step 1: Finding files for customer...")
@@ -231,7 +271,8 @@ async def handle_payment_success(
             customer_email=customer_email,
             payment_intent_id=payment_intent_id,
             amount=request.amount,
-            currency=request.currency
+            currency=request.currency,
+            payment_metadata=request.metadata
         )
         task_schedule_time = (time.time() - task_schedule_start) * 1000
 
@@ -268,16 +309,22 @@ async def handle_payment_success(
 
 async def process_user_payment_files_background(
     customer_email: str,
-    square_transaction_id: str
+    square_transaction_id: str,
+    amount: Optional[float] = None,
+    currency: Optional[str] = None,
+    payment_metadata: Optional[PaymentMetadata] = None
 ):
     """
-    Background task to move user transaction files from Temp to Inbox.
+    Background task to move user transaction files from Temp to Inbox and persist payment data.
     Updates user_transactions collection status to "completed".
     Runs asynchronously without blocking HTTP response.
 
     Args:
         customer_email: User email address
         square_transaction_id: Square payment transaction ID
+        amount: Payment amount in dollars
+        currency: Currency code (default: USD)
+        payment_metadata: Additional payment metadata from Square
     """
     import time
     from app.utils.user_transaction_helper import (
@@ -296,6 +343,45 @@ async def process_user_payment_files_background(
         print(f"   Customer: {customer_email}")
         print(f"   Square Transaction ID: {square_transaction_id}")
         print("=" * 80)
+
+        # Step 0: Persist payment data to payments collection
+        print(f"\n💾 Step 0: Persisting payment data to database...")
+        persist_start = time.time()
+
+        from app.services.payment_repository import payment_repository
+        from app.models.payment import PaymentCreate
+
+        try:
+            payment_data = PaymentCreate(
+                user_email=customer_email,
+                square_payment_id=square_transaction_id,
+                amount=int((amount or 0) * 100) if amount else 0,  # Convert to cents
+                currency=currency or "USD",
+                payment_status="completed",
+                payment_method="card",
+                payment_source="web",
+                card_brand=payment_metadata.cardBrand if payment_metadata else None,
+                last_4_digits=payment_metadata.last4 if payment_metadata else None,
+                buyer_email_address=payment_metadata.customer_email if payment_metadata and payment_metadata.customer_email else customer_email,
+                square_receipt_url=payment_metadata.receiptNumber if payment_metadata else None,
+                webhook_event_id=None,
+                square_raw_response={
+                    "square_transaction_id": square_transaction_id,
+                    "amount": amount,
+                    "currency": currency,
+                    "metadata": payment_metadata.model_dump() if payment_metadata else {}
+                }
+            )
+
+            payment_id = await payment_repository.create_payment(payment_data)
+            persist_time = (time.time() - persist_start) * 1000
+            print(f"⏱️  Payment persistence completed in {persist_time:.2f}ms")
+            print(f"✅ Payment record created with ID: {payment_id}")
+        except Exception as e:
+            persist_time = (time.time() - persist_start) * 1000
+            print(f"⏱️  Payment persistence attempted in {persist_time:.2f}ms")
+            print(f"⚠️  Failed to persist payment: {str(e)}")
+            logging.warning(f"Failed to persist user payment {square_transaction_id}: {e}")
 
         # Step 1: Get transaction from user_transactions collection
         print(f"\n🔍 Step 1: Fetching user transaction...")
@@ -558,7 +644,10 @@ async def handle_user_payment_success(
         background_tasks.add_task(
             process_user_payment_files_background,
             customer_email=customer_email,
-            square_transaction_id=square_transaction_id
+            square_transaction_id=square_transaction_id,
+            amount=request.amount,
+            currency=request.currency,
+            payment_metadata=request.metadata
         )
         task_schedule_time = (time.time() - task_schedule_start) * 1000
 

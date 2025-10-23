@@ -1,9 +1,8 @@
-# CLAUDE.md - FastAPI Backend
+markdown# CLAUDE.md - FastAPI Backend
 
-**Stack:** Python 3.11+, FastAPI 0.104+, Pydantic v2, Uvicorn, pytest-asyncio, httpx
+**Stack:** Python 3.11+, FastAPI 0.104+, Pydantic v2, Uvicorn, pytest-asyncio, httpx, MongoDB, Motor
 
 ## Structure
-```
 server/
 ├── app/
 │   ├── main.py              # FastAPI app + lifespan
@@ -11,19 +10,23 @@ server/
 │   ├── api/v1/              # versioned routes
 │   ├── services/            # business logic
 │   ├── models/              # Pydantic schemas
-│   ├── db/                  # models, session, repos
+│   ├── db/                  # MongoDB models, session, repos
 │   └── middleware/          # logging, CORS, rate limiting
 ├── tests/                   # unit, integration, fixtures
-└── alembic/                 # migrations
-```
+│   ├── integration/         # API integration tests
+│   ├── unit/                # Unit tests
+│   └── conftest.py          # Shared fixtures
+├── scripts/                 # Automation scripts
+└── .env                     # Environment variables
 
 **Quick Start:**
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt -r requirements-dev.txt
-uvicorn app.main:app --reload
-pytest -v --cov=app
+./scripts/setup.sh           # Complete environment setup
+./scripts/test.sh all        # Run all tests with coverage
+uvicorn app.main:app --reload --port 8000
 ```
+
+---
 
 ## Plugin System (wshobson/agents)
 
@@ -41,30 +44,37 @@ pytest -v --cov=app
 - `testing-automation` - Test generation, coverage
 
 **Core Agents:**
-| Agent | Purpose |
-|-------|---------|
-| `backend-architect` | API/system design |
-| `database-architect` | Schema design |
-| `python-backend-engineer` | FastAPI implementation |
-| `database-admin` | Migrations, setup |
-| `database-optimizer` | Query optimization, indexing |
-| `test-automator` | Test generation |
-| `security-auditor` | Security scanning |
-| `performance-engineer` | Performance profiling |
-| `incident-responder` | Production debugging |
-| `code-reviewer` | Code quality review |
+| Agent | Purpose | When to Use |
+|-------|---------|-------------|
+| `backend-architect` | API/system design | New features, API design needed |
+| `database-architect` | Schema design | New collections, relationships |
+| `python-pro` | FastAPI implementation | Writing code, refactoring |
+| `database-admin` | MongoDB setup, indexes | Index creation, migrations |
+| `database-optimizer` | Query optimization | Slow queries, performance issues |
+| `test-automator` | Test generation | Need tests, coverage gaps |
+| `security-auditor` | Security scanning | Security review, OWASP check |
+| `performance-engineer` | Performance profiling | Performance issues, benchmarking |
+| `incident-responder` | Production debugging | Production issues, incidents |
+| `code-reviewer` | Code quality review | Code review, refactoring |
+| `debugger` | Root cause analysis | Bug investigation, errors |
+
+---
 
 ## Agent Usage
 
-**Decision Tree:**
-- Architecture/Design → `backend-architect`, `database-architect`
-- Implementation → `python-backend-engineer`, `database-admin`
-- Testing → `test-automator`
-- Security → `security-auditor`, `backend-security-coder`
-- Performance → `performance-engineer`, `database-optimizer`
-- Incidents → `incident-responder`
+**Quick Workflows (use scripts):**
+```bash
+# Complete feature with all agents - runs scripts/feature_flow.py
+"FLOW: implement [feature_name]"
 
-**Invocation:**
+# Generate tests - runs scripts/gen_tests.py
+"TESTS: generate for [module]"
+
+# Optimize DB - runs scripts/optimize_db.py
+"OPTIMIZE: [collection]"
+```
+
+**Direct Agent Invocation:**
 ```bash
 # Natural language (auto-select)
 "Design REST API for document translation"
@@ -72,12 +82,9 @@ pytest -v --cov=app
 # Explicit
 "Use backend-architect to design authentication API with OAuth2"
 
-# Plugin workflow
-/backend-development:api-design "document translation service"
-
 # Multi-agent chain
 "Implement payment feature"
-→ backend-architect → python-backend-engineer → test-automator → security-auditor
+→ backend-architect → python-pro → test-automator → security-auditor
 ```
 
 **Always Include:**
@@ -86,164 +93,82 @@ pytest -v --cov=app
 3. Constraints (what not to change, compatibility)
 4. For bugs: test case, logs, steps to reproduce
 
+---
+
 ## Database Development
 
-**MCP Setup** (`~/.claude.json`):
+**MCP Setup** (`~/.claude/mcp.json` or `.claude/mcp.json`):
 ```json
 {
   "mcpServers": {
-    "postgresql": {
+    "mongodb": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres"],
-      "env": {"POSTGRES_CONNECTION_STRING": "postgresql://user:pass@localhost:5432/db"}
+      "args": ["-y", "@modelcontextprotocol/server-mongodb"],
+      "env": {
+        "MONGODB_URI": "mongodb://localhost:27017/translation"
+      }
+    },
+    "mongodb_test": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-mongodb"],
+      "env": {
+        "MONGODB_URI": "mongodb://localhost:27017/translation_test"
+      }
     }
   }
 }
 ```
 
-**Usage:**
-```bash
-# Direct queries
-"Show all tables" | "Get schema for users table"
+**Available MCP Operations:**
+- `list_databases` - List all databases
+- `list_collections` - List collections in current database
+- `find` - Query documents with filter
+- `aggregate` - Run aggregation pipeline
+- `insert_one` / `insert_many` - Create documents
+- `update_one` / `update_many` - Update documents
+- `delete_one` / `delete_many` - Delete documents
+- `count_documents` - Count matching documents
+- `create_index` - Create collection index
 
-# With agents
-"Use database-optimizer to analyze query performance for documents table"
-```
+---
 
-## Workflows
+## Real Integration Testing (MANDATORY)
 
-**New Feature:**
-```
-1. backend-architect: Design API spec
-2. database-architect: Schema design (if needed)
-3. python-backend-engineer: Implement
-4. test-automator: Create tests
-5. security-auditor: Security review
-6. performance-engineer: Profile (target: p95 <200ms)
-7. code-reviewer: Final review
-```
+**Default Testing Mode:** Real API + Real MongoDB
 
-**Production Incident:**
-```
-1. incident-responder: Triage
-2. debugger: Root cause analysis
-3. python-backend-engineer: Fix
-4. test-automator: Regression test
-5. deployment-engineer: Deploy
-```
+All tests use real backend endpoints and MongoDB connections unless explicitly mocking external services.
 
-## Quality Gates (Mandatory)
-```bash
-pytest -v --cov=app --cov-report=term-missing  # 80% coverage
-mypy app --strict
-ruff check app tests --fix
-black app tests --check
-bandit -r app -ll
-pip-audit
-```
+**Test Database:** `translation_test` (separate from production)
 
-## FastAPI Patterns
+---
 
-**App Factory:**
-```python
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
+## Implementation Patterns
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: init DB pool, cache
-    yield
-    # Shutdown: close connections
+See complete examples in the full CLAUDE.md file for:
+- Route Implementation
+- Service Layer
+- Repository Pattern
+- Error Handling
+- Performance Monitoring
 
-def create_app() -> FastAPI:
-    app = FastAPI(lifespan=lifespan)
-    # Add middleware, routers
-    return app
-```
-
-**Thin Controllers:**
-```python
-@router.post("/", response_model=TranslationResponse, status_code=202)
-async def create_translation(
-    file: UploadFile = File(...),
-    service: TranslationService = Depends(get_translation_service),
-    current_user = Depends(get_current_user),
-) -> TranslationResponse:
-    result = await service.create_translation_job(file, current_user.id)
-    return result
-```
-
-**Service Layer:**
-```python
-class TranslationService:
-    def __init__(self, db: AsyncSession):
-        self.repo = TranslationRepository(db)
-    
-    async def create_translation_job(self, file: UploadFile, user_id: str):
-        file_data = await file.read()
-        await self._validate_file(file_data)
-        return await self.repo.create_job(user_id=user_id)
-```
-
-**Repository:**
-```python
-class TranslationRepository:
-    def __init__(self, db: AsyncSession):
-        self.db = db
-    
-    async def get_by_id(self, job_id: str) -> Translation | None:
-        result = await self.db.execute(
-            select(Translation).where(Translation.id == job_id)
-        )
-        return result.scalar_one_or_none()
-```
-
-## Performance Budgets
-| Endpoint | P95 Target |
-|----------|------------|
-| GET /health | <20ms |
-| GET /api/v1/translations | <100ms |
-| POST /api/v1/translate | <200ms |
-
-## Agent Templates
-
-**API Design:**
-```
-"Use backend-architect to design auth API:
-- POST /api/v1/auth/login, /refresh
-- JWT RS256, 15min access, 7d refresh
-- Rate limit: 5/min
-→ Spec, errors, security, examples"
-```
-
-**DB Optimization:**
-```
-"Use database-optimizer for translations query (850ms → <200ms):
-[query]
-→ Query plan, indexes, rewrite, metrics, test"
-```
-
-**Security:**
-```
-"Use security-auditor for app/core/security.py:
-- OWASP Top 10, hardcoded secrets, SQL injection
-→ Vulnerability report, fixes, tests"
-```
+---
 
 ## Commands
 ```bash
-# Dev
-uvicorn app.main:app --reload
+# Development
+uvicorn app.main:app --reload --port 8000
 
-# Test
-pytest -v --cov=app
-pytest tests/integration/test_translate.py -v
+# Testing
+pytest -v --cov=app                          # All tests with coverage
+./scripts/test.sh all                        # Full test suite with reporting
 
-# Lint
-ruff check app tests --fix && black app tests && mypy app --strict
+# DB Optimization
+./scripts/optimize_db.py --collection users  # Optimize specific collection
 
-# DB
-alembic revision --autogenerate -m "msg"
-alembic upgrade head
-```
+# Test Generation
+./scripts/gen_tests.py openapi.yaml          # Generate tests from spec
+
+# Linting & Security
+ruff check app tests --fix                   # Lint and auto-fix
+bandit -r app -ll                            # Security scan
 

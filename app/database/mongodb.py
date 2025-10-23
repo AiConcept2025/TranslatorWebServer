@@ -111,10 +111,18 @@ class MongoDB:
 
     async def _create_indexes(self) -> None:
         """Create database indexes for performance."""
-        try:
-            logger.info("[MongoDB] Creating database indexes...")
+        logger.info("[MongoDB] Creating database indexes...")
 
-            # Companies collection indexes
+        # Track creation status for each collection
+        success_count = 0
+        failed_count = 0
+
+        # CRITICAL FIX: Wrap EACH collection's index creation in its own try-except
+        # Previously, if one collection failed, ALL subsequent collections were skipped
+        # Now each collection failure is isolated and doesn't block others
+
+        # Companies collection indexes
+        try:
             companies_indexes = [
                 IndexModel([("company_name", ASCENDING)], unique=True, name="company_name_unique"),
                 IndexModel([("company_id", ASCENDING)], unique=True, name="company_id_unique"),
@@ -122,8 +130,13 @@ class MongoDB:
             ]
             await self.db.companies.create_indexes(companies_indexes)
             logger.info("[MongoDB] Companies indexes created")
+            success_count += 1
+        except (OperationFailure, Exception) as e:
+            logger.warning(f"[MongoDB] Companies index creation failed: {e}")
+            failed_count += 1
 
-            # Users collection indexes
+        # Users collection indexes
+        try:
             users_indexes = [
                 IndexModel([("user_id", ASCENDING)], unique=True, name="user_id_unique"),
                 IndexModel([("email", ASCENDING)], name="email_idx"),
@@ -134,8 +147,13 @@ class MongoDB:
             ]
             await self.db.users.create_indexes(users_indexes)
             logger.info("[MongoDB] Users indexes created")
+            success_count += 1
+        except (OperationFailure, Exception) as e:
+            logger.warning(f"[MongoDB] Users index creation failed: {e}")
+            failed_count += 1
 
-            # Company users collection indexes (for enterprise/corporate users)
+        # Company users collection indexes (for enterprise/corporate users)
+        try:
             company_users_indexes = [
                 IndexModel([("user_id", ASCENDING)], unique=True, name="user_id_unique"),
                 IndexModel([("email", ASCENDING)], name="email_idx"),
@@ -146,24 +164,20 @@ class MongoDB:
             ]
             await self.db.company_users.create_indexes(company_users_indexes)
             logger.info("[MongoDB] Company users indexes created")
+            success_count += 1
+        except (OperationFailure, Exception) as e:
+            logger.warning(f"[MongoDB] Company users index creation failed: {e}")
+            failed_count += 1
 
-            # Sessions collection indexes
-            # COMMENTED OUT - Short-term solution: Sessions table updates disabled
-            # sessions_indexes = [
-            #     IndexModel([("session_token", ASCENDING)], unique=True, name="session_token_unique"),
-            #     IndexModel([("user_id", ASCENDING)], name="user_id_idx"),
-            #     IndexModel([("expires_at", ASCENDING)], name="expires_at_idx"),
-            #     IndexModel([("is_active", ASCENDING)], name="is_active_idx"),
-            #     IndexModel([("created_at", ASCENDING)], name="created_at_asc")
-            # ]
-            # await self.db.sessions.create_indexes(sessions_indexes)
-            # logger.info("[MongoDB] Sessions indexes created")
-            logger.info("[MongoDB] Sessions indexes SKIPPED (commented out for short-term solution)")
+        # Sessions collection indexes
+        # COMMENTED OUT - Short-term solution: Sessions table updates disabled
+        logger.info("[MongoDB] Sessions indexes SKIPPED (commented out for short-term solution)")
 
-            # TTL index creation removed - conflicted with existing expires_at_idx
-            # MongoDB will handle expiration based on expires_at field
+        # TTL index creation removed - conflicted with existing expires_at_idx
+        # MongoDB will handle expiration based on expires_at field
 
-            # Subscriptions collection indexes
+        # Subscriptions collection indexes
+        try:
             subscriptions_indexes = [
                 IndexModel([("company_id", ASCENDING)], name="company_id_idx"),
                 IndexModel([("status", ASCENDING)], name="status_idx"),
@@ -174,8 +188,13 @@ class MongoDB:
             ]
             await self.db.subscriptions.create_indexes(subscriptions_indexes)
             logger.info("[MongoDB] Subscriptions indexes created")
+            success_count += 1
+        except (OperationFailure, Exception) as e:
+            logger.warning(f"[MongoDB] Subscriptions index creation failed: {e}")
+            failed_count += 1
 
-            # Users login collection indexes (for simple user auth)
+        # Users login collection indexes (for simple user auth)
+        try:
             users_login_indexes = [
                 IndexModel([("user_email", ASCENDING)], unique=True, name="user_email_unique"),
                 IndexModel([("user_name", ASCENDING)], unique=True, name="user_name_unique"),
@@ -183,8 +202,13 @@ class MongoDB:
             ]
             await self.db.users_login.create_indexes(users_login_indexes)
             logger.info("[MongoDB] Users login indexes created")
+            success_count += 1
+        except (OperationFailure, Exception) as e:
+            logger.warning(f"[MongoDB] Users login index creation failed: {e}")
+            failed_count += 1
 
-            # Translation transactions collection indexes
+        # Translation transactions collection indexes
+        try:
             translation_transactions_indexes = [
                 IndexModel([("transaction_id", ASCENDING)], unique=True, name="transaction_id_unique"),
                 IndexModel([("company_id", ASCENDING), ("status", ASCENDING)], name="company_status_idx"),
@@ -192,8 +216,13 @@ class MongoDB:
             ]
             await self.db.translation_transactions.create_indexes(translation_transactions_indexes)
             logger.info("[MongoDB] Translation transactions indexes created")
+            success_count += 1
+        except (OperationFailure, Exception) as e:
+            logger.warning(f"[MongoDB] Translation transactions index creation failed: {e}")
+            failed_count += 1
 
-            # User transactions collection indexes (for individual users)
+        # User transactions collection indexes (for individual users)
+        try:
             user_transactions_indexes = [
                 IndexModel([("square_transaction_id", ASCENDING)], unique=True, name="square_transaction_id_unique"),
                 IndexModel([("user_email", ASCENDING)], name="user_email_idx"),
@@ -204,13 +233,36 @@ class MongoDB:
             ]
             await self.db.user_transactions.create_indexes(user_transactions_indexes)
             logger.info("[MongoDB] User transactions indexes created")
+            success_count += 1
+        except (OperationFailure, Exception) as e:
+            logger.warning(f"[MongoDB] User transactions index creation failed: {e}")
+            failed_count += 1
 
-            logger.info("[MongoDB] All indexes created successfully")
+        # Payments collection indexes (for Square payments) - CRITICAL FOR PAYMENT FUNCTIONALITY
+        # NOTE: square_payment_id is NOT unique to support stub implementation with hardcoded IDs
+        try:
+            payments_indexes = [
+                IndexModel([("square_payment_id", ASCENDING)], name="square_payment_id_idx"),  # Removed unique=True for stub
+                IndexModel([("company_id", ASCENDING)], name="company_id_idx"),
+                IndexModel([("subscription_id", ASCENDING)], name="subscription_id_idx"),
+                IndexModel([("user_id", ASCENDING)], name="user_id_idx"),
+                IndexModel([("payment_status", ASCENDING)], name="payment_status_idx"),
+                IndexModel([("payment_date", ASCENDING)], name="payment_date_idx"),
+                IndexModel([("user_email", ASCENDING)], name="user_email_idx"),
+                IndexModel([("company_id", ASCENDING), ("payment_status", ASCENDING)], name="company_status_idx"),
+                IndexModel([("user_id", ASCENDING), ("payment_date", ASCENDING)], name="user_payment_date_idx"),
+                IndexModel([("square_order_id", ASCENDING)], name="square_order_id_idx"),
+                IndexModel([("square_customer_id", ASCENDING)], name="square_customer_id_idx"),
+                IndexModel([("created_at", ASCENDING)], name="created_at_asc")
+            ]
+            await self.db.payments.create_indexes(payments_indexes)
+            logger.info("[MongoDB] Payments indexes created")
+            success_count += 1
+        except (OperationFailure, Exception) as e:
+            logger.warning(f"[MongoDB] Payments index creation failed: {e}")
+            failed_count += 1
 
-        except OperationFailure as e:
-            logger.warning(f"[MongoDB] Index creation warning (may already exist): {e}")
-        except Exception as e:
-            logger.error(f"[MongoDB] Error creating indexes: {e}", exc_info=True)
+        logger.info(f"[MongoDB] Index creation completed: {success_count} collections successful, {failed_count} collections had issues")
 
     @property
     def is_connected(self) -> bool:
@@ -261,6 +313,11 @@ class MongoDB:
     def user_transactions(self):
         """Get user_transactions collection for individual users."""
         return self.db.user_transactions if self.db is not None else None
+
+    @property
+    def payments(self):
+        """Get payments collection for Square payment tracking."""
+        return self.db.payments if self.db is not None else None
 
 
 # Global database instance

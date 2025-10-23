@@ -17,7 +17,7 @@ import asyncio
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions, translate_user
+from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities (will create these next)
@@ -97,10 +97,16 @@ app.add_middleware(
 # Include routers
 app.include_router(languages.router)
 app.include_router(upload.router)
-app.include_router(payment.router)
+app.include_router(payment.router)  # Simplified payment webhooks
+app.include_router(payments.router)  # Payment management API
 app.include_router(auth.router)
 app.include_router(subscriptions.router)
 app.include_router(translate_user.router)
+
+# Include test helper endpoints only in test/dev mode
+if settings.environment.lower() in ["test", "development"]:
+    app.include_router(test_helpers.router)
+    print("⚠️  Test helper endpoints enabled (test/dev mode only)")
 
 # Import models for /translate endpoint
 from pydantic import BaseModel, EmailStr
@@ -1141,31 +1147,29 @@ async def root():
 async def health_check():
     """Health check endpoint for monitoring and load balancers."""
     try:
-        # Get general health status
-        health_status = await health_checker.check_health()
-
-        # Add MongoDB health check
         from app.database import database
-        mongodb_health = await database.health_check()
-        health_status["database"] = mongodb_health
 
-        # Overall health status
-        overall_healthy = (
-            health_status["status"] == "healthy" and
-            mongodb_health.get("healthy", False)
-        )
-
-        if overall_healthy:
+        # Simple MongoDB connection check
+        if database.is_connected:
+            # Quick ping to verify connection is alive
+            await database.client.admin.command('ping')
             return JSONResponse(
-                content=health_status,
+                content={
+                    "status": "healthy",
+                    "database": "connected",
+                    "timestamp": time.time()
+                },
                 status_code=200
             )
         else:
             return JSONResponse(
-                content=health_status,
+                content={
+                    "status": "unhealthy",
+                    "database": "disconnected",
+                    "timestamp": time.time()
+                },
                 status_code=503
             )
-
     except Exception as e:
         return JSONResponse(
             content={

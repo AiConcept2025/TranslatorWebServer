@@ -191,7 +191,7 @@ class SubscriptionService:
             "units_allocated": period_data.units_allocated,
             "units_used": 0,
             "units_remaining": period_data.units_allocated,
-            "promotional_units_used": 0,
+            "promotional_units": 0,
             "last_updated": datetime.now(timezone.utc)
         }
 
@@ -259,41 +259,28 @@ class SubscriptionService:
         current_period = usage_periods[current_period_idx]
         units_to_add = usage_data.units_to_add
 
-        # Check if using promotional units
-        if usage_data.use_promotional_units:
-            promotional_available = subscription.get("promotional_units", 0) - current_period.get("promotional_units_used", 0)
+        # NEW LOGIC: Check total available units using formula:
+        # promotional_units + units_allocated - units_used >= units_needed
+        promotional_units_in_period = current_period.get("promotional_units", 0)
+        units_allocated = current_period["units_allocated"]
+        units_used = current_period["units_used"]
 
-            if promotional_available >= units_to_add:
-                # Use promotional units only
-                update_query = {
-                    f"usage_periods.{current_period_idx}.promotional_units_used": current_period.get("promotional_units_used", 0) + units_to_add,
-                    f"usage_periods.{current_period_idx}.last_updated": now,
-                    "updated_at": now
-                }
-            else:
-                # Use all promotional units, then regular units
-                remaining_to_use = units_to_add - promotional_available
-                if current_period["units_remaining"] < remaining_to_use:
-                    raise SubscriptionError(f"Insufficient units. Need {remaining_to_use}, have {current_period['units_remaining']}")
+        total_available = promotional_units_in_period + units_allocated - units_used
 
-                update_query = {
-                    f"usage_periods.{current_period_idx}.promotional_units_used": subscription.get("promotional_units", 0),
-                    f"usage_periods.{current_period_idx}.units_used": current_period["units_used"] + remaining_to_use,
-                    f"usage_periods.{current_period_idx}.units_remaining": current_period["units_remaining"] - remaining_to_use,
-                    f"usage_periods.{current_period_idx}.last_updated": now,
-                    "updated_at": now
-                }
-        else:
-            # Use regular units
-            if current_period["units_remaining"] < units_to_add:
-                raise SubscriptionError(f"Insufficient units. Need {units_to_add}, have {current_period['units_remaining']}")
+        # Check if we have enough (must have at least units_needed, can be equal)
+        if total_available < units_to_add:
+            raise SubscriptionError(
+                f"Insufficient units. Need {units_to_add}, have {total_available} "
+                f"(promotional: {promotional_units_in_period}, allocated: {units_allocated}, used: {units_used})"
+            )
 
-            update_query = {
-                f"usage_periods.{current_period_idx}.units_used": current_period["units_used"] + units_to_add,
-                f"usage_periods.{current_period_idx}.units_remaining": current_period["units_remaining"] - units_to_add,
-                f"usage_periods.{current_period_idx}.last_updated": now,
-                "updated_at": now
-            }
+        # Update usage - increment units_used
+        update_query = {
+            f"usage_periods.{current_period_idx}.units_used": units_used + units_to_add,
+            f"usage_periods.{current_period_idx}.units_remaining": current_period["units_remaining"] - units_to_add,
+            f"usage_periods.{current_period_idx}.last_updated": now,
+            "updated_at": now
+        }
 
         # Update subscription
         result = await database.subscriptions.find_one_and_update(
@@ -326,7 +313,7 @@ class SubscriptionService:
         total_allocated = sum(p["units_allocated"] for p in usage_periods)
         total_used = sum(p["units_used"] for p in usage_periods)
         total_remaining = sum(p["units_remaining"] for p in usage_periods)
-        total_promo_used = sum(p.get("promotional_units_used", 0) for p in usage_periods)
+        total_promo_in_periods = sum(p.get("promotional_units", 0) for p in usage_periods)
 
         # Find current period
         now = datetime.now(timezone.utc)
@@ -353,7 +340,7 @@ class SubscriptionService:
             total_units_used=total_used,
             total_units_remaining=total_remaining,
             promotional_units_available=subscription.get("promotional_units", 0),
-            promotional_units_used=total_promo_used,
+            promotional_units_used=total_promo_in_periods,
             current_period=current_period,
             status=subscription["status"],
             expires_at=subscription.get("end_date")

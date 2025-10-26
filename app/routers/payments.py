@@ -268,7 +268,7 @@ async def get_payment_by_square_id(
 @router.get("/company/{company_id}")
 async def get_company_payments(
     company_id: str = Path(..., description="Company identifier (e.g., cmp_00123)"),
-    status: Optional[str] = Query(None, description="Filter by payment status (COMPLETED, PENDING, FAILED, REFUNDED)"),
+    status_filter: Optional[str] = Query(None, description="Filter by payment status (COMPLETED, PENDING, FAILED, REFUNDED)"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
     skip: int = Query(0, ge=0, description="Number of results to skip (for pagination)")
 ):
@@ -305,18 +305,31 @@ async def get_company_payments(
     ```
     """
     try:
-        logger.info(f"Fetching payments for company {company_id}, status={status}, limit={limit}, skip={skip}")
+        logger.info(f"Fetching payments for company {company_id}, status={status_filter}, limit={limit}, skip={skip}")
 
         payments = await payment_repository.get_payments_by_company(
             company_id=company_id,
-            status=status,
+            status=status_filter,
             limit=limit,
             skip=skip
         )
 
-        # Convert ObjectIds to strings
+        # Convert ObjectIds and datetime objects to JSON-serializable format
         for payment in payments:
             payment["_id"] = str(payment["_id"])
+            # Convert datetime objects to ISO format strings
+            if "created_at" in payment and hasattr(payment["created_at"], "isoformat"):
+                payment["created_at"] = payment["created_at"].isoformat()
+            if "updated_at" in payment and hasattr(payment["updated_at"], "isoformat"):
+                payment["updated_at"] = payment["updated_at"].isoformat()
+            if "payment_date" in payment and hasattr(payment["payment_date"], "isoformat"):
+                payment["payment_date"] = payment["payment_date"].isoformat()
+
+            # Convert datetime objects in refunds array
+            if "refunds" in payment and isinstance(payment["refunds"], list):
+                for refund in payment["refunds"]:
+                    if "created_at" in refund and hasattr(refund["created_at"], "isoformat"):
+                        refund["created_at"] = refund["created_at"].isoformat()
 
         logger.info(f"Found {len(payments)} payments for company {company_id}")
 
@@ -329,7 +342,7 @@ async def get_company_payments(
                 "skip": skip,
                 "filters": {
                     "company_id": company_id,
-                    "status": status
+                    "status": status_filter
                 }
             }
         })

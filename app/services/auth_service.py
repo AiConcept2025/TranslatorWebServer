@@ -159,7 +159,7 @@ class AuthService:
             "user_id": user.get("user_id"),  # Required by JWT service
             "email": user.get("email"),
             "fullName": user.get("user_name"),  # Frontend expects this
-            "company": company_name,  # Frontend expects this
+            "company": str(company_id),  # Frontend expects company_id (for payments query)
             "company_id": str(company_id),  # Backend needs ObjectId as string for enterprise detection
             "company_name": company_name,  # JWT service expects this field name
             "permission_level": user.get("permission_level", "user")

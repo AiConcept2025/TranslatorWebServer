@@ -1,196 +1,174 @@
-# CLAUDE.md
+markdown# CLAUDE.md - FastAPI Backend
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+**Stack:** Python 3.11+, FastAPI 0.104+, Pydantic v2, Uvicorn, pytest-asyncio, httpx, MongoDB, Motor
 
-## Project Overview
-
-TranslatorWebServer - A FastAPI-based translation service with **STUB IMPLEMENTATIONS** for development and demonstration purposes.
-
-**Important**: This is a fully implemented FastAPI project with stub functions that use "Hello World" print statements instead of actual translation, file processing, and payment functionality.
-
-## Development Commands
-
-### Setup
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Copy environment configuration
-cp .env.example .env
-```
-
-### Running the Application
-```bash
-# Run with Python
-python -m app.main
-
-# Or run with uvicorn directly
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### Testing
-```bash
-# Install test dependencies
-pip install pytest pytest-asyncio httpx
-
-# Run tests
-pytest
-```
-
-### Code Quality
-```bash
-# Format code
-black app/
-
-# Lint code
-flake8 app/
-
-# Type checking
-mypy app/
-```
-
-## Project Architecture
-
-### Technology Stack
-- **Framework**: FastAPI (Python async web framework)
-- **Validation**: Pydantic models for request/response validation
-- **Configuration**: Environment-based configuration with pydantic-settings
-- **File Upload**: Multipart file handling with aiofiles
-- **Middleware**: Custom logging and rate limiting middleware
-- **Health Checks**: Comprehensive health monitoring
-- **Documentation**: Auto-generated OpenAPI/Swagger documentation
-
-### Project Structure
-```
-TranslatorWebServer/
+## Structure
+server/
 ├── app/
-│   ├── main.py                 # FastAPI application entry point
-│   ├── config.py              # Configuration management
-│   ├── models/                # Pydantic models
-│   │   ├── requests.py        # Request models with validation
-│   │   └── responses.py       # Response models
-│   ├── routers/               # API route handlers
-│   │   ├── translate.py       # Translation endpoints (STUBBED)
-│   │   ├── upload.py          # File upload endpoints (STUBBED)
-│   │   ├── languages.py       # Language endpoints (STUBBED)
-│   │   └── payment.py         # Payment endpoints (STUBBED)
-│   ├── services/              # Business logic services
-│   │   ├── translation_service.py  # Translation service (STUBBED)
-│   │   ├── file_service.py         # File handling service (STUBBED)
-│   │   └── payment_service.py      # Payment processing (STUBBED)
-│   ├── middleware/            # Custom middleware
-│   │   ├── logging.py         # Request/response logging (FUNCTIONAL)
-│   │   └── rate_limiting.py   # Rate limiting (FUNCTIONAL)
-│   └── utils/                 # Utility functions
-│       └── health.py          # Health check utilities (STUBBED)
-├── uploads/                   # File upload directory
-├── requirements.txt           # Python dependencies
-├── .env.example              # Environment configuration template
-├── .gitignore                # Git ignore rules
-└── README.md                 # Project documentation
+│   ├── main.py              # FastAPI app + lifespan
+│   ├── core/                # config, security, deps
+│   ├── api/v1/              # versioned routes
+│   ├── services/            # business logic
+│   ├── models/              # Pydantic schemas
+│   ├── db/                  # MongoDB models, session, repos
+│   └── middleware/          # logging, CORS, rate limiting
+├── tests/                   # unit, integration, fixtures
+│   ├── integration/         # API integration tests
+│   ├── unit/                # Unit tests
+│   └── conftest.py          # Shared fixtures
+├── scripts/                 # Automation scripts
+└── .env                     # Environment variables
+
+**Quick Start:**
+```bash
+./scripts/setup.sh           # Complete environment setup
+./scripts/test.sh all        # Run all tests with coverage
+uvicorn app.main:app --reload --port 8000
 ```
 
-## Implementation Status
+---
 
-### ✅ Fully Implemented (Functional)
-- FastAPI application setup and configuration
-- Request/response models with validation
-- API routing and endpoint structure
-- Middleware (logging, rate limiting, CORS)
-- Health check endpoints
-- Environment configuration management
-- OpenAPI/Swagger documentation
-- Error handling and exception management
+## Plugin System (wshobson/agents)
 
-### 🔄 Stub Implementations (Print "Hello World")
-- **Translation Services**: Google Translate, DeepL, Azure Translator
-- **File Processing**: Text extraction from DOC, DOCX, PDF, RTF, ODT
-- **Payment Processing**: Stripe integration and webhooks
-- **Language Detection**: Automatic language identification
-- **File Upload**: Actual file storage and metadata
-- **Database Operations**: User history and persistent storage
-
-## Key Features
-
-### API Endpoints
-- **Translation**: `/api/v1/translate/*` - Text and file translation (stubbed)
-- **File Upload**: `/api/v1/files/*` - File upload and management (stubbed)
-- **Languages**: `/api/v1/languages/*` - Language support and detection (stubbed)
-- **Payments**: `/api/v1/payments/*` - Payment processing (stubbed)
-- **Health**: `/health` - Application health monitoring (functional with stub metrics)
-
-### Middleware Features
-- **Request Logging**: Comprehensive request/response logging with sanitization
-- **Rate Limiting**: Configurable rate limiting with different limits per endpoint
-- **CORS Support**: Cross-origin request handling
-- **Error Handling**: Consistent error responses with request IDs
-
-### Configuration
-- Environment-based configuration with validation
-- Support for multiple translation service API keys
-- Configurable file upload limits and storage paths
-- Rate limiting configuration
-- Logging configuration
-
-## Working with Stubs
-
-### Understanding Stub Behavior
-All stub functions:
-1. Print "Hello World" messages to console with operation details
-2. Return realistic-looking response data
-3. Don't perform actual external API calls
-4. Don't process real files or payments
-
-### Replacing Stubs with Real Implementation
-To replace stubs with real functionality:
-1. **Translation Services**: Implement actual API calls to Google, DeepL, Azure
-2. **File Processing**: Add real text extraction using libraries like PyPDF2, python-docx
-3. **Payment Processing**: Implement actual Stripe API calls
-4. **Database**: Add SQLAlchemy models and database operations
-5. **Storage**: Implement real file storage and metadata persistence
-
-### Example Stub Pattern
-```python
-async def translate_text(text: str, target_lang: str) -> str:
-    print(f"Hello World - Translation stub: '{text[:30]}...' to {target_lang}")
-    return f"[STUB] Translated '{text[:30]}...' to {target_lang}"
+**Install:**
+```bash
+/plugin marketplace add wshobson/agents
+/plugin install backend-development database-development debugging-toolkit security-scanning testing-automation
 ```
 
-## Development Guidelines
+**Key Plugins:**
+- `backend-development` - API design, architecture, docs
+- `database-development` - Schema, migrations, optimization
+- `debugging-toolkit` - Bug investigation, incidents
+- `security-scanning` - Audits, OWASP compliance
+- `testing-automation` - Test generation, coverage
 
-### When Extending Functionality
-1. Follow the existing pattern of separating routers, services, and models
-2. Add proper request/response validation using Pydantic
-3. Include appropriate error handling
-4. Add logging for debugging
-5. Update health checks if adding external dependencies
-6. Maintain the stub pattern for non-essential services during development
+**Core Agents:**
+| Agent | Purpose | When to Use |
+|-------|---------|-------------|
+| `backend-architect` | API/system design | New features, API design needed |
+| `database-architect` | Schema design | New collections, relationships |
+| `python-pro` | FastAPI implementation | Writing code, refactoring |
+| `database-admin` | MongoDB setup, indexes | Index creation, migrations |
+| `database-optimizer` | Query optimization | Slow queries, performance issues |
+| `test-automator` | Test generation | Need tests, coverage gaps |
+| `security-auditor` | Security scanning | Security review, OWASP check |
+| `performance-engineer` | Performance profiling | Performance issues, benchmarking |
+| `incident-responder` | Production debugging | Production issues, incidents |
+| `code-reviewer` | Code quality review | Code review, refactoring |
+| `debugger` | Root cause analysis | Bug investigation, errors |
 
-### Testing Strategy
-- Test API endpoints for proper request/response handling
-- Test validation logic in Pydantic models
-- Test middleware functionality
-- Mock external services for unit tests
-- Use stub responses for integration tests
+---
 
-### Performance Considerations
-- Use async/await throughout for I/O operations
-- Implement proper connection pooling when adding real database/API clients
-- Consider caching strategies for translation results
-- Monitor memory usage with file uploads
-- Implement proper cleanup for temporary files
+## Agent Usage
 
-## Deployment Notes
+**Quick Workflows (use scripts):**
+```bash
+# Complete feature with all agents - runs scripts/feature_flow.py
+"FLOW: implement [feature_name]"
 
-For production deployment (after implementing real functionality):
-1. Set `DEBUG=False` and `ENVIRONMENT=production`
-2. Configure proper secret keys and API credentials
-3. Set up PostgreSQL or other production database
-4. Configure Redis for caching and session storage
-5. Use proper logging configuration (structured logging)
-6. Implement monitoring and alerting
-7. Use a production ASGI server like Gunicorn with Uvicorn workers
+# Generate tests - runs scripts/gen_tests.py
+"TESTS: generate for [module]"
+
+# Optimize DB - runs scripts/optimize_db.py
+"OPTIMIZE: [collection]"
+```
+
+**Direct Agent Invocation:**
+```bash
+# Natural language (auto-select)
+"Design REST API for document translation"
+
+# Explicit
+"Use backend-architect to design authentication API with OAuth2"
+
+# Multi-agent chain
+"Implement payment feature"
+→ backend-architect → python-pro → test-automator → security-auditor
+```
+
+**Always Include:**
+1. Context (file structure, dependencies, existing behavior)
+2. Acceptance criteria (status codes, schemas, performance targets)
+3. Constraints (what not to change, compatibility)
+4. For bugs: test case, logs, steps to reproduce
+
+---
+
+## Database Development
+
+**MCP Setup** (`~/.claude/mcp.json` or `.claude/mcp.json`):
+```json
+{
+  "mcpServers": {
+    "mongodb": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-mongodb"],
+      "env": {
+        "MONGODB_URI": "mongodb://localhost:27017/translation"
+      }
+    },
+    "mongodb_test": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-mongodb"],
+      "env": {
+        "MONGODB_URI": "mongodb://localhost:27017/translation_test"
+      }
+    }
+  }
+}
+```
+
+**Available MCP Operations:**
+- `list_databases` - List all databases
+- `list_collections` - List collections in current database
+- `find` - Query documents with filter
+- `aggregate` - Run aggregation pipeline
+- `insert_one` / `insert_many` - Create documents
+- `update_one` / `update_many` - Update documents
+- `delete_one` / `delete_many` - Delete documents
+- `count_documents` - Count matching documents
+- `create_index` - Create collection index
+
+---
+
+## Real Integration Testing (MANDATORY)
+
+**Default Testing Mode:** Real API + Real MongoDB
+
+All tests use real backend endpoints and MongoDB connections unless explicitly mocking external services.
+
+**Test Database:** `translation_test` (separate from production)
+
+---
+
+## Implementation Patterns
+
+See complete examples in the full CLAUDE.md file for:
+- Route Implementation
+- Service Layer
+- Repository Pattern
+- Error Handling
+- Performance Monitoring
+
+---
+
+## Commands
+```bash
+# Development
+uvicorn app.main:app --reload --port 8000
+
+# Testing
+pytest -v --cov=app                          # All tests with coverage
+./scripts/test.sh all                        # Full test suite with reporting
+
+# DB Optimization
+./scripts/optimize_db.py --collection users  # Optimize specific collection
+
+# Test Generation
+./scripts/gen_tests.py openapi.yaml          # Generate tests from spec
+
+# Linting & Security
+ruff check app tests --fix                   # Lint and auto-fix
+bandit -r app -ll                            # Security scan
+

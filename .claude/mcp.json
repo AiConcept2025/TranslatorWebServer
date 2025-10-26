@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "mongodb": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-mongodb"],
+      "env": {
+        "MONGODB_URI": "mongodb://localhost:27017/translation"
+      }
+    },
+    "mongodb_test": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-mongodb"],
+      "env": {
+        "MONGODB_URI": "mongodb://localhost:27017/translation_test"
+      }
+    }
+  }
+}
+

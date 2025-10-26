@@ -66,15 +66,15 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     
     async def _log_request(self, request: Request, request_id: str):
         """Log incoming request."""
-        
+
         # Get client info
-        client_ip = request.client.host
+        client_ip = request.client.host if request.client else "unknown"
         forwarded_for = request.headers.get('X-Forwarded-For')
         if forwarded_for:
             client_ip = forwarded_for.split(',')[0].strip()
-        
+
         user_agent = request.headers.get('User-Agent', 'Unknown')
-        
+
         # Prepare log data
         log_data = {
             'request_id': request_id,
@@ -87,9 +87,36 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             'headers': self._sanitize_headers(dict(request.headers)),
             'timestamp': time.time()
         }
-        
-        # Add request body if enabled and appropriate
-        if (self.log_request_body and 
+
+        # ALWAYS log request metadata for /translate and /api/transactions/confirm endpoints (but NOT body)
+        # We don't read the body here to avoid consuming the request stream before Pydantic validation
+        if request.url.path == '/translate' and request.method == 'POST':
+            print("=" * 80)
+            print(f"[RAW REQUEST METADATA] POST /translate - Request ID: {request_id}")
+            print(f"[RAW REQUEST METADATA] Client IP: {client_ip}")
+            print(f"[RAW REQUEST METADATA] User-Agent: {user_agent}")
+            print(f"[RAW REQUEST METADATA] Headers: {json.dumps(self._sanitize_headers(dict(request.headers)), indent=2)}")
+            print(f"[RAW REQUEST METADATA] Query Params: {dict(request.query_params)}")
+            print(f"[RAW REQUEST METADATA] Content-Type: {request.headers.get('Content-Type', 'N/A')}")
+            print(f"[RAW REQUEST METADATA] Content-Length: {request.headers.get('Content-Length', 'N/A')} bytes")
+            print(f"[RAW REQUEST METADATA] NOTE: Body details will be logged in endpoint after Pydantic parsing")
+            print("=" * 80)
+
+        # ADD DETAILED LOGGING FOR /api/transactions/confirm
+        elif request.url.path == '/api/transactions/confirm' and request.method == 'POST':
+            print("=" * 80)
+            print(f"[TRANSACTION CONFIRM REQ] Request ID: {request_id}")
+            print(f"[TRANSACTION CONFIRM REQ] Client IP: {client_ip}")
+            print(f"[TRANSACTION CONFIRM REQ] Content-Type: {request.headers.get('Content-Type', 'N/A')}")
+            print(f"[TRANSACTION CONFIRM REQ] Content-Length: {request.headers.get('Content-Length', '0')} bytes")
+            print(f"[TRANSACTION CONFIRM REQ] Authorization: {request.headers.get('Authorization', 'MISSING')[:50]}...")
+            print(f"[TRANSACTION CONFIRM REQ] Accept-Encoding: {request.headers.get('Accept-Encoding', 'N/A')}")
+            print(f"[TRANSACTION CONFIRM REQ] Transfer-Encoding: {request.headers.get('Transfer-Encoding', 'N/A')}")
+            print(f"[TRANSACTION CONFIRM REQ] NOTE: Request will now proceed to Pydantic body parsing")
+            print("=" * 80)
+
+        # Add request body if enabled and appropriate for other endpoints
+        elif (self.log_request_body and
             request.method in ['POST', 'PUT', 'PATCH'] and
             self._should_log_body(request)):
             try:
@@ -98,7 +125,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                     log_data['body'] = body
             except Exception as e:
                 log_data['body_error'] = str(e)
-        
+
         # Log request
         if settings.is_development:
             logger.info(f"Incoming request: {request.method} {request.url.path}")
@@ -184,22 +211,16 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     
     def _should_log_body(self, request: Request) -> bool:
         """Determine if request body should be logged."""
-        content_type = request.headers.get('Content-Type', '').lower()
-        
-        # Don't log file uploads or binary content
-        if ('multipart/form-data' in content_type or
-            'application/octet-stream' in content_type or
-            'image/' in content_type or
-            'video/' in content_type or
-            'audio/' in content_type):
-            return False
-        
-        # Don't log very large bodies
-        content_length = request.headers.get('Content-Length')
-        if content_length and int(content_length) > 10000:  # 10KB limit
-            return False
-        
-        return True
+        # CRITICAL: Don't consume request body for ANY endpoint with Pydantic validation
+        # BaseHTTPMiddleware + body reading causes stream corruption and ClientDisconnect errors
+        # FastAPI/Pydantic handles body parsing - middleware should NOT consume it
+        #
+        # Previous behavior: Only skipped /login/, causing 90s timeouts on other POST endpoints
+        # New behavior: Skip ALL endpoints to let FastAPI handle body parsing
+
+        # Skip ALL POST/PUT/PATCH endpoints to avoid consuming body stream
+        # Endpoints log their own body AFTER Pydantic validation succeeds
+        return False
     
     def _should_log_response_body(self, response) -> bool:
         """Determine if response body should be logged."""
@@ -217,7 +238,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         return True
     
     async def _get_request_body(self, request: Request) -> Any:
-        """Get request body for logging."""
+        """Get request body for logging with robust encoding handling."""
         try:
             content_type = request.headers.get('Content-Type', '').lower()
             
@@ -230,11 +251,38 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             else:
                 body = await request.body()
                 if len(body) < 1000:  # Only log small text bodies
-                    return body.decode('utf-8', errors='ignore')
+                    return self._safe_decode_body(body)
                 else:
                     return f"<binary data: {len(body)} bytes>"
-        except Exception:
-            return None
+        except Exception as e:
+            return f"<body read error: {str(e)}>"
+    
+    def _safe_decode_body(self, body: bytes) -> str:
+        """Safely decode request body with multiple encoding attempts."""
+        if not body:
+            return ""
+        
+        # Try multiple encodings in order of likelihood
+        encodings = ['utf-8', 'utf-8-sig', 'latin1', 'cp1252', 'iso-8859-1']
+        
+        for encoding in encodings:
+            try:
+                decoded = body.decode(encoding)
+                # Validate the decoded text doesn't contain replacement characters
+                if '\ufffd' not in decoded:
+                    return f"<{encoding}> {decoded}"
+                elif encoding == 'utf-8':
+                    # If UTF-8 fails, log the problematic bytes for debugging
+                    try:
+                        # Find the first problematic byte
+                        body.decode('utf-8')  # This will raise UnicodeDecodeError
+                    except UnicodeDecodeError as e:
+                        logger.warning(f"UTF-8 decode error: {e}")
+            except UnicodeDecodeError:
+                continue
+        
+        # If all encodings fail, return hex representation
+        return f"<hex> {body.hex()[:200]}..." if len(body) > 100 else f"<hex> {body.hex()}"
     
     async def _get_response_body(self, response) -> Any:
         """Get response body for logging."""

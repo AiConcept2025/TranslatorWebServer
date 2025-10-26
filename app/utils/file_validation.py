@@ -5,6 +5,7 @@ File validation utilities including file signature (magic number) validation.
 from typing import Dict, List, Optional, Tuple
 from fastapi import HTTPException
 import io
+import logging
 
 # File signatures (magic numbers) for supported file types
 FILE_SIGNATURES = {
@@ -60,6 +61,9 @@ FILE_SIGNATURES = {
         b'\x49\x49\x2a\x00',
         b'\x4d\x4d\x00\x2a',
     ],
+    
+    # Text files (no specific signature, will validate by content)
+    'txt': [],
 }
 
 # Dangerous file signatures to reject
@@ -90,7 +94,7 @@ class FileValidator:
         self.max_document_size = 100 * 1024 * 1024  # 100MB
         self.max_image_size = 50 * 1024 * 1024      # 50MB
         
-        self.document_types = {'pdf', 'doc', 'docx'}
+        self.document_types = {'pdf', 'doc', 'docx', 'txt'}
         self.image_types = {'jpeg', 'jpg', 'png', 'tiff', 'tif'}
         self.supported_types = self.document_types | self.image_types
     
@@ -108,7 +112,7 @@ class FileValidator:
         Raises:
             HTTPException: If file has dangerous signature
         """
-        print(f"Hello World - File signature validation stub for extension: {expected_extension}")
+        logging.debug(f"Validating file signature for extension: {expected_extension}")
         
         # Check for dangerous signatures first
         self._check_dangerous_signatures(content)
@@ -119,13 +123,23 @@ class FileValidator:
         if ext not in self.supported_types:
             return False
         
+        # Special handling for text files (no magic signature)
+        if ext == 'txt':
+            # Validate that content is mostly printable text
+            if self._is_text_content(content):
+                logging.debug(f"Text file content validated for {ext}")
+                return True
+            else:
+                logging.warning(f"Invalid text file content for {ext}")
+                return False
+        
         # Get expected signatures for this file type
         expected_signatures = FILE_SIGNATURES.get(ext, [])
         
         # Check if content matches any expected signature
         for signature in expected_signatures:
             if content.startswith(signature):
-                print(f"Hello World - File signature validated successfully for {ext}")
+                logging.debug(f"File signature validated successfully for {ext}")
                 return True
         
         # Special handling for Office documents (DOCX can have DOC signatures)
@@ -134,10 +148,10 @@ class FileValidator:
             office_sigs = FILE_SIGNATURES['doc'] + FILE_SIGNATURES['docx']
             for signature in office_sigs:
                 if content.startswith(signature):
-                    print(f"Hello World - Office document signature validated for {ext}")
+                    logging.debug(f"Office document signature validated for {ext}")
                     return True
         
-        print(f"Hello World - File signature validation failed for {ext}")
+        logging.warning(f"File signature validation failed for {ext}")
         return False
     
     def _check_dangerous_signatures(self, content: bytes) -> None:
@@ -153,11 +167,55 @@ class FileValidator:
         for file_type, signatures in DANGEROUS_SIGNATURES.items():
             for signature in signatures:
                 if content.startswith(signature):
-                    print(f"Hello World - Dangerous file signature detected: {file_type}")
+                    logging.error(f"🚨 SECURITY: Dangerous file signature detected: {file_type}")
                     raise HTTPException(
                         status_code=400,
                         detail=f"File rejected: Executable or script files are not allowed"
                     )
+    
+    def _is_text_content(self, content: bytes) -> bool:
+        """
+        Check if content appears to be valid text.
+        
+        Args:
+            content: File content to check
+            
+        Returns:
+            True if content appears to be text, False otherwise
+        """
+        try:
+            # Try to decode as UTF-8
+            text = content.decode('utf-8')
+            
+            # Check if content is mostly printable characters
+            printable_chars = sum(1 for c in text if c.isprintable() or c.isspace())
+            total_chars = len(text)
+            
+            if total_chars == 0:
+                return True  # Empty files are valid
+            
+            # Allow up to 5% non-printable characters
+            printable_ratio = printable_chars / total_chars
+            return printable_ratio >= 0.95
+            
+        except UnicodeDecodeError:
+            # Try other common encodings
+            for encoding in ['latin-1', 'cp1252', 'iso-8859-1']:
+                try:
+                    text = content.decode(encoding)
+                    printable_chars = sum(1 for c in text if c.isprintable() or c.isspace())
+                    total_chars = len(text)
+                    
+                    if total_chars == 0:
+                        return True
+                    
+                    printable_ratio = printable_chars / total_chars
+                    if printable_ratio >= 0.95:
+                        return True
+                except UnicodeDecodeError:
+                    continue
+            
+            return False
     
     def validate_file_size(self, size: int, file_extension: str) -> bool:
         """
@@ -180,7 +238,7 @@ class FileValidator:
             return False
         
         is_valid = size <= max_size
-        print(f"Hello World - File size validation for {ext}: {size} bytes (max: {max_size}) - {'Valid' if is_valid else 'Invalid'}")
+        logging.debug(f"File size validation for {ext}: {size} bytes (max: {max_size}) - {'Valid' if is_valid else 'Invalid'}")
         return is_valid
     
     def validate_file_extension(self, filename: str) -> bool:
@@ -199,7 +257,7 @@ class FileValidator:
         ext = filename.split('.')[-1].lower()
         is_supported = ext in self.supported_types
         
-        print(f"Hello World - File extension validation: {ext} - {'Supported' if is_supported else 'Not supported'}")
+        logging.debug(f"File extension validation: {ext} - {'Supported' if is_supported else 'Not supported'}")
         return is_supported
     
     def get_expected_content_type(self, extension: str) -> str:
@@ -223,6 +281,7 @@ class FileValidator:
             'png': 'image/png',
             'tiff': 'image/tiff',
             'tif': 'image/tiff',
+            'txt': 'text/plain',
         }
         
         return content_types.get(ext, 'application/octet-stream')
@@ -256,7 +315,7 @@ class FileValidator:
         normalized_provided = variations.get(provided, provided)
         is_valid = normalized_provided == expected
         
-        print(f"Hello World - Content type validation: '{provided}' vs '{expected}' - {'Valid' if is_valid else 'Invalid'}")
+        logging.debug(f"Content type validation: '{provided}' vs '{expected}' - {'Valid' if is_valid else 'Invalid'}")
         return is_valid
     
     async def comprehensive_file_validation(
@@ -276,7 +335,7 @@ class FileValidator:
         Returns:
             Tuple of (is_valid, list_of_errors)
         """
-        print(f"Hello World - Comprehensive file validation for: {filename}")
+        logging.info(f"Starting comprehensive file validation for: {filename}")
         
         errors = []
         
@@ -307,7 +366,10 @@ class FileValidator:
                 errors.append(f"Content type mismatch. Expected: {expected_type}, got: {content_type}")
         
         is_valid = len(errors) == 0
-        print(f"Hello World - Validation result: {'Valid' if is_valid else 'Invalid'} - {len(errors)} errors")
+        if is_valid:
+            logging.info(f"✅ File validation successful for: {filename}")
+        else:
+            logging.warning(f"❌ File validation failed for: {filename} - {len(errors)} errors: {'; '.join(errors)}")
         
         return is_valid, errors
 

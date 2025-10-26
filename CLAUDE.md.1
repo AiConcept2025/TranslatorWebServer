@@ -1,0 +1,870 @@
+# CLAUDE.md - FastAPI Backend
+
+**Stack:** Python 3.11+, FastAPI 0.104+, Pydantic v2, Uvicorn, pytest-asyncio, httpx, MongoDB, Motor
+
+## Structure
+```
+server/
+├── app/
+│   ├── main.py              # FastAPI app + lifespan
+│   ├── core/                # config, security, deps
+│   ├── api/v1/              # versioned routes
+│   ├── services/            # business logic
+│   ├── models/              # Pydantic schemas
+│   ├── db/                  # MongoDB models, session, repos
+│   └── middleware/          # logging, CORS, rate limiting
+├── tests/                   # unit, integration, fixtures
+│   ├── integration/         # API integration tests
+│   ├── unit/                # Unit tests
+│   └── conftest.py          # Shared fixtures
+└── .env                     # Environment variables
+```
+
+**Quick Start:**
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+uvicorn app.main:app --reload --port 8000
+pytest -v --cov=app
+```
+
+---
+
+## Plugin System (wshobson/agents)
+
+**Install:**
+```bash
+/plugin marketplace add wshobson/agents
+/plugin install backend-development database-development debugging-toolkit security-scanning testing-automation
+```
+
+**Key Plugins:**
+- `backend-development` - API design, architecture, docs
+- `database-development` - Schema, migrations, optimization
+- `debugging-toolkit` - Bug investigation, incidents
+- `security-scanning` - Audits, OWASP compliance
+- `testing-automation` - Test generation, coverage
+
+**Core Agents:**
+| Agent | Purpose |
+|-------|---------|
+| `backend-architect` | API/system design |
+| `database-architect` | Schema design |
+| `python-pro` | FastAPI implementation |
+| `database-admin` | MongoDB setup, indexes |
+| `database-optimizer` | Query optimization, indexing |
+| `test-automator` | Test generation |
+| `security-auditor` | Security scanning |
+| `performance-engineer` | Performance profiling |
+| `incident-responder` | Production debugging |
+| `code-reviewer` | Code quality review |
+| `debugger` | Root cause analysis |
+
+---
+
+## Agent Usage
+
+**Decision Tree:**
+- Architecture/Design → `backend-architect`, `database-architect`
+- Implementation → `python-pro`, `database-admin`
+- Testing → `test-automator`
+- Security → `security-auditor`
+- Performance → `performance-engineer`, `database-optimizer`
+- Incidents → `incident-responder`, `debugger`
+
+**Invocation:**
+```bash
+# Natural language (auto-select)
+"Design REST API for document translation"
+
+# Explicit
+"Use backend-architect to design authentication API with OAuth2"
+
+# Multi-agent chain
+"Implement payment feature"
+→ backend-architect → python-pro → test-automator → security-auditor
+```
+
+**Always Include:**
+1. Context (file structure, dependencies, existing behavior)
+2. Acceptance criteria (status codes, schemas, performance targets)
+3. Constraints (what not to change, compatibility)
+4. For bugs: test case, logs, steps to reproduce
+
+---
+
+## Database Development
+
+**MCP Setup** (`~/.claude.json` or project `.claude/mcp.json`):
+
+### MongoDB Configuration:
+```json
+{
+  "mcpServers": {
+    "mongodb": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-mongodb"],
+      "env": {
+        "MONGODB_URI": "mongodb://localhost:27017/translation"
+      }
+    }
+  }
+}
+```
+
+**For MongoDB Atlas (cloud):**
+```json
+{
+  "mcpServers": {
+    "mongodb": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-mongodb"],
+      "env": {
+        "MONGODB_URI": "mongodb+srv://user:pass@cluster.mongodb.net/translation"
+      }
+    }
+  }
+}
+```
+
+**Available Operations:**
+- `list_databases` - List all databases
+- `list_collections` - List collections in current database
+- `find` - Query documents with filter
+- `aggregate` - Run aggregation pipeline
+- `insert_one` / `insert_many` - Create documents
+- `update_one` / `update_many` - Update documents
+- `delete_one` / `delete_many` - Delete documents
+- `count_documents` - Count matching documents
+- `create_index` - Create collection index
+
+**Usage Examples:**
+```bash
+# Natural language queries
+"Show all collections in MongoDB"
+"Query translations collection where status='completed'"
+"Count documents in users collection"
+"Get schema for translations collection"
+
+# With agents
+"Use database-optimizer to analyze query: db.translations.find({user_id: '123'})"
+"Use database-admin to create index on translations.created_at"
+"Use database-architect to design schema for payments collection"
+```
+
+**Testing MCP Connection:**
+```bash
+# After adding to ~/.claude.json or .claude/mcp.json, restart Claude and ask:
+"List all MongoDB collections"
+"Show me 5 documents from translations collection"
+```
+
+**Troubleshooting:**
+- Ensure MongoDB is running: `mongosh`
+- Verify connection string is correct
+- Check database name exists: `show dbs` in mongosh
+- For authentication issues, add username:password to URI
+
+---
+
+## Real Integration Testing (MANDATORY)
+
+**Default Testing Mode:** Real API + Real MongoDB
+
+All tests use real backend endpoints and MongoDB connections unless explicitly specified with mocks.
+
+**Test Database:** `translation_test` (separate from production `translation`)
+
+**Environment Variables:**
+```bash
+# .env.test
+MONGODB_URI=mongodb://localhost:27017
+DATABASE_NAME=translation_test
+USE_REAL_DATABASE=true
+```
+
+**No Mocking By Default:**
+- All API calls hit real FastAPI endpoints
+- All database operations use real MongoDB
+- Tests run sequentially to avoid race conditions
+
+**When to Use Mocks:**
+Only mock external services:
+- Payment providers (Stripe/PayPal)
+- Email services
+- Third-party translation APIs
+
+**Never Mock:**
+- Your own API endpoints
+- Database operations
+- Authentication/authorization
+
+---
+
+## API Contract Tests (MANDATORY)
+
+**Location:** `server/tests/integration/test_<resource>_integration.py`
+
+**Template:**
+```python
+import pytest
+from httpx import AsyncClient
+from fastapi import status
+
+@pytest.mark.asyncio
+class TestTranslationIntegration:
+    """Full integration tests with real MongoDB."""
+
+    async def test_create_translation_success(
+        self, 
+        client: AsyncClient, 
+        auth_headers: dict,
+        sample_pdf: bytes
+    ):
+        """Test complete translation creation flow."""
+        response = await client.post(
+            "/api/v1/translate",
+            headers=auth_headers,
+            files={"file": ("test.pdf", sample_pdf, "application/pdf")},
+            data={"source_language": "en", "target_language": "es"},
+        )
+
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        
+        body = response.json()
+        
+        # Verify contract structure
+        assert "job_id" in body
+        assert "status" in body
+        assert "estimated_cost" in body
+        assert "created_at" in body
+        
+        # Verify types
+        assert isinstance(body["job_id"], str)
+        assert isinstance(body["estimated_cost"], (int, float))
+        assert body["status"] in ["pending", "processing", "completed", "failed"]
+        
+        # Verify data validity
+        assert len(body["job_id"]) == 36  # UUID format
+        assert body["estimated_cost"] > 0
+
+    async def test_translation_error_responses(
+        self, 
+        client: AsyncClient,
+        auth_headers: dict
+    ):
+        """Test all error scenarios return correct structure."""
+        
+        # 422: Invalid file format
+        response = await client.post(
+            "/api/v1/translate",
+            headers=auth_headers,
+            files={"file": ("test.txt", b"text", "text/plain")},
+            data={"source_language": "en", "target_language": "es"},
+        )
+        
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        body = response.json()
+        
+        # Verify error contract
+        assert "error" in body
+        assert "message" in body
+        assert "request_id" in body
+        assert "details" in body or body.get("details") is None
+
+    async def test_field_presence_and_types(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        sample_pdf: bytes
+    ):
+        """Ensure all documented fields are present with correct types."""
+        response = await client.post(
+            "/api/v1/translate",
+            headers=auth_headers,
+            files={"file": ("test.pdf", sample_pdf, "application/pdf")},
+            data={"source_language": "en", "target_language": "es"},
+        )
+
+        body = response.json()
+        
+        # Required fields (must always be present)
+        required_fields = {
+            "job_id": str,
+            "status": str,
+            "estimated_cost": (int, float),
+            "created_at": str,
+        }
+        
+        for field, expected_type in required_fields.items():
+            assert field in body, f"Missing required field: {field}"
+            assert isinstance(body[field], expected_type), \
+                f"Field '{field}' has wrong type: {type(body[field])}"
+
+        # Optional fields (validate if present)
+        if "completed_at" in body:
+            assert isinstance(body["completed_at"], str)
+        
+        if "error_message" in body:
+            assert isinstance(body["error_message"], str)
+```
+
+**Fixtures (tests/conftest.py):**
+```python
+import pytest
+from httpx import AsyncClient
+from app.main import create_app
+from motor.motor_asyncio import AsyncIOMotorClient
+
+@pytest.fixture
+async def client():
+    """Async HTTP client for integration tests."""
+    app = create_app()
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
+
+@pytest.fixture
+def auth_headers(test_user_token: str) -> dict:
+    """Authenticated request headers."""
+    return {"Authorization": f"Bearer {test_user_token}"}
+
+@pytest.fixture
+def sample_pdf() -> bytes:
+    """Sample PDF file for upload tests."""
+    # Minimal valid PDF
+    return b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/Resources <<\n/Font <<\n/F1 4 0 R\n>>\n>>\n/MediaBox [0 0 612 792]\n/Contents 5 0 R\n>>\nendobj\n4 0 obj\n<<\n/Type /Font\n/Subtype /Type1\n/BaseFont /Helvetica\n>>\nendobj\n5 0 obj\n<<\n/Length 44\n>>\nstream\nBT\n/F1 12 Tf\n100 700 Td\n(Test PDF) Tj\nET\nendstream\nendobj\nxref\n0 6\n0000000000 65535 f\n0000000015 00000 n\n0000000068 00000 n\n0000000125 00000 n\n0000000277 00000 n\n0000000361 00000 n\ntrailer\n<<\n/Size 6\n/Root 1 0 R\n>>\nstartxref\n457\n%%EOF"
+
+@pytest.fixture(scope="session")
+async def test_db():
+    """Test database connection."""
+    client = AsyncIOMotorClient("mongodb://localhost:27017")
+    db = client["translation_test"]
+    
+    # Clean before tests
+    await db["users"].delete_many({})
+    await db["translations"].delete_many({})
+    await db["payments"].delete_many({})
+    
+    yield db
+    
+    # Clean after tests (optional - keep for debugging)
+    # await db["users"].delete_many({})
+    # await db["translations"].delete_many({})
+    # await db["payments"].delete_many({})
+    
+    await client.close()
+
+@pytest.fixture
+async def test_user_token(test_db) -> str:
+    """Generate test user and return auth token."""
+    from app.core.security import create_access_token
+    
+    # Insert test user
+    await test_db["users"].insert_one({
+        "_id": "test-user-123",
+        "email": "test@example.com",
+        "password_hash": "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5lW8kHLqC6M7e",
+        "name": "Test User",
+        "created_at": "2024-01-01T00:00:00Z",
+    })
+    
+    # Generate token
+    token = create_access_token({"sub": "test-user-123"})
+    return token
+```
+
+**Run:** 
+```bash
+# Single integration test
+pytest tests/integration/test_translate_integration.py -v
+
+# All integration tests
+pytest tests/integration/ -v --cov=app/api
+
+# With coverage report
+pytest tests/integration/ -v --cov=app/api --cov-report=term-missing
+```
+
+---
+
+## Workflows
+
+**New Feature:**
+```
+1. backend-architect: Design API spec
+2. database-architect: Schema design (if needed)
+3. python-pro: Implement endpoints, services, repositories
+4. test-automator: Create integration tests
+5. security-auditor: Security review
+6. performance-engineer: Profile (target: p95 <200ms)
+7. code-reviewer: Final review
+```
+
+**Production Incident:**
+```
+1. incident-responder: Triage
+2. debugger: Root cause analysis
+3. python-pro: Fix implementation
+4. test-automator: Create regression test
+```
+
+---
+
+## Quality Gates (Mandatory)
+```bash
+# Full test suite with coverage (80% required)
+pytest -v --cov=app --cov-report=term-missing
+
+# Type checking (strict mode)
+mypy app --strict
+
+# Linting and auto-fix
+ruff check app tests --fix
+
+# Code formatting check
+black app tests --check
+
+# Security scanning
+bandit -r app -ll
+
+# Dependency vulnerability audit
+pip-audit
+```
+
+**Pre-commit:**
+```bash
+# Run all quality gates before commit
+pytest -v --cov=app && mypy app --strict && ruff check app tests && black app tests --check && bandit -r app -ll
+```
+
+---
+
+## FastAPI Patterns
+
+**App Factory with MongoDB:**
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from motor.motor_asyncio import AsyncIOMotorClient
+from app.core.config import settings
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Initialize MongoDB connection
+    app.state.db_client = AsyncIOMotorClient(settings.mongodb_uri)
+    app.state.db = app.state.db_client[settings.database_name]
+    
+    # Create indexes
+    await app.state.db.translations.create_index("user_id")
+    await app.state.db.translations.create_index("created_at")
+    await app.state.db.users.create_index("email", unique=True)
+    
+    print(f"✓ Connected to MongoDB: {settings.database_name}")
+    
+    yield
+    
+    # Shutdown: Close MongoDB connection
+    app.state.db_client.close()
+    print("✓ MongoDB connection closed")
+
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="Translation Service API",
+        version="1.0.0",
+        lifespan=lifespan
+    )
+    
+    # Add middleware
+    from app.middleware.logging import LoggingMiddleware
+    from app.middleware.cors import setup_cors
+    
+    setup_cors(app)
+    app.add_middleware(LoggingMiddleware)
+    
+    # Add routers
+    from app.api.v1 import router as api_router
+    app.include_router(api_router, prefix="/api/v1")
+    
+    return app
+```
+
+**Thin Controllers:**
+```python
+from fastapi import APIRouter, Depends, File, UploadFile, status
+from app.services.translation import TranslationService
+from app.models.translation import TranslationResponse
+from app.core.deps import get_translation_service, get_current_user
+
+router = APIRouter()
+
+@router.post("/translate", response_model=TranslationResponse, status_code=status.HTTP_202_ACCEPTED)
+async def create_translation(
+    file: UploadFile = File(...),
+    source_language: str = Form(...),
+    target_language: str = Form(...),
+    service: TranslationService = Depends(get_translation_service),
+    current_user: dict = Depends(get_current_user),
+) -> TranslationResponse:
+    """
+    Create a new translation job.
+    
+    - **file**: Document to translate (PDF, DOCX)
+    - **source_language**: Source language code (e.g., 'en')
+    - **target_language**: Target language code (e.g., 'es')
+    """
+    result = await service.create_translation_job(
+        file=file,
+        user_id=current_user["_id"],
+        source_language=source_language,
+        target_language=target_language,
+    )
+    return result
+```
+
+**Service Layer:**
+```python
+from fastapi import UploadFile, HTTPException, status
+from app.db.repositories.translation import TranslationRepository
+from app.models.translation import TranslationResponse
+import uuid
+from datetime import datetime
+
+class TranslationService:
+    def __init__(self, db):
+        self.repo = TranslationRepository(db)
+    
+    async def create_translation_job(
+        self,
+        file: UploadFile,
+        user_id: str,
+        source_language: str,
+        target_language: str,
+    ) -> TranslationResponse:
+        # Validate file
+        file_data = await file.read()
+        await self._validate_file(file_data, file.content_type)
+        
+        # Calculate estimated cost
+        estimated_cost = self._calculate_cost(len(file_data))
+        
+        # Create job
+        job = await self.repo.create_job(
+            job_id=str(uuid.uuid4()),
+            user_id=user_id,
+            source_language=source_language,
+            target_language=target_language,
+            estimated_cost=estimated_cost,
+            status="pending",
+        )
+        
+        return TranslationResponse(**job)
+    
+    async def _validate_file(self, file_data: bytes, content_type: str):
+        """Validate file format and size."""
+        if content_type not in ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": "invalid_file_format",
+                    "message": "File format not supported",
+                    "details": {"accepted_formats": [".pdf", ".docx"]},
+                }
+            )
+        
+        if len(file_data) > 10 * 1024 * 1024:  # 10MB
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": "file_too_large",
+                    "message": "File size exceeds 10MB limit",
+                }
+            )
+    
+    def _calculate_cost(self, file_size: int) -> float:
+        """Calculate translation cost based on file size."""
+        # $0.10 per 1000 bytes
+        return round((file_size / 1000) * 0.10, 2)
+```
+
+**Repository (MongoDB):**
+```python
+from motor.motor_asyncio import AsyncIOMotorDatabase
+from datetime import datetime
+from typing import Optional
+
+class TranslationRepository:
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.collection = db["translations"]
+    
+    async def get_by_id(self, job_id: str) -> Optional[dict]:
+        """Get translation job by ID."""
+        return await self.collection.find_one({"_id": job_id})
+    
+    async def create_job(self, job_id: str, user_id: str, **kwargs) -> dict:
+        """Create new translation job."""
+        doc = {
+            "_id": job_id,
+            "user_id": user_id,
+            "status": "pending",
+            "created_at": datetime.utcnow().isoformat(),
+            **kwargs
+        }
+        await self.collection.insert_one(doc)
+        return doc
+    
+    async def update_status(self, job_id: str, status: str) -> bool:
+        """Update job status."""
+        result = await self.collection.update_one(
+            {"_id": job_id},
+            {"$set": {"status": status, "updated_at": datetime.utcnow().isoformat()}}
+        )
+        return result.modified_count > 0
+    
+    async def list_user_jobs(self, user_id: str, skip: int = 0, limit: int = 20) -> list[dict]:
+        """List all jobs for a user."""
+        cursor = self.collection.find({"user_id": user_id}).sort("created_at", -1).skip(skip).limit(limit)
+        return await cursor.to_list(length=limit)
+```
+
+---
+
+## Performance Budgets
+
+| Endpoint | P95 Target | Notes |
+|----------|------------|-------|
+| GET /health | <20ms | Should be instant |
+| GET /api/v1/translations | <100ms | With pagination |
+| POST /api/v1/translate | <200ms | Async processing |
+| GET /api/v1/translate/:id | <50ms | Single document lookup |
+
+**Monitoring:**
+```python
+# Add to middleware
+import time
+from fastapi import Request
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
+```
+
+---
+
+## Agent Templates
+
+**API Design:**
+```
+"Use backend-architect to design authentication API:
+- POST /api/v1/auth/login (email/password)
+- POST /api/v1/auth/refresh (refresh token)
+- POST /api/v1/auth/logout
+- JWT with RS256, 15min access token, 7d refresh token
+- Rate limit: 5 requests/min per IP
+→ Provide OpenAPI spec, error responses, security considerations"
+```
+
+**MongoDB Optimization:**
+```
+"Use database-optimizer to improve translations query performance (850ms → <200ms):
+Query: db.translations.find({user_id: '123', status: 'completed'}).sort({created_at: -1}).limit(20)
+→ Analyze query plan, suggest indexes, provide rewritten query with metrics"
+```
+
+**Security Audit:**
+```
+"Use security-auditor to audit app/core/security.py:
+- Check for OWASP Top 10 vulnerabilities
+- Verify JWT implementation security
+- Check for hardcoded secrets
+- Review password hashing strength
+→ Provide vulnerability report with severity ratings and fixes"
+```
+
+**Integration Test:**
+```
+"Use test-automator to create integration test for POST /api/v1/translate:
+- Test successful translation creation with real MongoDB
+- Test validation errors (invalid file, missing fields)
+- Test authentication errors (401)
+- Verify all response fields match Pydantic model
+→ Generate complete pytest test file with fixtures"
+```
+
+---
+
+## Commands
+```bash
+# Development
+uvicorn app.main:app --reload --port 8000
+
+# Testing
+pytest -v --cov=app                          # All tests with coverage
+pytest tests/integration/ -v                 # Integration tests only
+pytest tests/unit/ -v                        # Unit tests only
+pytest -k "test_translate" -v                # Specific test pattern
+
+# Linting & Formatting
+ruff check app tests --fix                   # Lint and auto-fix
+black app tests                              # Format code
+mypy app --strict                            # Type checking
+
+# Security
+bandit -r app -ll                            # Security scan
+pip-audit                                    # Dependency vulnerabilities
+
+# MongoDB
+mongosh                                      # Connect to local MongoDB
+mongosh "mongodb://localhost:27017/translation"  # Connect to specific database
+```
+
+---
+
+## Environment Configuration
+
+**`.env` file:**
+```bash
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017
+DATABASE_NAME=translation
+
+# JWT
+JWT_SECRET_KEY=your-secret-key-change-in-production
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# API
+API_V1_PREFIX=/api/v1
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# Stripe (for payments)
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# PayPal (for payments)
+PAYPAL_CLIENT_ID=...
+PAYPAL_CLIENT_SECRET=...
+
+# File Upload
+MAX_UPLOAD_SIZE=10485760  # 10MB in bytes
+ALLOWED_FILE_TYPES=application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document
+```
+
+**`.env.test` file:**
+```bash
+# Test environment (automatically uses translation_test database)
+MONGODB_URI=mongodb://localhost:27017
+DATABASE_NAME=translation_test
+USE_REAL_DATABASE=true
+
+# Use test API keys
+STRIPE_SECRET_KEY=sk_test_...
+PAYPAL_CLIENT_ID=test_client_id
+```
+
+---
+
+## Database Schema Examples
+
+**Users Collection:**
+```json
+{
+  "_id": "uuid-string",
+  "email": "user@example.com",
+  "password_hash": "$2b$12$...",
+  "name": "John Doe",
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-01T00:00:00Z"
+}
+```
+
+**Translations Collection:**
+```json
+{
+  "_id": "uuid-string",
+  "user_id": "uuid-string",
+  "source_language": "en",
+  "target_language": "es",
+  "status": "pending",
+  "estimated_cost": 2.50,
+  "file_path": "/uploads/abc123.pdf",
+  "result_path": "/results/abc123_translated.pdf",
+  "created_at": "2024-01-01T00:00:00Z",
+  "completed_at": null,
+  "error_message": null
+}
+```
+
+**Payments Collection:**
+```json
+{
+  "_id": "uuid-string",
+  "translation_id": "uuid-string",
+  "user_id": "uuid-string",
+  "amount": 2.50,
+  "currency": "USD",
+  "provider": "stripe",
+  "provider_payment_id": "pi_...",
+  "status": "succeeded",
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+
+**Indexes:**
+```python
+# In lifespan startup
+await db.translations.create_index("user_id")
+await db.translations.create_index("created_at")
+await db.translations.create_index([("user_id", 1), ("status", 1)])
+await db.users.create_index("email", unique=True)
+await db.payments.create_index("translation_id")
+```
+
+---
+
+## Troubleshooting
+
+**MongoDB Connection Issues:**
+```bash
+# Check if MongoDB is running
+mongosh
+
+# Check connection string
+echo $MONGODB_URI
+
+# Test connection in Python
+python -c "from motor.motor_asyncio import AsyncIOMotorClient; import asyncio; asyncio.run(AsyncIOMotorClient('mongodb://localhost:27017').admin.command('ping')); print('Connected!')"
+```
+
+**Test Failures:**
+```bash
+# Run with verbose output
+pytest -vv
+
+# Run with print statements
+pytest -s
+
+# Run specific test
+pytest tests/integration/test_translate_integration.py::TestTranslationIntegration::test_create_translation_success -v
+
+# Debug with pdb
+pytest --pdb
+```
+
+**Import Errors:**
+```bash
+# Ensure PYTHONPATH is set
+export PYTHONPATH="${PYTHONPATH}:${PWD}"
+
+# Or use editable install
+pip install -e .
+```
+
+---
+
+**End of Server CLAUDE.md**
+

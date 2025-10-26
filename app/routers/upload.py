@@ -8,6 +8,7 @@ from typing import List, Optional
 import uuid
 import os
 import logging
+import tempfile
 
 from app.models.requests import FileUploadRequest
 from app.models.responses import FileUploadResponse, FileUploadResult
@@ -52,9 +53,9 @@ async def upload_files(
     # Use default customer email if none provided
     if customer_email is None:
         customer_email = settings.default_customer_email
-        print(f"Hello World - Using default customer email: {customer_email}")
+        logging.info(f"Using default customer email: {customer_email}")
     
-    print(f"Hello World - New upload endpoint called with {len(files)} files for {customer_email}")
+    logging.info(f"Upload endpoint called: {len(files)} files for {customer_email}")
     
     # Validate request parameters using Pydantic model
     try:
@@ -62,7 +63,7 @@ async def upload_files(
             customer_email=customer_email,
             target_language=target_language
         )
-        print(f"Hello World - Request validation successful for {request_data.customer_email}")
+        logging.info(f"Request validation successful for {request_data.customer_email}")
     except Exception as e:
         raise HTTPException(
             status_code=400,
@@ -75,7 +76,7 @@ async def upload_files(
             detail="No files provided"
         )
     
-    print(f"Hello World - Starting upload process for {len(files)} files")
+    logging.info(f"Starting upload process for {len(files)} files")
     
     # Create Google Drive folder structure
     try:
@@ -99,7 +100,7 @@ async def upload_files(
     failed_uploads = 0
     
     for i, file in enumerate(files):
-        print(f"Hello World - Processing file {i+1}/{len(files)}: {file.filename}")
+        logging.info(f"Processing file {i+1}/{len(files)}: {file.filename}")
         
         result = FileUploadResult(
             filename=file.filename or f"unnamed_file_{i+1}",
@@ -108,7 +109,9 @@ async def upload_files(
             message="",
             file_size=0,
             content_type=file.content_type or "unknown",
-            google_drive_folder=folder_id
+            google_drive_folder=folder_id,
+            page_count=None,
+            supports_page_counting=None
         )
         
         try:
@@ -116,7 +119,7 @@ async def upload_files(
             content = await file.read()
             result.file_size = len(content)
             
-            print(f"Hello World - File content read: {result.file_size} bytes")
+            logging.debug(f"File content read: {result.file_size} bytes")
             
             # Comprehensive file validation
             is_valid, validation_errors = await file_validator.comprehensive_file_validation(
@@ -128,12 +131,12 @@ async def upload_files(
             if not is_valid:
                 result.status = "failed"
                 result.message = "; ".join(validation_errors)
-                print(f"Hello World - File validation failed: {result.message}")
+                logging.warning(f"File validation failed: {result.message}")
                 failed_uploads += 1
                 upload_results.append(result)
                 continue
             
-            print(f"Hello World - File validation passed for: {result.filename}")
+            logging.info(f"File validation passed for: {result.filename}")
             
             # Check if file format supports page counting
             supports_page_counting = page_counter_service.is_supported_format(result.filename)
@@ -142,7 +145,7 @@ async def upload_files(
             if not supports_page_counting:
                 result.status = "failed"
                 result.message = f"File format not supported for page counting. Supported formats: {', '.join(page_counter_service.get_supported_formats())}"
-                print(f"Hello World - Page counting validation failed: {result.message}")
+                logging.warning(f"Page counting validation failed: {result.message}")
                 failed_uploads += 1
                 upload_results.append(result)
                 continue
@@ -196,29 +199,28 @@ async def upload_files(
             
             # Count pages in the uploaded file
             try:
-                # For stub implementation, we'll simulate page counting based on file extension
-                # In real implementation, we'd save the file locally first, then count pages
-                file_extension = os.path.splitext(result.filename)[1].lower()
+                # Save file temporarily for page counting
+                with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(result.filename)[1]) as temp_file:
+                    temp_file.write(content)
+                    temp_file_path = temp_file.name
                 
-                # Simulate page count based on file type (stub implementation)
-                if file_extension == '.pdf':
-                    page_count = 5  # Simulate 5 pages for PDF
-                elif file_extension in ['.doc', '.docx']:
-                    page_count = 3  # Simulate 3 pages for Word docs
-                elif file_extension == '.txt':
-                    page_count = 2  # Simulate 2 pages for text files
-                elif file_extension == '.rtf':
-                    page_count = 2  # Simulate 2 pages for RTF
-                elif file_extension in ['.png', '.jpg', '.jpeg', '.tiff']:
-                    page_count = 1  # Images are single page
-                else:
-                    page_count = 1  # Default
-                
-                result.page_count = page_count
-                print(f"Hello World - Simulated page count for {result.filename}: {page_count}")
+                try:
+                    # Use the real page counter service
+                    page_count = await page_counter_service.count_pages(temp_file_path)
+                    if page_count == -1:
+                        page_count = 1  # Default for unsupported formats
+                    
+                    result.page_count = page_count
+                    logging.info(f"Page count for {result.filename}: {page_count}")
+                    
+                finally:
+                    # Clean up temporary file
+                    if os.path.exists(temp_file_path):
+                        os.unlink(temp_file_path)
+                        
             except Exception as e:
-                print(f"Hello World - Error counting pages for {result.filename}: {e}")
-                result.page_count = -1
+                logging.warning(f"Error counting pages for {result.filename}: {e}")
+                result.page_count = 1  # Default fallback
             
             # Mark as successful
             result.file_id = file_info['file_id']
@@ -230,13 +232,13 @@ async def upload_files(
             result.status = "failed"
             result.message = e.detail
             failed_uploads += 1
-            print(f"Hello World - HTTP exception during file processing: {e.detail}")
+            logging.error(f"HTTP exception during file processing: {e.detail}")
             
         except Exception as e:
             result.status = "failed"
             result.message = f"Unexpected error: {str(e)}"
             failed_uploads += 1
-            print(f"Hello World - Unexpected error during file processing: {e}")
+            logging.error(f"Unexpected error during file processing: {e}")
             
         upload_results.append(result)
     
@@ -253,7 +255,8 @@ async def upload_files(
         google_drive_folder_path=folder_id
     )
     
-    print(f"Hello World - Upload process completed: {successful_uploads}/{len(files)} files successful")
+    logging.info(f"Upload process completed: {successful_uploads}/{len(files)} files successful")
+    logging.info(f"FILES UPLOADED TO TEMP FOLDER - AWAITING PAYMENT CONFIRMATION TO MOVE TO INBOX")
     
     # Return appropriate HTTP status
     if successful_uploads == 0:
@@ -273,72 +276,5 @@ async def upload_files(
         return response
 
 
-# Keep the old endpoint for backward compatibility
-@router.post("/upload/legacy")
-async def upload_files_legacy(files: List[UploadFile] = File(...)):
-    """
-    Legacy upload endpoint - DEPRECATED.
-    Use /api/upload with customer_email and target_language parameters instead.
-    """
-    print(f"Hello World - Legacy upload endpoint called with {len(files)} files")
-    
-    # Supported file types
-    supported_types = {
-        'application/pdf': 100 * 1024 * 1024,  # 100MB
-        'application/msword': 100 * 1024 * 1024,  # 100MB
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 100 * 1024 * 1024,  # 100MB
-        'image/jpeg': 50 * 1024 * 1024,  # 50MB
-        'image/jpg': 50 * 1024 * 1024,   # 50MB
-        'image/png': 50 * 1024 * 1024,   # 50MB
-        'image/tiff': 50 * 1024 * 1024,  # 50MB
-        'image/tif': 50 * 1024 * 1024    # 50MB
-    }
-    
-    file_ids = []
-    
-    for file in files:
-        # Validate file type
-        if file.content_type not in supported_types:
-            raise HTTPException(
-                status_code=415,
-                detail=f"Unsupported file type: {file.content_type}"
-            )
-        
-        # Validate file size
-        content = await file.read()
-        file_size = len(content)
-        max_size = supported_types[file.content_type]
-        
-        if file_size > max_size:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File too large: {file_size} bytes. Maximum allowed: {max_size} bytes"
-            )
-        
-        # Validate file extension
-        if file.filename:
-            ext = os.path.splitext(file.filename)[1].lower()
-            valid_extensions = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.tiff', '.tif']
-            if ext not in valid_extensions:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid file extension: {ext}"
-                )
-        
-        # Generate unique file ID
-        file_id = str(uuid.uuid4())
-        file_ids.append(file_id)
-        
-        print(f"Hello World - Processing file: {file.filename}, Size: {file_size}, ID: {file_id}")
-    
-    return JSONResponse(
-        content={
-            "success": True,
-            "data": file_ids,
-            "error": None,
-            "deprecated": True,
-            "message": "This endpoint is deprecated. Use /api/upload with customer_email and target_language parameters."
-        }
-    )
 
 

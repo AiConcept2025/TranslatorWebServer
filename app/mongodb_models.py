@@ -119,6 +119,25 @@ class FileMetadata(BaseModel):
     character_count: Optional[int] = None
 
 
+class Address(BaseModel):
+    """Embedded address information for companies."""
+    address0: Optional[str] = Field(None, description="Primary address line")
+    address1: Optional[str] = Field(None, description="Secondary address line")
+    city: Optional[str] = Field(None, description="City name")
+    state: Optional[str] = Field(None, description="State or province")
+    postal_code: Optional[str] = Field(None, description="Postal or ZIP code")
+    country: Optional[str] = Field(None, description="Country name")
+
+
+class ContactPerson(BaseModel):
+    """Embedded contact person information for companies."""
+    name: Optional[str] = Field(None, description="Contact person full name")
+    type: Optional[str] = Field(None, description="Contact type (e.g., primary, billing, technical)")
+    title: Optional[str] = Field(None, description="Job title or position")
+    email: Optional[EmailStr] = Field(None, description="Contact email address")
+    phone: Optional[str] = Field(None, description="Contact phone number")
+
+
 # ==============================================================================
 # CORE COLLECTIONS
 # ==============================================================================
@@ -129,8 +148,9 @@ class Company(BaseModel):
     company_id: Optional[str] = None
     company_name: str = Field(..., max_length=255)
     description: Optional[str] = None
-    address: Optional[Dict[str, Any]] = None
-    contact_person: Optional[Dict[str, Any]] = None
+    address: Optional[Address] = None
+    contact_person: Optional[ContactPerson] = None
+    contact_email: Optional[EmailStr] = None
     phone_number: Optional[List[str]] = None
     company_url: Optional[List[str]] = None
     line_of_business: Optional[str] = None
@@ -296,6 +316,8 @@ __all__ = [
     "UsagePeriod",
     "PaymentApplication",
     "FileMetadata",
+    "Address",
+    "ContactPerson",
 
     # Core Models
     "Company",

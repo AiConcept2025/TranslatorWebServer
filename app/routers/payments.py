@@ -18,7 +18,7 @@ from bson import ObjectId
 from pydantic import EmailStr
 import logging
 
-from app.models.payment import PaymentCreate, PaymentUpdate, PaymentResponse
+from app.models.payment import PaymentCreate, PaymentUpdate, PaymentResponse, RefundRequest
 from app.services.payment_repository import payment_repository
 
 logger = logging.getLogger(__name__)
@@ -62,13 +62,13 @@ def payment_doc_to_response(payment_doc: dict) -> dict:
     return {
         "_id": str(payment_doc["_id"]),
         "company_id": payment_doc.get("company_id"),
-        "subscription_id": payment_doc.get("subscription_id"),
-        "user_id": payment_doc.get("user_id"),
+        "company_name": payment_doc.get("company_name"),
         "user_email": payment_doc["user_email"],
         "square_payment_id": payment_doc["square_payment_id"],
         "amount": payment_doc["amount"],
         "currency": payment_doc["currency"],
         "payment_status": payment_doc["payment_status"],
+        "refunds": payment_doc.get("refunds", []),
         "payment_date": payment_doc["payment_date"],
         "created_at": payment_doc["created_at"],
         "updated_at": payment_doc["updated_at"]
@@ -80,41 +80,71 @@ async def create_payment(payment_data: PaymentCreate):
     """
     Create a new payment record.
 
-    This endpoint creates a payment record in the database with comprehensive
-    payment details including Square integration data.
+    This endpoint creates a payment record in the database with Square payment details.
 
-    **Request Body:**
+    **Required Fields:**
+    - `company_id`: Company identifier (e.g., "cmp_00123")
+    - `company_name`: Company name
+    - `user_email`: User email address
+    - `square_payment_id`: Square payment ID
+    - `amount`: Payment amount in cents
+
+    **Optional Fields (with defaults):**
+    - `currency`: "USD"
+    - `payment_status`: "PENDING"
+    - `payment_date`: Current timestamp
+
+    **Request Example:**
     ```json
     {
-        "user_email": "user@example.com",
-        "square_payment_id": "sq_payment_abc123",
-        "amount": 10600,
+        "company_id": "cmp_00123",
+        "company_name": "Acme Health LLC",
+        "user_email": "test5@yahoo.com",
+        "square_payment_id": "payment_sq_1761244600756",
+        "amount": 1299,
         "currency": "USD",
-        "payment_status": "completed",
-        "company_id": "68ec42a48ca6a1781d9fe5c2",
-        "card_brand": "VISA",
-        "last_4_digits": "4242"
+        "payment_status": "COMPLETED"
     }
     ```
 
-    **Response:**
+    **Response Example:**
+    ```json
+    {
+        "_id": "68fad3c2a0f41c24037c4810",
+        "company_id": "cmp_00123",
+        "company_name": "Acme Health LLC",
+        "user_email": "test5@yahoo.com",
+        "square_payment_id": "payment_sq_1761244600756",
+        "amount": 1299,
+        "currency": "USD",
+        "payment_status": "COMPLETED",
+        "refunds": [],
+        "created_at": "2025-10-24T01:17:54.544Z",
+        "updated_at": "2025-10-24T01:17:54.544Z",
+        "payment_date": "2025-10-24T01:17:54.544Z"
+    }
+    ```
+
+    **Status Codes:**
     - **201**: Payment created successfully
     - **400**: Invalid payment data
     - **500**: Internal server error
 
-    **Example:**
+    **cURL Example:**
     ```bash
     curl -X POST "http://localhost:8000/api/v1/payments" \\
          -H "Content-Type: application/json" \\
-         -d '{"user_email":"user@example.com","square_payment_id":"sq_pay_123","amount":10600,"payment_status":"completed"}'
+         -d '{
+           "company_id": "cmp_00123",
+           "company_name": "Acme Health LLC",
+           "user_email": "test5@yahoo.com",
+           "square_payment_id": "payment_sq_1761244600756",
+           "amount": 1299
+         }'
     ```
     """
     try:
         logger.info(f"Creating payment for {payment_data.user_email}, Square ID: {payment_data.square_payment_id}")
-
-        # Validate company_id if provided
-        if payment_data.company_id:
-            validate_object_id(payment_data.company_id, "company_id")
 
         # Create payment
         payment_id = await payment_repository.create_payment(payment_data)
@@ -222,10 +252,6 @@ async def get_payment_by_square_id(
 
         # Return full payment document (not just PaymentResponse fields)
         payment_doc["_id"] = str(payment_doc["_id"])
-        if payment_doc.get("company_id"):
-            payment_doc["company_id"] = str(payment_doc["company_id"])
-        if payment_doc.get("subscription_id"):
-            payment_doc["subscription_id"] = str(payment_doc["subscription_id"])
 
         return JSONResponse(content=payment_doc)
 
@@ -241,8 +267,8 @@ async def get_payment_by_square_id(
 
 @router.get("/company/{company_id}")
 async def get_company_payments(
-    company_id: str = Path(..., description="Company ObjectId"),
-    status: Optional[str] = Query(None, description="Filter by payment status (completed, pending, failed, refunded)"),
+    company_id: str = Path(..., description="Company identifier (e.g., cmp_00123)"),
+    status: Optional[str] = Query(None, description="Filter by payment status (COMPLETED, PENDING, FAILED, REFUNDED)"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
     skip: int = Query(0, ge=0, description="Number of results to skip (for pagination)")
 ):
@@ -253,7 +279,7 @@ async def get_company_payments(
     filtering by payment status and pagination support.
 
     **Path Parameters:**
-    - `company_id`: Company MongoDB ObjectId
+    - `company_id`: Company identifier (e.g., "cmp_00123")
 
     **Query Parameters:**
     - `status`: Filter by payment status (optional)
@@ -272,15 +298,13 @@ async def get_company_payments(
     **Example:**
     ```bash
     # Get all completed payments for a company
-    curl -X GET "http://localhost:8000/api/v1/payments/company/68ec42a48ca6a1781d9fe5c2?status=completed&limit=20"
+    curl -X GET "http://localhost:8000/api/v1/payments/company/cmp_00123?status=COMPLETED&limit=20"
 
     # Get second page of payments
-    curl -X GET "http://localhost:8000/api/v1/payments/company/68ec42a48ca6a1781d9fe5c2?skip=20&limit=20"
+    curl -X GET "http://localhost:8000/api/v1/payments/company/cmp_00123?skip=20&limit=20"
     ```
     """
     try:
-        validate_object_id(company_id, "company_id")
-
         logger.info(f"Fetching payments for company {company_id}, status={status}, limit={limit}, skip={skip}")
 
         payments = await payment_repository.get_payments_by_company(
@@ -293,10 +317,6 @@ async def get_company_payments(
         # Convert ObjectIds to strings
         for payment in payments:
             payment["_id"] = str(payment["_id"])
-            if payment.get("company_id"):
-                payment["company_id"] = str(payment["company_id"])
-            if payment.get("subscription_id"):
-                payment["subscription_id"] = str(payment["subscription_id"])
 
         logger.info(f"Found {len(payments)} payments for company {company_id}")
 
@@ -321,71 +341,6 @@ async def get_company_payments(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve company payments: {str(e)}"
-        )
-
-
-@router.get("/user/{user_id}")
-async def get_user_payments(
-    user_id: str = Path(..., description="User ObjectId or identifier"),
-    limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
-    skip: int = Query(0, ge=0, description="Number of results to skip (for pagination)")
-):
-    """
-    Get all payments for a user.
-
-    Retrieves payments associated with a specific user by user_id.
-
-    **Path Parameters:**
-    - `user_id`: User identifier (ObjectId or string)
-
-    **Query Parameters:**
-    - `limit`: Maximum results (1-100, default: 50)
-    - `skip`: Results to skip for pagination (default: 0)
-
-    **Response:**
-    - **200**: List of payments (may be empty)
-    - **500**: Internal server error
-
-    **Example:**
-    ```bash
-    curl -X GET "http://localhost:8000/api/v1/payments/user/68ec42a48ca6a1781d9fe5c5?limit=20"
-    ```
-    """
-    try:
-        logger.info(f"Fetching payments for user {user_id}, limit={limit}, skip={skip}")
-
-        payments = await payment_repository.get_payments_by_user(
-            user_id=user_id,
-            limit=limit,
-            skip=skip
-        )
-
-        # Convert ObjectIds to strings
-        for payment in payments:
-            payment["_id"] = str(payment["_id"])
-            if payment.get("company_id"):
-                payment["company_id"] = str(payment["company_id"])
-            if payment.get("subscription_id"):
-                payment["subscription_id"] = str(payment["subscription_id"])
-
-        logger.info(f"Found {len(payments)} payments for user {user_id}")
-
-        return JSONResponse(content={
-            "success": True,
-            "data": {
-                "payments": payments,
-                "count": len(payments),
-                "limit": limit,
-                "skip": skip,
-                "user_id": user_id
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"Failed to retrieve payments for user {user_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve user payments: {str(e)}"
         )
 
 
@@ -429,10 +384,6 @@ async def get_payments_by_email(
         # Convert ObjectIds to strings
         for payment in payments:
             payment["_id"] = str(payment["_id"])
-            if payment.get("company_id"):
-                payment["company_id"] = str(payment["company_id"])
-            if payment.get("subscription_id"):
-                payment["subscription_id"] = str(payment["subscription_id"])
 
         logger.info(f"Found {len(payments)} payments for email {email}")
 
@@ -518,10 +469,6 @@ async def update_payment(
 
         # Convert ObjectIds to strings
         payment_doc["_id"] = str(payment_doc["_id"])
-        if payment_doc.get("company_id"):
-            payment_doc["company_id"] = str(payment_doc["company_id"])
-        if payment_doc.get("subscription_id"):
-            payment_doc["subscription_id"] = str(payment_doc["subscription_id"])
 
         return JSONResponse(content={
             "success": True,
@@ -542,39 +489,87 @@ async def update_payment(
 @router.post("/{square_payment_id}/refund")
 async def process_refund(
     square_payment_id: str = Path(..., description="Square payment ID"),
-    refund_id: str = Query(..., description="Square refund ID"),
-    refund_amount: int = Query(..., description="Refund amount in cents"),
-    refund_reason: Optional[str] = Query(None, description="Reason for refund")
+    refund_request: RefundRequest = None
 ):
     """
     Process a payment refund.
 
-    Marks a payment as refunded and records refund details.
+    Marks a payment as refunded and records refund details in the refunds array.
 
     **Path Parameters:**
-    - `square_payment_id`: Square payment ID
+    - `square_payment_id`: Square payment ID (e.g., "payment_sq_1761268674_852e5fe3")
 
-    **Query Parameters:**
-    - `refund_id`: Square refund ID (required)
-    - `refund_amount`: Refund amount in cents (required)
-    - `refund_reason`: Reason for refund (optional)
+    **Request Body:**
+    ```json
+    {
+        "refund_id": "rfn_01J2M9ABCD",
+        "amount": 500,
+        "currency": "USD",
+        "idempotency_key": "rfd_7e6df9c2-5f7c-43f9-9b1a-3e7e2e6b2b62"
+    }
+    ```
 
-    **Response:**
+    **Response Example:**
+    ```json
+    {
+        "success": true,
+        "message": "Refund processed: 500 cents",
+        "data": {
+            "payment": {
+                "_id": "68fad3c2a0f41c24037c4810",
+                "company_id": "cmp_00123",
+                "company_name": "Acme Health LLC",
+                "user_email": "test5@yahoo.com",
+                "square_payment_id": "payment_sq_1761268674_852e5fe3",
+                "amount": 1299,
+                "currency": "USD",
+                "payment_status": "REFUNDED",
+                "refunds": [
+                    {
+                        "refund_id": "rfn_01J2M9ABCD",
+                        "amount": 500,
+                        "currency": "USD",
+                        "status": "COMPLETED",
+                        "idempotency_key": "rfd_7e6df9c2-5f7c-43f9-9b1a-3e7e2e6b2b62",
+                        "created_at": "2025-10-24T01:15:43.453Z"
+                    }
+                ],
+                "created_at": "2025-10-24T01:17:54.544Z",
+                "updated_at": "2025-10-24T01:17:54.544Z",
+                "payment_date": "2025-10-24T01:17:54.544Z"
+            },
+            "refund": {
+                "refund_id": "rfn_01J2M9ABCD",
+                "amount": 500,
+                "idempotency_key": "rfd_7e6df9c2-5f7c-43f9-9b1a-3e7e2e6b2b62"
+            }
+        }
+    }
+    ```
+
+    **Status Codes:**
     - **200**: Refund processed successfully
-    - **400**: Invalid refund parameters
+    - **400**: Invalid refund parameters or refund amount exceeds payment amount
     - **404**: Payment not found
     - **500**: Internal server error
 
-    **Example:**
+    **cURL Example:**
     ```bash
-    curl -X POST "http://localhost:8000/api/v1/payments/sq_payment_abc123/refund?refund_id=sq_refund_xyz&refund_amount=10600&refund_reason=Customer+request"
+    curl -X POST "http://localhost:8000/api/v1/payments/payment_sq_1761268674_852e5fe3/refund" \\
+         -H "Content-Type: application/json" \\
+         -d '{
+           "refund_id": "rfn_01J2M9ABCD",
+           "amount": 500,
+           "currency": "USD",
+           "idempotency_key": "rfd_7e6df9c2-5f7c-43f9-9b1a-3e7e2e6b2b62"
+         }'
     ```
     """
     try:
-        logger.info(f"Processing refund for payment {square_payment_id}, amount: {refund_amount} cents")
+        logger.info(f"Processing refund for payment {square_payment_id}, amount: {refund_request.amount} cents")
 
         # Validate refund amount
-        if refund_amount <= 0:
+        if refund_request.amount <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Refund amount must be greater than 0"
@@ -590,18 +585,18 @@ async def process_refund(
 
         # Check if refund amount exceeds payment amount
         payment_amount = existing_payment.get("amount", 0)
-        if refund_amount > payment_amount:
+        if refund_request.amount > payment_amount:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Refund amount ({refund_amount}) exceeds payment amount ({payment_amount})"
+                detail=f"Refund amount ({refund_request.amount}) exceeds payment amount ({payment_amount})"
             )
 
         # Process refund
         refunded = await payment_repository.process_refund(
             square_payment_id=square_payment_id,
-            refund_id=refund_id,
-            refund_amount=refund_amount,
-            refund_reason=refund_reason
+            refund_id=refund_request.refund_id,
+            refund_amount=refund_request.amount,
+            refund_reason=None
         )
 
         if not refunded:
@@ -617,21 +612,16 @@ async def process_refund(
 
         # Convert ObjectIds to strings
         payment_doc["_id"] = str(payment_doc["_id"])
-        if payment_doc.get("company_id"):
-            payment_doc["company_id"] = str(payment_doc["company_id"])
-        if payment_doc.get("subscription_id"):
-            payment_doc["subscription_id"] = str(payment_doc["subscription_id"])
 
         return JSONResponse(content={
             "success": True,
-            "message": f"Refund processed: {refund_amount} cents",
+            "message": f"Refund processed: {refund_request.amount} cents",
             "data": {
                 "payment": payment_doc,
                 "refund": {
-                    "refund_id": refund_id,
-                    "refund_amount": refund_amount,
-                    "refund_reason": refund_reason,
-                    "refund_date": payment_doc.get("refund_date")
+                    "refund_id": refund_request.refund_id,
+                    "amount": refund_request.amount,
+                    "idempotency_key": refund_request.idempotency_key
                 }
             }
         })

@@ -29,9 +29,17 @@ async def create_user_transaction(
     square_transaction_id: str,
     date: datetime,
     status: str = "processing",
+    # New Square payment parameters
+    square_payment_id: Optional[str] = None,
+    amount_cents: Optional[int] = None,
+    currency: str = "USD",
+    payment_status: str = "COMPLETED",
+    payment_date: Optional[datetime] = None,
+    refunds: Optional[List[Dict[str, Any]]] = None,
+    translated_url: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Create a new user transaction record.
+    Create a new user transaction record with Square payment integration.
 
     Automatically calculates total_cost and sets timestamps.
 
@@ -47,6 +55,13 @@ async def create_user_transaction(
         square_transaction_id: Unique Square payment transaction ID
         date: Transaction date
         status: Transaction status ("processing", "completed", "failed")
+        square_payment_id: Square payment ID (defaults to square_transaction_id if not provided)
+        amount_cents: Payment amount in cents (auto-calculated if not provided)
+        currency: Currency code (default: "USD")
+        payment_status: Payment status ("APPROVED", "COMPLETED", "CANCELED", "FAILED")
+        payment_date: Payment processing date (defaults to current UTC time)
+        refunds: List of refund dictionaries (default: empty list)
+        translated_url: URL or path to the translated document (optional)
 
     Returns:
         str: square_transaction_id if successful, None if failed
@@ -79,17 +94,44 @@ async def create_user_transaction(
             )
             return None
 
+        # Validate payment_status
+        valid_payment_statuses = {"APPROVED", "COMPLETED", "CANCELED", "FAILED"}
+        if payment_status not in valid_payment_statuses:
+            logger.error(
+                f"[UserTransaction] Invalid payment_status: {payment_status}. "
+                f"Must be one of {valid_payment_statuses}"
+            )
+            return None
+
         # Calculate total_cost
         total_cost = float(Decimal(str(number_of_units)) * Decimal(str(cost_per_unit)))
+
+        # Auto-calculate amount_cents if not provided
+        if amount_cents is None:
+            amount_cents = int(total_cost * 100)
+
+        # Default square_payment_id to square_transaction_id if not provided
+        if square_payment_id is None:
+            square_payment_id = square_transaction_id
 
         # Get current UTC time
         current_time = datetime.now(timezone.utc)
 
-        # Build transaction document
+        # Default payment_date to current time if not provided
+        if payment_date is None:
+            payment_date = current_time
+
+        # Default refunds to empty list if not provided
+        if refunds is None:
+            refunds = []
+
+        # Build transaction document with Square payment fields
         transaction_doc = {
+            # Core transaction fields
             "user_name": user_name,
             "user_email": user_email,
             "document_url": document_url,
+            "translated_url": translated_url,
             "number_of_units": number_of_units,
             "unit_type": unit_type,
             "cost_per_unit": cost_per_unit,
@@ -99,6 +141,14 @@ async def create_user_transaction(
             "date": date,
             "status": status,
             "total_cost": total_cost,
+            # Square payment fields
+            "square_payment_id": square_payment_id,
+            "amount_cents": amount_cents,
+            "currency": currency,
+            "payment_status": payment_status,
+            "refunds": refunds,
+            "payment_date": payment_date,
+            # Timestamps
             "created_at": current_time,
             "updated_at": current_time,
         }
@@ -108,7 +158,7 @@ async def create_user_transaction(
 
         logger.info(
             f"[UserTransaction] Created transaction {square_transaction_id} "
-            f"for user {user_email} with status {status}"
+            f"for user {user_email} with status {status}, payment_status {payment_status}"
         )
 
         return square_transaction_id
@@ -351,10 +401,179 @@ async def get_user_transaction(
         return None
 
 
+async def add_refund_to_transaction(
+    square_transaction_id: str,
+    refund_data: Dict[str, Any],
+) -> bool:
+    """
+    Add a refund to an existing user transaction.
+
+    Args:
+        square_transaction_id: Unique Square transaction ID
+        refund_data: Dictionary containing refund information:
+            - refund_id: Square refund ID
+            - amount_cents: Refund amount in cents
+            - currency: Currency code (default: "USD")
+            - status: Refund status (COMPLETED, PENDING, FAILED)
+            - created_at: Refund creation timestamp
+            - idempotency_key: Unique idempotency key
+            - reason: Optional reason for refund
+
+    Returns:
+        bool: True if refund added successfully, False otherwise
+
+    Raises:
+        None: Errors are logged and False is returned
+    """
+    try:
+        # Check database connection
+        collection = database.user_transactions
+        if collection is None:
+            logger.error("[UserTransaction] Database collection not available")
+            return False
+
+        # Validate required refund fields
+        required_fields = {"refund_id", "amount_cents", "status", "idempotency_key"}
+        if not all(field in refund_data for field in required_fields):
+            logger.error(
+                f"[UserTransaction] Missing required refund fields. "
+                f"Required: {required_fields}, Got: {refund_data.keys()}"
+            )
+            return False
+
+        # Add created_at if not provided
+        if "created_at" not in refund_data:
+            refund_data["created_at"] = datetime.now(timezone.utc)
+
+        # Add currency if not provided
+        if "currency" not in refund_data:
+            refund_data["currency"] = "USD"
+
+        # Add refund to array and update timestamp
+        result = await collection.update_one(
+            {"square_transaction_id": square_transaction_id},
+            {
+                "$push": {"refunds": refund_data},
+                "$set": {"updated_at": datetime.now(timezone.utc)},
+            },
+        )
+
+        if result.matched_count == 0:
+            logger.warning(
+                f"[UserTransaction] Transaction not found: {square_transaction_id}"
+            )
+            return False
+
+        if result.modified_count == 0:
+            logger.warning(
+                f"[UserTransaction] Transaction {square_transaction_id} "
+                "was not modified (possible duplicate refund)"
+            )
+            return False
+
+        logger.info(
+            f"[UserTransaction] Added refund {refund_data['refund_id']} "
+            f"to transaction {square_transaction_id}"
+        )
+        return True
+
+    except PyMongoError as e:
+        logger.error(
+            f"[UserTransaction] MongoDB error adding refund: {e}",
+            exc_info=True,
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            f"[UserTransaction] Unexpected error adding refund: {e}",
+            exc_info=True,
+        )
+        return False
+
+
+async def update_payment_status(
+    square_transaction_id: str,
+    new_payment_status: str,
+) -> bool:
+    """
+    Update payment status for a user transaction.
+
+    Args:
+        square_transaction_id: Unique Square transaction ID
+        new_payment_status: New payment status (APPROVED, COMPLETED, CANCELED, FAILED)
+
+    Returns:
+        bool: True if update successful, False otherwise
+
+    Raises:
+        None: Errors are logged and False is returned
+    """
+    try:
+        # Check database connection
+        collection = database.user_transactions
+        if collection is None:
+            logger.error("[UserTransaction] Database collection not available")
+            return False
+
+        # Validate payment_status
+        valid_payment_statuses = {"APPROVED", "COMPLETED", "CANCELED", "FAILED"}
+        if new_payment_status not in valid_payment_statuses:
+            logger.error(
+                f"[UserTransaction] Invalid payment_status: {new_payment_status}. "
+                f"Must be one of {valid_payment_statuses}"
+            )
+            return False
+
+        # Update payment status
+        result = await collection.update_one(
+            {"square_transaction_id": square_transaction_id},
+            {
+                "$set": {
+                    "payment_status": new_payment_status,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+        )
+
+        if result.matched_count == 0:
+            logger.warning(
+                f"[UserTransaction] Transaction not found: {square_transaction_id}"
+            )
+            return False
+
+        if result.modified_count == 0:
+            logger.info(
+                f"[UserTransaction] Transaction {square_transaction_id} "
+                "already had the same payment status"
+            )
+            return True
+
+        logger.info(
+            f"[UserTransaction] Updated payment status for transaction "
+            f"{square_transaction_id} to {new_payment_status}"
+        )
+        return True
+
+    except PyMongoError as e:
+        logger.error(
+            f"[UserTransaction] MongoDB error updating payment status: {e}",
+            exc_info=True,
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            f"[UserTransaction] Unexpected error updating payment status: {e}",
+            exc_info=True,
+        )
+        return False
+
+
 # Export all public functions
 __all__ = [
     "create_user_transaction",
     "update_user_transaction_status",
     "get_user_transactions_by_email",
     "get_user_transaction",
+    "add_refund_to_transaction",
+    "update_payment_status",
 ]

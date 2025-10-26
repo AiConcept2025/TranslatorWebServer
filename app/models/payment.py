@@ -3,146 +3,66 @@ Payment models for Square payment integration.
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, EmailStr
 from bson import ObjectId
 
 
-class CompanyAddress(BaseModel):
-    """Company address information."""
-    street: str
-    city: str
-    state: str
-    postal_code: str
-    country: str = "US"
+# ============================================================================
+# Payment Models (for payments collection)
+# ============================================================================
 
+class RefundSchema(BaseModel):
+    """Schema for refund in payments collection refunds array."""
+    refund_id: str = Field(..., description="Square refund ID")
+    amount: int = Field(..., gt=0, description="Refund amount in cents")
+    currency: str = Field(default="USD", description="Currency code")
+    status: str = Field(..., description="Refund status: COMPLETED | PENDING | FAILED")
+    idempotency_key: str = Field(..., description="Unique idempotency key for Square API")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Refund creation timestamp")
 
-class PaymentMetadataInfo(BaseModel):
-    """Additional payment metadata."""
-    subscription_plan: Optional[str] = None
-    invoice_number: Optional[str] = None
-
-    model_config = {'extra': 'allow'}  # Allow additional fields
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'refund_id': 'rfn_01J2M9ABCD',
+                'amount': 500,
+                'currency': 'USD',
+                'status': 'COMPLETED',
+                'idempotency_key': 'rfd_7e6df9c2-5f7c-43f9-9b1a-3e7e2e6b2b62',
+                'created_at': '2025-10-23T19:05:13Z'
+            }
+        }
+    }
 
 
 class Payment(BaseModel):
-    """
-    Payment document schema for Square payments.
-
-    Stores comprehensive payment information including:
-    - Core identifiers (company, subscription, user)
-    - Denormalized customer data (snapshot at transaction time)
-    - Square payment identifiers
-    - Payment amounts and fees
-    - Card details
-    - Refund tracking
-    - Risk evaluation
-    """
-
-    # Core identifiers
-    company_id: Optional[str] = Field(None, description="Company ObjectId as string")
-    subscription_id: Optional[str] = Field(None, description="Subscription ObjectId as string")
-    user_id: Optional[str] = Field(None, description="User ObjectId as string")
-
-    # Denormalized customer data (snapshot at transaction time)
-    company_name: Optional[str] = None
-    company_address: Optional[CompanyAddress] = None
-    user_email: EmailStr
-    user_name: Optional[str] = None
-
-    # Square identifiers
-    square_payment_id: str = Field(..., description="Square payment ID (unique)")
-    square_order_id: Optional[str] = None
-    square_customer_id: Optional[str] = None
-    square_location_id: Optional[str] = None
-    square_receipt_url: Optional[str] = None
-
-    # Payment amounts (in cents)
-    amount: int = Field(..., description="Payment amount in cents")
-    currency: str = Field(default="USD", description="Currency code")
-    processing_fee: Optional[int] = Field(None, description="Processing fee in cents")
-    net_amount: Optional[int] = Field(None, description="Net amount after fees in cents")
-    refunded_amount: int = Field(default=0, description="Refunded amount in cents")
-
-    # Payment details
-    payment_status: str = Field(..., description="Payment status (completed, pending, failed, refunded)")
-    payment_method: Optional[str] = Field(default="card", description="Payment method type")
-    payment_source: Optional[str] = Field(default="web", description="Payment source")
-
-    # Card details
-    card_brand: Optional[str] = None
-    last_4_digits: Optional[str] = Field(None, max_length=4)
-    card_exp_month: Optional[int] = Field(None, ge=1, le=12)
-    card_exp_year: Optional[int] = Field(None, ge=2020)
-
-    # Customer info
-    buyer_email_address: Optional[EmailStr] = None
-
-    # Refund tracking
-    refund_id: Optional[str] = None
-    refund_date: Optional[datetime] = None
-    refund_reason: Optional[str] = None
-
-    # Risk & fraud
-    risk_evaluation: Optional[str] = Field(default="NORMAL", description="Risk evaluation status")
-
-    # Dates
-    payment_date: datetime = Field(default_factory=datetime.utcnow)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-    # Additional tracking
-    notes: Optional[str] = None
-    webhook_event_id: Optional[str] = None
-
-    # Metadata
-    metadata: Optional[PaymentMetadataInfo] = None
-
-    # Raw Square response
-    square_raw_response: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    """Payment schema for payments collection."""
+    company_id: str = Field(..., description="Company identifier")
+    company_name: str = Field(..., description="Company name")
+    user_email: EmailStr = Field(..., description="User email address")
+    square_payment_id: str = Field(..., description="Square payment ID")
+    amount: int = Field(..., gt=0, description="Payment amount in cents")
+    currency: str = Field(default="USD", description="Currency code (ISO 4217)")
+    payment_status: str = Field(..., description="Payment status: COMPLETED | PENDING | FAILED | REFUNDED")
+    refunds: List[RefundSchema] = Field(default_factory=list, description="Array of refund objects")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
+    payment_date: datetime = Field(default_factory=datetime.utcnow, description="Payment processing date")
 
     model_config = {
-        'populate_by_name': True,
         'json_schema_extra': {
             'example': {
-                'company_id': '68ec42a48ca6a1781d9fe5c2',
-                'subscription_id': '68ec42a48ca6a1781d9fe5c4',
-                'user_id': '68ec42a48ca6a1781d9fe5c5',
-                'company_name': 'Acme Corporation',
-                'company_address': {
-                    'street': '123 Main Street',
-                    'city': 'San Francisco',
-                    'state': 'CA',
-                    'postal_code': '94102',
-                    'country': 'US'
-                },
-                'user_email': 'john.doe@acme.com',
-                'user_name': 'John Doe',
-                'square_payment_id': 'sq_payment_68ec42a48ca6a178',
-                'square_order_id': 'sq_order_68ec42a48ca6a178',
-                'square_customer_id': 'sq_customer_abc123',
-                'square_location_id': 'sq_location_xyz789',
-                'square_receipt_url': 'https://square.example.com/receipts/12345',
-                'amount': 10600,
+                'company_id': 'cmp_00123',
+                'company_name': 'Acme Health LLC',
+                'user_email': 'test5@yahoo.com',
+                'square_payment_id': 'payment_sq_1761244600756_u12vb3tx6',
+                'amount': 1299,
                 'currency': 'USD',
-                'processing_fee': 338,
-                'net_amount': 10262,
-                'refunded_amount': 0,
-                'payment_status': 'completed',
-                'payment_method': 'card',
-                'payment_source': 'web',
-                'card_brand': 'VISA',
-                'last_4_digits': '4242',
-                'card_exp_month': 12,
-                'card_exp_year': 2026,
-                'buyer_email_address': 'john.doe@acme.com',
-                'risk_evaluation': 'NORMAL',
-                'notes': 'Payment for annual subscription',
-                'webhook_event_id': 'evt_abc123xyz',
-                'metadata': {
-                    'subscription_plan': 'annual',
-                    'invoice_number': 'INV-2025-001'
-                }
+                'payment_status': 'COMPLETED',
+                'refunds': [],
+                'created_at': '2025-10-23T18:36:51.154Z',
+                'updated_at': '2025-10-23T18:36:51.154Z',
+                'payment_date': '2025-10-23T18:36:51.154Z'
             }
         }
     }
@@ -150,61 +70,265 @@ class Payment(BaseModel):
 
 class PaymentCreate(BaseModel):
     """Schema for creating a new payment."""
-    company_id: Optional[str] = None
-    subscription_id: Optional[str] = None
-    user_id: Optional[str] = None
-    company_name: Optional[str] = None
-    company_address: Optional[CompanyAddress] = None
+    company_id: str
+    company_name: str
     user_email: EmailStr
-    user_name: Optional[str] = None
     square_payment_id: str
-    square_order_id: Optional[str] = None
-    square_customer_id: Optional[str] = None
-    square_location_id: Optional[str] = None
-    square_receipt_url: Optional[str] = None
-    amount: int
-    currency: str = "USD"
-    processing_fee: Optional[int] = None
-    net_amount: Optional[int] = None
-    payment_status: str = "pending"
-    payment_method: str = "card"
-    payment_source: str = "web"
-    card_brand: Optional[str] = None
-    last_4_digits: Optional[str] = None
-    card_exp_month: Optional[int] = None
-    card_exp_year: Optional[int] = None
-    buyer_email_address: Optional[EmailStr] = None
-    risk_evaluation: str = "NORMAL"
-    notes: Optional[str] = None
-    webhook_event_id: Optional[str] = None
-    metadata: Optional[PaymentMetadataInfo] = None
-    square_raw_response: Optional[Dict[str, Any]] = None
+    amount: int = Field(..., gt=0, description="Payment amount in cents")
+    currency: str = Field(default="USD")
+    payment_status: str = Field(default="PENDING", description="PENDING | COMPLETED | FAILED | REFUNDED")
+    payment_date: Optional[datetime] = None
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'company_id': 'cmp_00123',
+                'company_name': 'Acme Health LLC',
+                'user_email': 'test5@yahoo.com',
+                'square_payment_id': 'payment_sq_1761244600756_u12vb3tx6',
+                'amount': 1299,
+                'currency': 'USD',
+                'payment_status': 'COMPLETED'
+            }
+        }
+    }
 
 
 class PaymentUpdate(BaseModel):
     """Schema for updating an existing payment."""
-    payment_status: Optional[str] = None
-    refund_id: Optional[str] = None
-    refund_date: Optional[datetime] = None
-    refund_reason: Optional[str] = None
-    refunded_amount: Optional[int] = None
-    notes: Optional[str] = None
+    payment_status: Optional[str] = Field(None, description="COMPLETED | PENDING | FAILED | REFUNDED")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class PaymentResponse(BaseModel):
     """Schema for payment API responses."""
     id: str = Field(..., alias="_id")
-    company_id: Optional[str] = None
-    subscription_id: Optional[str] = None
-    user_id: Optional[str] = None
+    company_id: str
+    company_name: str
     user_email: EmailStr
     square_payment_id: str
     amount: int
     currency: str
     payment_status: str
+    refunds: List[RefundSchema]
+    created_at: datetime
+    updated_at: datetime
+    payment_date: datetime
+
+    model_config = {'populate_by_name': True}
+
+
+class RefundRequest(BaseModel):
+    """Schema for processing a refund on a payment."""
+    refund_id: str = Field(..., description="Square refund ID")
+    amount: int = Field(..., gt=0, description="Refund amount in cents")
+    currency: str = Field(default="USD", description="Currency code")
+    idempotency_key: str = Field(..., description="Unique idempotency key")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'refund_id': 'rfn_01J2M9ABCD',
+                'amount': 500,
+                'currency': 'USD',
+                'idempotency_key': 'rfd_7e6df9c2-5f7c-43f9-9b1a-3e7e2e6b2b62'
+            }
+        }
+    }
+
+
+# ============================================================================
+# User Transaction Models (for users_transactions collection)
+# ============================================================================
+
+class UserTransactionRefundSchema(BaseModel):
+    """Schema for refund information in user transactions."""
+    refund_id: str = Field(..., description="Square refund ID")
+    amount_cents: int = Field(..., gt=0, description="Refund amount in cents")
+    currency: str = Field(default="USD", description="Currency code")
+    status: str = Field(..., description="Refund status: COMPLETED, PENDING, FAILED")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Refund creation timestamp")
+    idempotency_key: str = Field(..., description="Unique idempotency key for refund")
+    reason: Optional[str] = Field(None, description="Reason for refund")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'refund_id': 'rfn_01J2M9ABCD',
+                'amount_cents': 50,
+                'currency': 'USD',
+                'status': 'COMPLETED',
+                'created_at': '2025-10-23T12:00:00Z',
+                'idempotency_key': 'rfd_uuid_12345',
+                'reason': 'Customer request'
+            }
+        }
+    }
+
+
+class UserTransactionSchema(BaseModel):
+    """
+    Schema for user_transactions collection with Square payment integration.
+
+    This model represents individual translation transactions with full payment details.
+    """
+    # Core transaction fields
+    user_name: str = Field(..., description="Full name of the user")
+    user_email: EmailStr = Field(..., description="Email address of the user")
+    document_url: str = Field(..., description="URL or path to the document")
+    translated_url: Optional[str] = Field(None, description="URL or path to the translated document")
+    number_of_units: int = Field(..., gt=0, description="Number of units (pages, words, or characters)")
+    unit_type: str = Field(..., description="Type of unit: page, word, or character")
+    cost_per_unit: float = Field(..., gt=0, description="Cost per single unit")
+    source_language: str = Field(..., description="Source language code")
+    target_language: str = Field(..., description="Target language code")
+    square_transaction_id: str = Field(..., description="Unique Square transaction ID")
+    date: datetime = Field(..., description="Transaction date")
+    status: str = Field(default="processing", description="Transaction status: processing, completed, failed")
+    total_cost: float = Field(..., ge=0, description="Total cost (auto-calculated)")
+
+    # Square payment fields
+    square_payment_id: str = Field(..., description="Square payment ID")
+    amount_cents: int = Field(..., gt=0, description="Payment amount in cents")
+    currency: str = Field(default="USD", description="Currency code (ISO 4217)")
+    payment_status: str = Field(
+        default="COMPLETED",
+        description="Payment status: APPROVED, COMPLETED, CANCELED, FAILED"
+    )
+    refunds: List[UserTransactionRefundSchema] = Field(default_factory=list, description="List of refunds for this transaction")
+    payment_date: datetime = Field(default_factory=datetime.utcnow, description="Payment processing date")
+
+    # Timestamps
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Record update timestamp")
+
+    model_config = {
+        'populate_by_name': True,
+        'json_schema_extra': {
+            'example': {
+                'user_name': 'John Doe',
+                'user_email': 'john.doe@example.com',
+                'document_url': 'https://drive.google.com/file/d/1ABC_sample_document/view',
+                'translated_url': 'https://drive.google.com/file/d/1ABC_transl_document/view',
+                'number_of_units': 10,
+                'unit_type': 'page',
+                'cost_per_unit': 0.15,
+                'source_language': 'en',
+                'target_language': 'es',
+                'square_transaction_id': 'SQR-1EC28E70F10B4D9E',
+                'date': '2025-10-23T23:56:55.438Z',
+                'status': 'completed',
+                'total_cost': 1.5,
+                'square_payment_id': 'SQR-1EC28E70F10B4D9E',
+                'amount_cents': 150,
+                'currency': 'USD',
+                'payment_status': 'COMPLETED',
+                'refunds': [],
+                'payment_date': '2025-10-23T23:56:55.438Z',
+                'created_at': '2025-10-23T23:56:55.438Z',
+                'updated_at': '2025-10-23T23:56:55.438Z'
+            }
+        }
+    }
+
+
+class UserTransactionCreate(BaseModel):
+    """Schema for creating a new user transaction."""
+    user_name: str
+    user_email: EmailStr
+    document_url: str
+    translated_url: Optional[str] = None
+    number_of_units: int = Field(..., gt=0)
+    unit_type: str = Field(..., pattern="^(page|word|character)$")
+    cost_per_unit: float = Field(..., gt=0)
+    source_language: str
+    target_language: str
+    square_transaction_id: str
+    date: Optional[datetime] = None
+    status: str = Field(default="processing", pattern="^(processing|completed|failed)$")
+
+    # Square payment fields
+    square_payment_id: str
+    amount_cents: Optional[int] = Field(None, gt=0, description="Payment amount in cents (auto-calculated if not provided)")
+    currency: str = Field(default="USD")
+    payment_status: str = Field(
+        default="COMPLETED",
+        pattern="^(APPROVED|COMPLETED|CANCELED|FAILED)$"
+    )
+    payment_date: Optional[datetime] = None
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                # Required fields
+                'user_name': 'John Doe',
+                'user_email': 'john.doe@example.com',
+                'document_url': 'https://drive.google.com/file/d/1ABC_sample_document/view',
+                'translated_url': 'https://drive.google.com/file/d/1ABC_transl_document/view',
+                'number_of_units': 10,
+                'unit_type': 'page',
+                'cost_per_unit': 0.15,
+                'source_language': 'en',
+                'target_language': 'es',
+                'square_transaction_id': 'SQR-1EC28E70F10B4D9E',
+                'square_payment_id': 'SQR-1EC28E70F10B4D9E',
+                # Optional fields (with defaults shown)
+                'currency': 'USD',
+                'payment_status': 'COMPLETED',
+                'status': 'completed',
+                # Optional fields
+                'date': '2025-10-23T23:56:55.438Z',
+                'payment_date': '2025-10-23T23:56:55.438Z',
+                'amount_cents': 150
+            }
+        }
+    }
+
+
+class UserTransactionResponse(BaseModel):
+    """Schema for user transaction API responses."""
+    id: str = Field(..., alias="_id")
+    user_name: str
+    user_email: EmailStr
+    document_url: str
+    translated_url: Optional[str] = None
+    number_of_units: int
+    unit_type: str
+    cost_per_unit: float
+    source_language: str
+    target_language: str
+    square_transaction_id: str
+    date: datetime
+    status: str
+    total_cost: float
+    square_payment_id: str
+    amount_cents: int
+    currency: str
+    payment_status: str
+    refunds: List[UserTransactionRefundSchema]
     payment_date: datetime
     created_at: datetime
     updated_at: datetime
 
     model_config = {'populate_by_name': True}
+
+
+class UserTransactionRefundRequest(BaseModel):
+    """Schema for processing a refund on a user transaction."""
+    refund_id: str = Field(..., description="Square refund ID")
+    amount_cents: int = Field(..., gt=0, description="Refund amount in cents")
+    currency: str = Field(default="USD", description="Currency code")
+    idempotency_key: str = Field(..., description="Unique idempotency key")
+    reason: Optional[str] = Field(None, description="Reason for refund")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'refund_id': 'rfn_01J2M9ABCD',
+                'amount_cents': 50,
+                'currency': 'USD',
+                'idempotency_key': 'rfd_c8e1a4b5-1c7a-4f9b-9f2d-1a2b3c4d5e6f',
+                'reason': 'Customer request'
+            }
+        }
+    }

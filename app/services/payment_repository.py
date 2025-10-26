@@ -5,7 +5,7 @@ This module provides database operations for the payments collection,
 including creating, retrieving, updating, and querying payment records.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
@@ -34,19 +34,31 @@ class PaymentRepository:
 
         Example:
             >>> payment = PaymentCreate(
-            ...     user_email="john.doe@acme.com",
-            ...     square_payment_id="sq_payment_123",
-            ...     amount=10600,
-            ...     payment_status="completed"
+            ...     company_id="cmp_00123",
+            ...     company_name="Acme Health LLC",
+            ...     user_email="test5@yahoo.com",
+            ...     square_payment_id="payment_sq_1761244600756",
+            ...     amount=1299,
+            ...     currency="USD",
+            ...     payment_status="COMPLETED"
             ... )
             >>> payment_id = await repo.create_payment(payment)
         """
-        payment_dict = payment_data.model_dump(exclude_unset=True)
-        payment_dict['created_at'] = datetime.utcnow()
-        payment_dict['updated_at'] = datetime.utcnow()
-        payment_dict['payment_date'] = payment_dict.get('payment_date', datetime.utcnow())
+        payment_doc = {
+            "company_id": payment_data.company_id,
+            "company_name": payment_data.company_name,
+            "user_email": payment_data.user_email,
+            "square_payment_id": payment_data.square_payment_id,
+            "amount": payment_data.amount,
+            "currency": payment_data.currency,
+            "payment_status": payment_data.payment_status,
+            "refunds": [],  # Always start with empty array
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "payment_date": payment_data.payment_date or datetime.now(timezone.utc)
+        }
 
-        result = await self.collection.insert_one(payment_dict)
+        result = await self.collection.insert_one(payment_doc)
         return str(result.inserted_id)
 
     async def get_payment_by_id(self, payment_id: str) -> Optional[Dict[str, Any]]:
@@ -103,25 +115,6 @@ class PaymentRepository:
         cursor = self.collection.find(query).sort("payment_date", -1).skip(skip).limit(limit)
         return await cursor.to_list(length=limit)
 
-    async def get_payments_by_user(
-        self,
-        user_id: str,
-        limit: int = 50,
-        skip: int = 0
-    ) -> List[Dict[str, Any]]:
-        """
-        Get payments for a user.
-
-        Args:
-            user_id: User ObjectId as string
-            limit: Maximum number of results
-            skip: Number of results to skip (for pagination)
-
-        Returns:
-            List of payment documents
-        """
-        cursor = self.collection.find({"user_id": user_id}).sort("payment_date", -1).skip(skip).limit(limit)
-        return await cursor.to_list(length=limit)
 
     async def get_payments_by_email(
         self,
@@ -149,7 +142,7 @@ class PaymentRepository:
         update_data: PaymentUpdate
     ) -> bool:
         """
-        Update a payment record.
+        Update payment status.
 
         Args:
             square_payment_id: Square payment ID
@@ -158,12 +151,14 @@ class PaymentRepository:
         Returns:
             True if updated, False otherwise
         """
-        update_dict = update_data.model_dump(exclude_unset=True)
-        update_dict['updated_at'] = datetime.utcnow()
+        update_doc = {"$set": {"updated_at": datetime.now(timezone.utc)}}
+
+        if update_data.payment_status:
+            update_doc["$set"]["payment_status"] = update_data.payment_status
 
         result = await self.collection.update_one(
             {"square_payment_id": square_payment_id},
-            {"$set": update_dict}
+            update_doc
         )
         return result.modified_count > 0
 
@@ -172,32 +167,37 @@ class PaymentRepository:
         square_payment_id: str,
         refund_id: str,
         refund_amount: int,
+        idempotency_key: str,
         refund_reason: Optional[str] = None
     ) -> bool:
         """
-        Process a refund for a payment.
+        Add a refund to payment's refunds array.
 
         Args:
             square_payment_id: Square payment ID
             refund_id: Square refund ID
             refund_amount: Refund amount in cents
-            refund_reason: Optional refund reason
+            idempotency_key: Unique idempotency key for Square API
+            refund_reason: Optional refund reason (not stored in refund object)
 
         Returns:
             True if refund processed, False otherwise
         """
-        update_data = {
+        refund_obj = {
             "refund_id": refund_id,
-            "refund_date": datetime.utcnow(),
-            "refund_reason": refund_reason,
-            "refunded_amount": refund_amount,
-            "payment_status": "refunded",
-            "updated_at": datetime.utcnow()
+            "amount": refund_amount,
+            "currency": "USD",
+            "status": "COMPLETED",
+            "idempotency_key": idempotency_key,
+            "created_at": datetime.now(timezone.utc)
         }
 
         result = await self.collection.update_one(
             {"square_payment_id": square_payment_id},
-            {"$set": update_data}
+            {
+                "$push": {"refunds": refund_obj},
+                "$set": {"updated_at": datetime.now(timezone.utc)}
+            }
         )
         return result.modified_count > 0
 
@@ -211,7 +211,7 @@ class PaymentRepository:
         Get payment statistics for a company.
 
         Args:
-            company_id: Company ObjectId as string
+            company_id: Company identifier (string)
             start_date: Optional start date filter
             end_date: Optional end date filter
 
@@ -235,12 +235,11 @@ class PaymentRepository:
                     "_id": None,
                     "total_payments": {"$sum": 1},
                     "total_amount": {"$sum": "$amount"},
-                    "total_refunded": {"$sum": "$refunded_amount"},
                     "completed_payments": {
-                        "$sum": {"$cond": [{"$eq": ["$payment_status", "completed"]}, 1, 0]}
+                        "$sum": {"$cond": [{"$eq": ["$payment_status", "COMPLETED"]}, 1, 0]}
                     },
                     "failed_payments": {
-                        "$sum": {"$cond": [{"$eq": ["$payment_status", "failed"]}, 1, 0]}
+                        "$sum": {"$cond": [{"$eq": ["$payment_status", "FAILED"]}, 1, 0]}
                     }
                 }
             }
@@ -254,8 +253,6 @@ class PaymentRepository:
                 "total_payments": stats.get("total_payments", 0),
                 "total_amount_cents": stats.get("total_amount", 0),
                 "total_amount_dollars": stats.get("total_amount", 0) / 100,
-                "total_refunded_cents": stats.get("total_refunded", 0),
-                "total_refunded_dollars": stats.get("total_refunded", 0) / 100,
                 "completed_payments": stats.get("completed_payments", 0),
                 "failed_payments": stats.get("failed_payments", 0)
             }
@@ -264,8 +261,6 @@ class PaymentRepository:
             "total_payments": 0,
             "total_amount_cents": 0,
             "total_amount_dollars": 0.0,
-            "total_refunded_cents": 0,
-            "total_refunded_dollars": 0.0,
             "completed_payments": 0,
             "failed_payments": 0
         }

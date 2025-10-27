@@ -323,35 +323,35 @@ async def process_transaction_refund(
 @router.get("/user/{email}")
 async def get_user_transaction_history(
     email: EmailStr = Path(..., description="User email address"),
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (processing, completed, failed)"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (completed, pending, failed)"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
+    skip: int = Query(0, ge=0, description="Number of results to skip for pagination"),
 ):
     """
     Get transaction history for a user by email.
 
-    Retrieves all transactions for a specific user, with optional status filtering.
-    Returns complete transaction records with all 22 fields.
+    Retrieves all transactions for a specific user, with optional status filtering and pagination.
+    Returns complete transaction records sorted by date (newest first).
 
     **Path Parameters:**
     - `email`: User email address
 
     **Query Parameters:**
-    - `status`: Optional status filter (processing | completed | failed)
+    - `status`: Optional status filter (completed | pending | failed)
     - `limit`: Maximum results (1-100, default: 50)
+    - `skip`: Number of results to skip (default: 0)
 
     **Response Example:**
     ```json
     {
         "success": true,
         "data": {
-            "email": "john.doe@example.com",
             "transactions": [
                 {
-                    "_id": "68fad3c2a0f41c24037c4810",
+                    "_id": "68fac0c78d81a68274ac140b",
                     "user_name": "John Doe",
                     "user_email": "john.doe@example.com",
                     "document_url": "https://drive.google.com/file/d/1ABC_sample_document/view",
-                    "translated_url": "https://drive.google.com/file/d/1ABC_transl_document/view",
                     "number_of_units": 10,
                     "unit_type": "page",
                     "cost_per_unit": 0.15,
@@ -361,20 +361,16 @@ async def get_user_transaction_history(
                     "date": "2025-10-23T23:56:55.438Z",
                     "status": "completed",
                     "total_cost": 1.5,
-                    "square_payment_id": "SQR-1EC28E70F10B4D9E",
-                    "amount_cents": 150,
-                    "currency": "USD",
-                    "payment_status": "COMPLETED",
-                    "refunds": [],
-                    "payment_date": "2025-10-23T23:56:55.438Z",
                     "created_at": "2025-10-23T23:56:55.438Z",
                     "updated_at": "2025-10-23T23:56:55.438Z"
                 }
             ],
             "count": 1,
+            "limit": 50,
+            "skip": 0,
             "filters": {
-                "status": "completed",
-                "limit": 50
+                "user_email": "john.doe@example.com",
+                "status": "completed"
             }
         }
     }
@@ -382,6 +378,7 @@ async def get_user_transaction_history(
 
     **Status Codes:**
     - **200**: Transaction history retrieved (may be empty array)
+    - **400**: Invalid status filter
     - **422**: Invalid email format
     - **500**: Internal server error
 
@@ -393,42 +390,77 @@ async def get_user_transaction_history(
     # Get only completed transactions
     curl -X GET "http://localhost:8000/api/v1/user-transactions/user/john.doe@example.com?status=completed"
 
-    # Get first 10 processing transactions
-    curl -X GET "http://localhost:8000/api/v1/user-transactions/user/john.doe@example.com?status=processing&limit=10"
+    # Get first 10 transactions with pagination
+    curl -X GET "http://localhost:8000/api/v1/user-transactions/user/john.doe@example.com?limit=10&skip=0"
     ```
     """
     try:
         logger.info(
             f"Retrieving transaction history for {email}, "
-            f"status filter: {status_filter or 'all'}"
+            f"status filter: {status_filter or 'all'}, limit={limit}, skip={skip}"
         )
 
-        transactions = await get_user_transactions_by_email(email, status=status_filter)
+        # Validate status filter if provided
+        valid_statuses = ["completed", "pending", "failed"]
+        if status_filter and status_filter not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid transaction status. Must be one of: {', '.join(valid_statuses)}"
+            )
 
-        # Limit results
-        if len(transactions) > limit:
-            transactions = transactions[:limit]
+        # Build query filter
+        match_stage = {"user_email": email}
+        if status_filter:
+            match_stage["status"] = status_filter
 
-        # Convert ObjectIds to strings
+        # Query transactions with sorting (newest first) using aggregation
+        from app.database.mongodb import database
+        from bson.decimal128 import Decimal128
+
+        pipeline = [
+            {"$match": match_stage},
+            {"$sort": {"date": -1}},  # Sort by date descending (newest first)
+            {"$skip": skip},
+            {"$limit": limit}
+        ]
+
+        # Execute aggregation
+        transactions = await database.user_transactions.aggregate(pipeline).to_list(length=limit)
+
+        # Convert ObjectIds and data types to JSON-serializable format
         for txn in transactions:
             if "_id" in txn:
                 txn["_id"] = str(txn["_id"])
+
+            # Convert Decimal128 fields to float
+            for key, value in list(txn.items()):
+                if isinstance(value, Decimal128):
+                    txn[key] = float(value.to_decimal())
+
+            # Convert datetime fields to ISO format strings
+            datetime_fields = ["date", "created_at", "updated_at", "payment_date"]
+            for field in datetime_fields:
+                if field in txn and hasattr(txn[field], "isoformat"):
+                    txn[field] = txn[field].isoformat()
 
         logger.info(f"Found {len(transactions)} transactions for {email}")
 
         return JSONResponse(content={
             "success": True,
             "data": {
-                "email": email,
                 "transactions": transactions,
                 "count": len(transactions),
+                "limit": limit,
+                "skip": skip,
                 "filters": {
-                    "status": status_filter,
-                    "limit": limit
+                    "user_email": email,
+                    "status": status_filter
                 }
             }
         })
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to retrieve transaction history: {e}", exc_info=True)
         raise HTTPException(

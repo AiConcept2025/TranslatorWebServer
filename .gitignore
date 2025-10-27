@@ -234,3 +234,4 @@ yarn.lock
 
 # Coverage reports
 htmlcov/
+.admin-credentials.txt

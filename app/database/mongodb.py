@@ -319,6 +319,11 @@ class MongoDB:
         """Get payments collection for Square payment tracking."""
         return self.db.payments if self.db is not None else None
 
+    @property
+    def invoices(self):
+        """Get invoices collection."""
+        return self.db.invoices if self.db is not None else None
+
 
 # Global database instance
 database = MongoDB()

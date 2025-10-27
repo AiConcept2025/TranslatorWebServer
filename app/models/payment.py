@@ -137,6 +137,207 @@ class RefundRequest(BaseModel):
     }
 
 
+class PaymentListItem(BaseModel):
+    """
+    Individual payment item in the company payments list.
+
+    This schema represents a payment record as returned in the list endpoint.
+    All datetime fields are returned as ISO 8601 strings.
+    """
+    id: str = Field(..., alias="_id", description="MongoDB ObjectId of the payment record")
+    company_id: str = Field(..., description="Company identifier (e.g., cmp_00123)")
+    company_name: str = Field(..., description="Full company name")
+    user_email: EmailStr = Field(..., description="Email address of the user who made the payment")
+    square_payment_id: str = Field(..., description="Square payment identifier")
+    amount: int = Field(..., gt=0, description="Payment amount in cents (e.g., 1299 = $12.99)")
+    currency: str = Field(..., description="Currency code (ISO 4217, e.g., USD, EUR)")
+    payment_status: str = Field(..., description="Payment status: COMPLETED | PENDING | FAILED | REFUNDED")
+    refunds: List[RefundSchema] = Field(default_factory=list, description="Array of refund objects (empty if no refunds)")
+    payment_date: str = Field(..., description="Payment processing date in ISO 8601 format")
+    created_at: str = Field(..., description="Record creation timestamp in ISO 8601 format")
+    updated_at: str = Field(..., description="Last update timestamp in ISO 8601 format")
+
+    model_config = {
+        'populate_by_name': True,
+        'json_schema_extra': {
+            'example': {
+                '_id': '68fad3c2a0f41c24037c4810',
+                'company_id': 'cmp_00123',
+                'company_name': 'Acme Health LLC',
+                'user_email': 'test5@yahoo.com',
+                'square_payment_id': 'payment_sq_1761244600756',
+                'amount': 1299,
+                'currency': 'USD',
+                'payment_status': 'COMPLETED',
+                'refunds': [],
+                'payment_date': '2025-10-24T01:17:54.544Z',
+                'created_at': '2025-10-24T01:17:54.544Z',
+                'updated_at': '2025-10-24T01:17:54.544Z'
+            }
+        }
+    }
+
+
+class PaymentListFilters(BaseModel):
+    """Filters applied to the payment list query."""
+    company_id: str = Field(..., description="Company identifier used for filtering")
+    status: Optional[str] = Field(None, description="Payment status filter (COMPLETED, PENDING, FAILED, REFUNDED) or None if not filtered")
+
+    model_config = {
+        'json_schema_extra': {
+            'examples': [
+                {
+                    'company_id': 'cmp_00123',
+                    'status': 'COMPLETED'
+                },
+                {
+                    'company_id': 'cmp_00123',
+                    'status': None
+                }
+            ]
+        }
+    }
+
+
+class PaymentListData(BaseModel):
+    """Data payload containing payments list with pagination and filter information."""
+    payments: List[PaymentListItem] = Field(..., description="Array of payment records matching the query")
+    count: int = Field(..., ge=0, description="Number of payments returned in this response")
+    limit: int = Field(..., ge=1, le=100, description="Maximum number of results requested")
+    skip: int = Field(..., ge=0, description="Number of results skipped (pagination offset)")
+    filters: PaymentListFilters = Field(..., description="Filters applied to the query")
+
+    model_config = {
+        'json_schema_extra': {
+            'examples': [
+                {
+                    'summary': 'Multiple payments',
+                    'description': 'Response with multiple completed payments',
+                    'value': {
+                        'payments': [
+                            {
+                                '_id': '68fad3c2a0f41c24037c4810',
+                                'company_id': 'cmp_00123',
+                                'company_name': 'Acme Health LLC',
+                                'user_email': 'test5@yahoo.com',
+                                'square_payment_id': 'payment_sq_1761244600756',
+                                'amount': 1299,
+                                'currency': 'USD',
+                                'payment_status': 'COMPLETED',
+                                'refunds': [],
+                                'payment_date': '2025-10-24T01:17:54.544Z',
+                                'created_at': '2025-10-24T01:17:54.544Z',
+                                'updated_at': '2025-10-24T01:17:54.544Z'
+                            },
+                            {
+                                '_id': '68fad3c2a0f41c24037c4811',
+                                'company_id': 'cmp_00123',
+                                'company_name': 'Acme Health LLC',
+                                'user_email': 'admin@acmehealth.com',
+                                'square_payment_id': 'payment_sq_1761268674',
+                                'amount': 2499,
+                                'currency': 'USD',
+                                'payment_status': 'COMPLETED',
+                                'refunds': [],
+                                'payment_date': '2025-10-24T02:30:15.123Z',
+                                'created_at': '2025-10-24T02:30:15.123Z',
+                                'updated_at': '2025-10-24T02:30:15.123Z'
+                            }
+                        ],
+                        'count': 2,
+                        'limit': 50,
+                        'skip': 0,
+                        'filters': {
+                            'company_id': 'cmp_00123',
+                            'status': 'COMPLETED'
+                        }
+                    }
+                },
+                {
+                    'summary': 'Empty result',
+                    'description': 'No payments found for the given filters',
+                    'value': {
+                        'payments': [],
+                        'count': 0,
+                        'limit': 50,
+                        'skip': 0,
+                        'filters': {
+                            'company_id': 'cmp_00999',
+                            'status': None
+                        }
+                    }
+                }
+            ]
+        }
+    }
+
+
+class PaymentListResponse(BaseModel):
+    """
+    Standardized response wrapper for company payments list endpoint.
+
+    This is the root response object returned by GET /api/v1/payments/company/{company_id}
+    """
+    success: bool = Field(True, description="Indicates if the request was successful")
+    data: PaymentListData = Field(..., description="Payment list data with pagination and filters")
+
+    model_config = {
+        'json_schema_extra': {
+            'examples': [
+                {
+                    'summary': 'Success with payments',
+                    'description': 'Successful response with multiple payments',
+                    'value': {
+                        'success': True,
+                        'data': {
+                            'payments': [
+                                {
+                                    '_id': '68fad3c2a0f41c24037c4810',
+                                    'company_id': 'cmp_00123',
+                                    'company_name': 'Acme Health LLC',
+                                    'user_email': 'test5@yahoo.com',
+                                    'square_payment_id': 'payment_sq_1761244600756',
+                                    'amount': 1299,
+                                    'currency': 'USD',
+                                    'payment_status': 'COMPLETED',
+                                    'refunds': [],
+                                    'payment_date': '2025-10-24T01:17:54.544Z',
+                                    'created_at': '2025-10-24T01:17:54.544Z',
+                                    'updated_at': '2025-10-24T01:17:54.544Z'
+                                }
+                            ],
+                            'count': 1,
+                            'limit': 50,
+                            'skip': 0,
+                            'filters': {
+                                'company_id': 'cmp_00123',
+                                'status': 'COMPLETED'
+                            }
+                        }
+                    }
+                },
+                {
+                    'summary': 'Empty result',
+                    'description': 'No payments found',
+                    'value': {
+                        'success': True,
+                        'data': {
+                            'payments': [],
+                            'count': 0,
+                            'limit': 50,
+                            'skip': 0,
+                            'filters': {
+                                'company_id': 'cmp_00999',
+                                'status': None
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+
+
 # ============================================================================
 # User Transaction Models (for users_transactions collection)
 # ============================================================================

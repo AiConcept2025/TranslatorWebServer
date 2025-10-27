@@ -18,7 +18,16 @@ from bson import ObjectId
 from pydantic import EmailStr
 import logging
 
-from app.models.payment import PaymentCreate, PaymentUpdate, PaymentResponse, RefundRequest
+from app.models.payment import (
+    PaymentCreate,
+    PaymentUpdate,
+    PaymentResponse,
+    RefundRequest,
+    PaymentListResponse,
+    PaymentListData,
+    PaymentListFilters,
+    PaymentListItem
+)
 from app.services.payment_repository import payment_repository
 
 logger = logging.getLogger(__name__)
@@ -265,44 +274,277 @@ async def get_payment_by_square_id(
         )
 
 
-@router.get("/company/{company_id}")
+@router.get(
+    "/company/{company_id}",
+    response_model=PaymentListResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "Successfully retrieved company payments",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "multiple_payments": {
+                            "summary": "Multiple completed payments",
+                            "description": "Example response with multiple completed payments for a company",
+                            "value": {
+                                "success": True,
+                                "data": {
+                                    "payments": [
+                                        {
+                                            "_id": "68fad3c2a0f41c24037c4810",
+                                            "company_id": "cmp_00123",
+                                            "company_name": "Acme Health LLC",
+                                            "user_email": "test5@yahoo.com",
+                                            "square_payment_id": "payment_sq_1761244600756",
+                                            "amount": 1299,
+                                            "currency": "USD",
+                                            "payment_status": "COMPLETED",
+                                            "refunds": [],
+                                            "payment_date": "2025-10-24T01:17:54.544Z",
+                                            "created_at": "2025-10-24T01:17:54.544Z",
+                                            "updated_at": "2025-10-24T01:17:54.544Z"
+                                        },
+                                        {
+                                            "_id": "68fad3c2a0f41c24037c4811",
+                                            "company_id": "cmp_00123",
+                                            "company_name": "Acme Health LLC",
+                                            "user_email": "admin@acmehealth.com",
+                                            "square_payment_id": "payment_sq_1761268674",
+                                            "amount": 2499,
+                                            "currency": "USD",
+                                            "payment_status": "COMPLETED",
+                                            "refunds": [],
+                                            "payment_date": "2025-10-24T02:30:15.123Z",
+                                            "created_at": "2025-10-24T02:30:15.123Z",
+                                            "updated_at": "2025-10-24T02:30:15.123Z"
+                                        },
+                                        {
+                                            "_id": "68fad3c2a0f41c24037c4812",
+                                            "company_id": "cmp_00123",
+                                            "company_name": "Acme Health LLC",
+                                            "user_email": "billing@acmehealth.com",
+                                            "square_payment_id": "payment_sq_1761278900",
+                                            "amount": 999,
+                                            "currency": "USD",
+                                            "payment_status": "COMPLETED",
+                                            "refunds": [],
+                                            "payment_date": "2025-10-24T03:45:00.000Z",
+                                            "created_at": "2025-10-24T03:45:00.000Z",
+                                            "updated_at": "2025-10-24T03:45:00.000Z"
+                                        }
+                                    ],
+                                    "count": 3,
+                                    "limit": 50,
+                                    "skip": 0,
+                                    "filters": {
+                                        "company_id": "cmp_00123",
+                                        "status": "COMPLETED"
+                                    }
+                                }
+                            }
+                        },
+                        "empty_result": {
+                            "summary": "No payments found",
+                            "description": "Response when no payments match the query filters",
+                            "value": {
+                                "success": True,
+                                "data": {
+                                    "payments": [],
+                                    "count": 0,
+                                    "limit": 50,
+                                    "skip": 0,
+                                    "filters": {
+                                        "company_id": "cmp_00999",
+                                        "status": None
+                                    }
+                                }
+                            }
+                        },
+                        "with_refunds": {
+                            "summary": "Payment with refund",
+                            "description": "Example showing a payment that has been partially refunded",
+                            "value": {
+                                "success": True,
+                                "data": {
+                                    "payments": [
+                                        {
+                                            "_id": "68fad3c2a0f41c24037c4820",
+                                            "company_id": "cmp_00123",
+                                            "company_name": "Acme Health LLC",
+                                            "user_email": "refund@example.com",
+                                            "square_payment_id": "payment_sq_1761300000",
+                                            "amount": 5000,
+                                            "currency": "USD",
+                                            "payment_status": "REFUNDED",
+                                            "refunds": [
+                                                {
+                                                    "refund_id": "rfn_01J2M9ABCD",
+                                                    "amount": 500,
+                                                    "currency": "USD",
+                                                    "status": "COMPLETED",
+                                                    "idempotency_key": "rfd_7e6df9c2-5f7c-43f9-9b1a-3e7e2e6b2b62",
+                                                    "created_at": "2025-10-24T05:00:00.000Z"
+                                                }
+                                            ],
+                                            "payment_date": "2025-10-24T04:00:00.000Z",
+                                            "created_at": "2025-10-24T04:00:00.000Z",
+                                            "updated_at": "2025-10-24T05:00:00.000Z"
+                                        }
+                                    ],
+                                    "count": 1,
+                                    "limit": 50,
+                                    "skip": 0,
+                                    "filters": {
+                                        "company_id": "cmp_00123",
+                                        "status": "REFUNDED"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid request parameters",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_company_id": {
+                            "summary": "Invalid company_id format",
+                            "value": {
+                                "detail": "Invalid company identifier format"
+                            }
+                        },
+                        "invalid_status": {
+                            "summary": "Invalid status filter",
+                            "value": {
+                                "detail": "Invalid payment status. Must be one of: COMPLETED, PENDING, FAILED, REFUNDED"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Company not found",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Company not found: cmp_00999"
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Failed to retrieve company payments: Database connection error"
+                    }
+                }
+            }
+        }
+    }
+)
 async def get_company_payments(
-    company_id: str = Path(..., description="Company identifier (e.g., cmp_00123)"),
-    status_filter: Optional[str] = Query(None, description="Filter by payment status (COMPLETED, PENDING, FAILED, REFUNDED)"),
-    limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
-    skip: int = Query(0, ge=0, description="Number of results to skip (for pagination)")
+    company_id: str = Path(
+        ...,
+        description="Company identifier (e.g., cmp_00123)",
+        example="cmp_00123"
+    ),
+    status_filter: Optional[str] = Query(
+        None,
+        description="Filter by payment status. Valid values: COMPLETED, PENDING, FAILED, REFUNDED",
+        example="COMPLETED",
+        alias="status"
+    ),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=100,
+        description="Maximum number of results to return (1-100)",
+        example=50
+    ),
+    skip: int = Query(
+        0,
+        ge=0,
+        description="Number of results to skip for pagination",
+        example=0
+    )
 ):
     """
-    Get all payments for a company.
+    Get all payments for a company with filtering and pagination.
 
-    Retrieves payments associated with a specific company, with optional
-    filtering by payment status and pagination support.
+    Retrieves a list of payment records associated with a specific company ID.
+    Results can be filtered by payment status and paginated using limit/skip parameters.
 
-    **Path Parameters:**
-    - `company_id`: Company identifier (e.g., "cmp_00123")
+    ## Path Parameters
+    - **company_id**: Company identifier (format: cmp_XXXXX)
 
-    **Query Parameters:**
-    - `status`: Filter by payment status (optional)
-        - `completed`: Successfully processed payments
-        - `pending`: Payments awaiting processing
-        - `failed`: Failed payment attempts
-        - `refunded`: Refunded payments
-    - `limit`: Maximum results (1-100, default: 50)
-    - `skip`: Results to skip for pagination (default: 0)
+    ## Query Parameters
+    - **status** *(optional)*: Filter payments by status
+        - `COMPLETED`: Successfully processed payments
+        - `PENDING`: Payments awaiting processing
+        - `FAILED`: Failed payment attempts
+        - `REFUNDED`: Payments that have been refunded (fully or partially)
+    - **limit** *(default: 50)*: Maximum number of records to return (1-100)
+    - **skip** *(default: 0)*: Number of records to skip (for pagination)
 
-    **Response:**
-    - **200**: List of payments (may be empty)
-    - **400**: Invalid company_id or parameters
-    - **500**: Internal server error
+    ## Response Structure
+    Returns a standardized response wrapper containing:
+    - **success**: Boolean indicating request success
+    - **data**: Object containing:
+        - **payments**: Array of payment records
+        - **count**: Number of payments in this response
+        - **limit**: Limit value used
+        - **skip**: Skip value used
+        - **filters**: Applied filter values
 
-    **Example:**
+    ## Payment Record Fields
+    Each payment record includes:
+    - **_id**: MongoDB ObjectId (24-character hex string)
+    - **company_id**: Company identifier
+    - **company_name**: Full company name
+    - **user_email**: Email of user who made the payment
+    - **square_payment_id**: Square payment identifier
+    - **amount**: Payment amount in cents (e.g., 1299 = $12.99)
+    - **currency**: Currency code (ISO 4217, e.g., USD)
+    - **payment_status**: Current payment status
+    - **refunds**: Array of refund objects (empty if no refunds)
+    - **payment_date**: Payment processing date (ISO 8601)
+    - **created_at**: Record creation timestamp (ISO 8601)
+    - **updated_at**: Last update timestamp (ISO 8601)
+
+    ## Usage Examples
+
+    ### Get all completed payments
     ```bash
-    # Get all completed payments for a company
     curl -X GET "http://localhost:8000/api/v1/payments/company/cmp_00123?status=COMPLETED&limit=20"
+    ```
 
-    # Get second page of payments
+    ### Get second page of payments (pagination)
+    ```bash
     curl -X GET "http://localhost:8000/api/v1/payments/company/cmp_00123?skip=20&limit=20"
     ```
+
+    ### Get all payments regardless of status
+    ```bash
+    curl -X GET "http://localhost:8000/api/v1/payments/company/cmp_00123"
+    ```
+
+    ### Filter by refunded payments only
+    ```bash
+    curl -X GET "http://localhost:8000/api/v1/payments/company/cmp_00123?status=REFUNDED"
+    ```
+
+    ## Notes
+    - Returns empty array if no payments match the criteria
+    - All datetime fields are returned in ISO 8601 format
+    - Amount is always in cents (divide by 100 for dollar amount)
+    - Refunds array shows detailed refund history when applicable
     """
     try:
         logger.info(f"Fetching payments for company {company_id}, status={status_filter}, limit={limit}, skip={skip}")

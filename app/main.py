@@ -367,6 +367,7 @@ async def translate_files(
     print(f"   User: {current_user.get('user_name', 'N/A')} ({request.email})")
 
     # For enterprise users, get company name from database
+    # CRITICAL: Enforce referential integrity - REJECT if company doesn't exist
     if is_enterprise:
         from app.database import database
         from bson import ObjectId
@@ -377,11 +378,22 @@ async def translate_files(
                 log_step("COMPANY NAME", f"Enterprise: {company_name}")
                 print(f"Enterprise company: {company_name}")
             else:
-                log_step("COMPANY NOT FOUND", f"Using company_id as fallback: {company_id}")
-                company_name = f"Company_{company_id}"
+                # REJECT: Company doesn't exist in database
+                log_step("VALIDATION FAILED", f"Company does not exist: {company_id}")
+                logging.error(f"[VALIDATION] REJECTED: Company '{company_id}' does not exist in database")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid company_id: Company '{company_id}' does not exist in database. Cannot create translation for non-existent company."
+                )
+        except HTTPException:
+            raise  # Re-raise HTTP exceptions
         except Exception as e:
             log_step("COMPANY LOOKUP FAILED", f"Error: {e}")
-            company_name = f"Company_{company_id}"
+            logging.error(f"[VALIDATION] Database error while validating company: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database error while validating company: {str(e)}"
+            )
 
     # Create Google Drive folder structure with proper hierarchy
     log_step("FOLDER CREATE START", f"Creating structure for: {request.email}")

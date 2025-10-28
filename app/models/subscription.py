@@ -19,6 +19,12 @@ class UsagePeriod(BaseModel):
     promotional_units: int = Field(default=0, ge=0)
     last_updated: datetime = Field(default_factory=datetime.utcnow)
 
+    # New fields requested by user
+    start_period: Optional[datetime] = None  # Alternative naming for period_start
+    end_period: Optional[datetime] = None    # Alternative naming for period_end
+    units_per_subscription: Optional[int] = Field(None, ge=0)  # Alternative naming for units_allocated
+    used_units: Optional[int] = Field(None, ge=0)  # Alternative naming for units_used
+
     @field_validator('units_remaining')
     @classmethod
     def validate_units_remaining(cls, v, info):
@@ -37,7 +43,7 @@ class UsagePeriod(BaseModel):
 
 class SubscriptionCreate(BaseModel):
     """Model for creating a new subscription."""
-    company_id: str  # Will be converted to ObjectId
+    company_name: str  # Company name (String, not ObjectId)
     subscription_unit: Literal["page", "word", "character"]
     units_per_subscription: int = Field(gt=0)
     price_per_unit: Decimal = Field(gt=0)
@@ -96,7 +102,7 @@ class UsageUpdate(BaseModel):
 class SubscriptionResponse(BaseModel):
     """Response model for subscription data."""
     id: str
-    company_id: str
+    company_name: str
     subscription_unit: str
     units_per_subscription: int
     price_per_unit: float
@@ -120,7 +126,7 @@ class SubscriptionResponse(BaseModel):
 class SubscriptionSummary(BaseModel):
     """Summary of subscription usage."""
     subscription_id: str
-    company_id: str
+    company_name: str
     subscription_unit: str
     total_units_allocated: int
     total_units_used: int

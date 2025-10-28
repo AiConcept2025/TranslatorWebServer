@@ -43,18 +43,20 @@ class SubscriptionService:
         Raises:
             SubscriptionError: If creation fails
         """
-        logger.info(f"[SUBSCRIPTION] Creating subscription for company: {subscription_data.company_id}")
+        logger.info(f"[SUBSCRIPTION] Creating subscription for company: {subscription_data.company_name}")
 
-        # Verify company exists
-        company = await database.companies.find_one({"_id": ObjectId(subscription_data.company_id)})
+        # Verify company exists (CRITICAL: Enforce referential integrity)
+        # company_name should match a company.company_name in the database
+        company = await database.companies.find_one({"company_name": subscription_data.company_name})
         if not company:
-            raise SubscriptionError(f"Company not found: {subscription_data.company_id}")
+            logger.error(f"[SUBSCRIPTION] REJECTED: Company does not exist: {subscription_data.company_name}")
+            raise SubscriptionError(f"Cannot create subscription: Company '{subscription_data.company_name}' does not exist in database")
 
         now = datetime.now(timezone.utc)
 
         # Create subscription document
         subscription_doc = {
-            "company_id": ObjectId(subscription_data.company_id),
+            "company_name": subscription_data.company_name,
             "subscription_unit": subscription_data.subscription_unit,
             "units_per_subscription": subscription_data.units_per_subscription,
             "price_per_unit": float(subscription_data.price_per_unit),
@@ -96,7 +98,7 @@ class SubscriptionService:
 
     async def get_company_subscriptions(
         self,
-        company_id: str,
+        company_name: str,
         status: Optional[str] = None,
         active_only: bool = False
     ) -> List[Dict[str, Any]]:
@@ -104,14 +106,14 @@ class SubscriptionService:
         Get all subscriptions for a company.
 
         Args:
-            company_id: Company ID
+            company_name: Company name
             status: Filter by status (active, inactive, expired)
             active_only: Only return active subscriptions
 
         Returns:
             list: List of subscription documents
         """
-        query = {"company_id": ObjectId(company_id)}
+        query = {"company_name": company_name}
 
         if active_only:
             query["status"] = "active"
@@ -120,7 +122,7 @@ class SubscriptionService:
 
         subscriptions = await database.subscriptions.find(query).sort("created_at", -1).to_list(length=100)
 
-        logger.info(f"[SUBSCRIPTION] Found {len(subscriptions)} subscriptions for company {company_id}")
+        logger.info(f"[SUBSCRIPTION] Found {len(subscriptions)} subscriptions for company {company_name}")
 
         return subscriptions
 
@@ -334,7 +336,7 @@ class SubscriptionService:
 
         return SubscriptionSummary(
             subscription_id=str(subscription["_id"]),
-            company_id=str(subscription["company_id"]),
+            company_name=subscription["company_name"],
             subscription_unit=subscription["subscription_unit"],
             total_units_allocated=total_allocated,
             total_units_used=total_used,

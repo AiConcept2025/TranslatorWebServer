@@ -154,16 +154,28 @@ class MongoDB:
 
         # Company users collection indexes (for enterprise/corporate users)
         try:
+            # Drop old company_id indexes if they exist (migration from company_id to company_name)
+            try:
+                await self.db.company_users.drop_index("company_id_idx")
+                logger.info("[MongoDB] Dropped old company_id_idx index")
+            except (OperationFailure, Exception):
+                pass
+            try:
+                await self.db.company_users.drop_index("email_company_idx")
+                logger.info("[MongoDB] Dropped old email_company_idx index (had company_id)")
+            except (OperationFailure, Exception):
+                pass
+
             company_users_indexes = [
                 IndexModel([("user_id", ASCENDING)], unique=True, name="user_id_unique"),
                 IndexModel([("email", ASCENDING)], name="email_idx"),
-                IndexModel([("company_id", ASCENDING)], name="company_id_idx"),
-                IndexModel([("email", ASCENDING), ("company_id", ASCENDING)], name="email_company_idx"),
+                IndexModel([("company_name", ASCENDING)], name="company_name_idx"),
+                IndexModel([("email", ASCENDING), ("company_name", ASCENDING)], name="email_company_idx"),
                 IndexModel([("status", ASCENDING)], name="status_idx"),
                 IndexModel([("created_at", ASCENDING)], name="created_at_asc")
             ]
             await self.db.company_users.create_indexes(company_users_indexes)
-            logger.info("[MongoDB] Company users indexes created")
+            logger.info("[MongoDB] Company users indexes created (company_name migration complete)")
             success_count += 1
         except (OperationFailure, Exception) as e:
             logger.warning(f"[MongoDB] Company users index creation failed: {e}")
@@ -177,17 +189,35 @@ class MongoDB:
         # MongoDB will handle expiration based on expires_at field
 
         # Subscriptions collection indexes
+        # UNIQUE constraint: ONE subscription per company (company_name_unique)
         try:
+            # Drop old company_id indexes if they exist
+            try:
+                await self.db.subscriptions.drop_index("company_id_idx")
+                logger.info("[MongoDB] Dropped old company_id_idx index")
+            except (OperationFailure, Exception):
+                pass
+            try:
+                await self.db.subscriptions.drop_index("company_id_unique")
+                logger.info("[MongoDB] Dropped old company_id_unique index")
+            except (OperationFailure, Exception):
+                pass
+            try:
+                await self.db.subscriptions.drop_index("company_status_idx")
+                logger.info("[MongoDB] Dropped old company_status_idx index (had company_id)")
+            except (OperationFailure, Exception):
+                pass
+
             subscriptions_indexes = [
-                IndexModel([("company_id", ASCENDING)], name="company_id_idx"),
+                IndexModel([("company_name", ASCENDING)], unique=True, name="company_name_unique"),
                 IndexModel([("status", ASCENDING)], name="status_idx"),
                 IndexModel([("start_date", ASCENDING)], name="start_date_idx"),
                 IndexModel([("end_date", ASCENDING)], name="end_date_idx"),
-                IndexModel([("company_id", ASCENDING), ("status", ASCENDING)], name="company_status_idx"),
+                IndexModel([("company_name", ASCENDING), ("status", ASCENDING)], name="company_status_idx"),
                 IndexModel([("created_at", ASCENDING)], name="created_at_asc")
             ]
             await self.db.subscriptions.create_indexes(subscriptions_indexes)
-            logger.info("[MongoDB] Subscriptions indexes created")
+            logger.info("[MongoDB] Subscriptions indexes created (company_name UNIQUE constraint enforced)")
             success_count += 1
         except (OperationFailure, Exception) as e:
             logger.warning(f"[MongoDB] Subscriptions index creation failed: {e}")
@@ -209,13 +239,20 @@ class MongoDB:
 
         # Translation transactions collection indexes
         try:
+            # Drop old company_id index if it exists (migration from company_id to company_name)
+            try:
+                await self.db.translation_transactions.drop_index("company_status_idx")
+                logger.info("[MongoDB] Dropped old company_status_idx index (had company_id)")
+            except (OperationFailure, Exception):
+                pass
+
             translation_transactions_indexes = [
                 IndexModel([("transaction_id", ASCENDING)], unique=True, name="transaction_id_unique"),
-                IndexModel([("company_id", ASCENDING), ("status", ASCENDING)], name="company_status_idx"),
+                IndexModel([("company_name", ASCENDING), ("status", ASCENDING)], name="company_status_idx"),
                 IndexModel([("created_at", ASCENDING)], name="created_at_asc")
             ]
             await self.db.translation_transactions.create_indexes(translation_transactions_indexes)
-            logger.info("[MongoDB] Translation transactions indexes created")
+            logger.info("[MongoDB] Translation transactions indexes created (company_name migration complete)")
             success_count += 1
         except (OperationFailure, Exception) as e:
             logger.warning(f"[MongoDB] Translation transactions index creation failed: {e}")

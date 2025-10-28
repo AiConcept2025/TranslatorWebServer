@@ -68,9 +68,14 @@ def payment_doc_to_response(payment_doc: dict) -> dict:
     if not payment_doc:
         return None
 
+    # Convert company_id if it's an ObjectId
+    company_id = payment_doc.get("company_id")
+    if isinstance(company_id, ObjectId):
+        company_id = str(company_id)
+
     return {
         "_id": str(payment_doc["_id"]),
-        "company_id": payment_doc.get("company_id"),
+        "company_id": company_id,
         "company_name": payment_doc.get("company_name"),
         "user_email": payment_doc["user_email"],
         "square_payment_id": payment_doc["square_payment_id"],
@@ -547,6 +552,7 @@ async def get_company_payments(
     - Refunds array shows detailed refund history when applicable
     """
     try:
+        print(f"[PAYMENTS DEBUG] Fetching payments for company {company_id}, status={status_filter}, limit={limit}, skip={skip}")
         logger.info(f"Fetching payments for company {company_id}, status={status_filter}, limit={limit}, skip={skip}")
 
         payments = await payment_repository.get_payments_by_company(
@@ -556,38 +562,57 @@ async def get_company_payments(
             skip=skip
         )
 
-        # Convert ObjectIds and datetime objects to JSON-serializable format
-        for payment in payments:
-            payment["_id"] = str(payment["_id"])
-            # Convert datetime objects to ISO format strings
-            if "created_at" in payment and hasattr(payment["created_at"], "isoformat"):
-                payment["created_at"] = payment["created_at"].isoformat()
-            if "updated_at" in payment and hasattr(payment["updated_at"], "isoformat"):
-                payment["updated_at"] = payment["updated_at"].isoformat()
-            if "payment_date" in payment and hasattr(payment["payment_date"], "isoformat"):
-                payment["payment_date"] = payment["payment_date"].isoformat()
+        print(f"[PAYMENTS DEBUG] Retrieved {len(payments)} payments from repository")
+        logger.info(f"Retrieved {len(payments)} payments from repository")
 
-            # Convert datetime objects in refunds array
-            if "refunds" in payment and isinstance(payment["refunds"], list):
-                for refund in payment["refunds"]:
-                    if "created_at" in refund and hasattr(refund["created_at"], "isoformat"):
-                        refund["created_at"] = refund["created_at"].isoformat()
+        # Helper function to recursively convert ObjectIds and datetimes
+        def convert_doc(obj):
+            """Recursively convert ObjectIds and datetimes to JSON-serializable types."""
+            if isinstance(obj, ObjectId):
+                return str(obj)
+            elif isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, dict):
+                return {key: convert_doc(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_doc(item) for item in obj]
+            else:
+                return obj
 
-        logger.info(f"Found {len(payments)} payments for company {company_id}")
+        # Convert all payments using recursive converter
+        for idx, payment in enumerate(payments):
+            print(f"[PAYMENTS DEBUG] Processing payment {idx + 1}")
+            # Apply recursive conversion
+            payments[idx] = convert_doc(payment)
+            print(f"[PAYMENTS DEBUG] Payment {idx + 1} converted successfully")
 
-        return JSONResponse(content={
-            "success": True,
-            "data": {
-                "payments": payments,
-                "count": len(payments),
-                "limit": limit,
-                "skip": skip,
-                "filters": {
-                    "company_id": company_id,
-                    "status": status_filter
+        logger.info(f"Found {len(payments)} payments for company {company_id}, creating response")
+
+        # Try to serialize the response before returning it
+        import json
+        try:
+            response_content = {
+                "success": True,
+                "data": {
+                    "payments": payments,
+                    "count": len(payments),
+                    "limit": limit,
+                    "skip": skip,
+                    "filters": {
+                        "company_id": company_id,
+                        "status": status_filter
+                    }
                 }
             }
-        })
+            # Test serialization
+            test_json = json.dumps(response_content, default=str)
+            logger.info(f"Response serialization successful, size: {len(test_json)} bytes")
+        except Exception as json_err:
+            logger.error(f"JSON serialization test failed: {json_err}")
+            logger.error(f"Problematic data: {payments}")
+            raise
+
+        return JSONResponse(content=response_content)
 
     except HTTPException:
         raise

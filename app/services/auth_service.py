@@ -62,30 +62,28 @@ class AuthService:
             logger.error("[AUTH] FAILED - MongoDB not connected")
             raise AuthenticationError("Service temporarily unavailable")
 
-        # Step 1: Find company by company_name
-        logger.info(f"[AUTH] Step 1: Looking up company '{company_name}'...")
+        # Step 1: Verify company exists by company_name
+        logger.info(f"[AUTH] Step 1: Verifying company '{company_name}' exists...")
         company = await database.companies.find_one({"company_name": company_name})
         if not company:
             logger.warning(f"[AUTH] FAILED - Company not found: {company_name}")
             raise AuthenticationError("Invalid credentials")
 
-        company_id = company["_id"]
         logger.info(f"[AUTH] SUCCESS - Company found")
-        logger.info(f"[AUTH]   Company ID: {company_id}")
         logger.info(f"[AUTH]   Company Name: {company.get('company_name')}")
 
-        # Step 2: Find user by email, company_id, and user_name
+        # Step 2: Find user by email, company_name, and user_name (MIGRATED from company_id)
         logger.info(f"[AUTH] Step 2: Looking up user in database...")
         logger.info(f"[AUTH]   Searching with:")
         logger.info(f"[AUTH]     - email: {email}")
-        logger.info(f"[AUTH]     - company_id: {company_id}")
+        logger.info(f"[AUTH]     - company_name: {company_name}")
         logger.info(f"[AUTH]     - user_name: {user_name}")
 
         # Enterprise users: Use company_users collection ONLY (no fallback to users)
         logger.info(f"[AUTH]   Looking up enterprise user in 'company_users' collection...")
         user = await database.company_users.find_one({
             "email": email,
-            "company_id": company_id,
+            "company_name": company_name,
             "user_name": user_name
         })
 
@@ -95,7 +93,7 @@ class AuthService:
             logger.warning(f"[AUTH] FAILED - User not found")
             logger.warning(f"[AUTH]   Email: {email}")
             logger.warning(f"[AUTH]   User Name: {user_name}")
-            logger.warning(f"[AUTH]   Company ID: {company_id}")
+            logger.warning(f"[AUTH]   Company Name: {company_name}")
             raise AuthenticationError("Invalid credentials")
 
         logger.info(f"[AUTH] SUCCESS - User found in '{collection_used}' collection")

@@ -108,7 +108,14 @@ class PaymentRepository:
         Returns:
             List of payment documents
         """
-        query = {"company_id": company_id}
+        # Convert string company_id to ObjectId for database query
+        try:
+            company_id_obj = ObjectId(company_id)
+            query = {"company_id": company_id_obj}
+        except Exception:
+            # If conversion fails, try as string (for backwards compatibility)
+            query = {"company_id": company_id}
+
         if status:
             query["payment_status"] = status
 
@@ -218,7 +225,13 @@ class PaymentRepository:
         Returns:
             Dictionary with payment statistics
         """
-        match_query: Dict[str, Any] = {"company_id": company_id}
+        # Convert string company_id to ObjectId for database query
+        try:
+            company_id_obj = ObjectId(company_id)
+            match_query: Dict[str, Any] = {"company_id": company_id_obj}
+        except Exception:
+            # If conversion fails, try as string (for backwards compatibility)
+            match_query: Dict[str, Any] = {"company_id": company_id}
 
         if start_date or end_date:
             date_query = {}

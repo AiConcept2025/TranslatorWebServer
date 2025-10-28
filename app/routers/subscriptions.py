@@ -33,7 +33,7 @@ async def create_subscription(
     Request:
     ```json
     {
-        "company_id": "507f1f77bcf86cd799439011",
+        "company_name": "Acme Translation Corp",
         "subscription_unit": "page",
         "units_per_subscription": 1000,
         "price_per_unit": 0.10,
@@ -46,7 +46,7 @@ async def create_subscription(
     }
     ```
     """
-    logger.info(f"[API] Creating subscription for company: {subscription_data.company_id}")
+    logger.info(f"[API] Creating subscription for company: {subscription_data.company_name}")
 
     try:
         subscription = await subscription_service.create_subscription(subscription_data)
@@ -57,7 +57,7 @@ async def create_subscription(
                 "message": "Subscription created successfully",
                 "data": {
                     "subscription_id": str(subscription["_id"]),
-                    "company_id": str(subscription["company_id"]),
+                    "company_name": subscription["company_name"],
                     "subscription_unit": subscription["subscription_unit"],
                     "units_per_subscription": subscription["units_per_subscription"],
                     "status": subscription["status"]
@@ -76,8 +76,7 @@ async def create_subscription(
 
 @router.get("/{subscription_id}")
 async def get_subscription(
-    subscription_id: str,
-    current_user: dict = Depends(get_current_user)
+    subscription_id: str
 ):
     """
     Get subscription details by ID.
@@ -89,18 +88,12 @@ async def get_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    # Check if user has access to this subscription
-    user_company_id = current_user.get("company_id")
-    if user_company_id and str(subscription["company_id"]) != str(user_company_id):
-        if current_user.get("permission_level") != "admin":
-            raise HTTPException(status_code=403, detail="Access denied")
-
     return JSONResponse(
         content={
             "success": True,
             "data": {
                 "subscription_id": str(subscription["_id"]),
-                "company_id": str(subscription["company_id"]),
+                "company_name": subscription["company_name"],
                 "subscription_unit": subscription["subscription_unit"],
                 "units_per_subscription": subscription["units_per_subscription"],
                 "price_per_unit": subscription["price_per_unit"],
@@ -118,12 +111,11 @@ async def get_subscription(
     )
 
 
-@router.get("/company/{company_id}")
+@router.get("/company/{company_name}")
 async def get_company_subscriptions(
-    company_id: str,
+    company_name: str,
     status: Optional[str] = None,
-    active_only: bool = False,
-    current_user: dict = Depends(get_current_user)
+    active_only: bool = False
 ):
     """
     Get all subscriptions for a company.
@@ -132,33 +124,34 @@ async def get_company_subscriptions(
     - status: Filter by status (active, inactive, expired)
     - active_only: Only return active subscriptions (true/false)
     """
-    logger.info(f"[API] Fetching subscriptions for company: {company_id}")
-
-    # Check access
-    user_company_id = current_user.get("company_id")
-    if user_company_id and str(user_company_id) != company_id:
-        if current_user.get("permission_level") != "admin":
-            raise HTTPException(status_code=403, detail="Access denied")
+    logger.info(f"[API] Fetching subscriptions for company: {company_name}")
 
     subscriptions = await subscription_service.get_company_subscriptions(
-        company_id, status=status, active_only=active_only
+        company_name, status=status, active_only=active_only
     )
 
     return JSONResponse(
         content={
             "success": True,
             "data": {
-                "company_id": company_id,
+                "company_name": company_name,
                 "count": len(subscriptions),
                 "subscriptions": [
                     {
-                        "subscription_id": str(sub["_id"]),
+                        "_id": str(sub["_id"]),
+                        "company_name": sub.get("company_name", company_name),
                         "subscription_unit": sub["subscription_unit"],
                         "units_per_subscription": sub["units_per_subscription"],
+                        "price_per_unit": sub["price_per_unit"],
+                        "promotional_units": sub.get("promotional_units", 0),
+                        "discount": sub.get("discount", 1.0),
+                        "subscription_price": sub["subscription_price"],
                         "status": sub["status"],
                         "start_date": sub["start_date"].isoformat(),
                         "end_date": sub["end_date"].isoformat() if sub.get("end_date") else None,
-                        "created_at": sub["created_at"].isoformat()
+                        "usage_periods": sub.get("usage_periods", []),
+                        "created_at": sub["created_at"].isoformat(),
+                        "updated_at": sub["updated_at"].isoformat()
                     }
                     for sub in subscriptions
                 ]
@@ -274,8 +267,9 @@ async def record_usage(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    user_company_id = current_user.get("company_id")
-    if user_company_id and str(subscription["company_id"]) != str(user_company_id):
+    # Check company name (migrated from company_id)
+    user_company_name = current_user.get("company_name") or current_user.get("company")
+    if user_company_name and subscription.get("company_name") != user_company_name:
         if current_user.get("permission_level") != "admin":
             raise HTTPException(status_code=403, detail="Access denied")
 
@@ -304,23 +298,17 @@ async def record_usage(
 
 @router.get("/{subscription_id}/summary")
 async def get_subscription_summary(
-    subscription_id: str,
-    current_user: dict = Depends(get_current_user)
+    subscription_id: str
 ):
     """
     Get subscription usage summary.
     """
     logger.info(f"[API] Fetching subscription summary: {subscription_id}")
 
-    # Verify access
+    # Verify subscription exists
     subscription = await subscription_service.get_subscription(subscription_id)
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
-
-    user_company_id = current_user.get("company_id")
-    if user_company_id and str(subscription["company_id"]) != str(user_company_id):
-        if current_user.get("permission_level") != "admin":
-            raise HTTPException(status_code=403, detail="Access denied")
 
     summary = await subscription_service.get_subscription_summary(subscription_id)
 

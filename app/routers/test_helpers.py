@@ -260,10 +260,11 @@ async def seed_translation_transactions():
         )
 
     # Build company mapping from actual database records
-    # Use company_name (String) instead of ObjectId
+    # Store both company_id (ObjectId) and company_name (String)
     company_data = []
     for company in companies:
         company_data.append({
+            "id": company["_id"],  # ObjectId
             "name": company.get("company_name", "Unknown Company")
         })
 
@@ -300,6 +301,7 @@ async def seed_translation_transactions():
 
     # Create transactions for each EXISTING company
     for company in company_data:
+        company_id = company["id"]  # ObjectId
         company_name = company["name"]
         num_transactions = random.randint(5, 10)
         company_transactions = []
@@ -372,7 +374,8 @@ async def seed_translation_transactions():
                 "error_message": error_message,
                 "created_at": created_at,
                 "updated_at": updated_at,
-                "company_name": company_name,  # Using company_name (String)
+                "company_id": company_id,  # ObjectId - REQUIRED for queries to work
+                "company_name": company_name,  # String - for display
                 "subscription_id": subscription_id,
                 "unit_type": "page"
             }

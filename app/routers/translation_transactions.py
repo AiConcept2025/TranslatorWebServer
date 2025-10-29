@@ -394,27 +394,28 @@ async def get_company_translation_transactions(
         # Execute aggregation
         transactions = await database.translation_transactions.aggregate(pipeline).to_list(length=limit)
 
-        # Convert ObjectIds and datetime objects to JSON-serializable format
-        for transaction in transactions:
-            transaction["_id"] = str(transaction["_id"])
+        # Helper function to recursively convert ObjectIds and datetimes
+        from datetime import datetime
+        from bson.decimal128 import Decimal128
 
-            # Convert ObjectId fields to strings
-            objectid_fields = ["company_id", "subscription_id"]
-            for field in objectid_fields:
-                if field in transaction and transaction[field] is not None and isinstance(transaction[field], ObjectId):
-                    transaction[field] = str(transaction[field])
+        def convert_doc(obj):
+            """Recursively convert ObjectIds, datetimes, and Decimal128 to JSON-serializable types."""
+            if isinstance(obj, ObjectId):
+                return str(obj)
+            elif isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, Decimal128):
+                return float(obj.to_decimal())
+            elif isinstance(obj, dict):
+                return {key: convert_doc(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_doc(item) for item in obj]
+            else:
+                return obj
 
-            # Convert Decimal128 fields to float (for MongoDB Decimal128 types)
-            from bson.decimal128 import Decimal128
-            for key, value in list(transaction.items()):
-                if isinstance(value, Decimal128):
-                    transaction[key] = float(value.to_decimal())
-
-            # Convert datetime fields to ISO format strings
-            datetime_fields = ["created_at", "updated_at"]
-            for field in datetime_fields:
-                if field in transaction and hasattr(transaction[field], "isoformat"):
-                    transaction[field] = transaction[field].isoformat()
+        # Convert all transactions using recursive converter
+        for idx, transaction in enumerate(transactions):
+            transactions[idx] = convert_doc(transaction)
 
         logger.info(f"Found {len(transactions)} translation transactions for company {company_id}")
 

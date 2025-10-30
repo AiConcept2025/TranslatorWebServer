@@ -367,7 +367,7 @@ async def translate_files(
     if is_enterprise:
         from app.database import database
         try:
-            company_doc = await database.companies.find_one({"company_name": company_name})
+            company_doc = await database.company.find_one({"company_name": company_name})
             if not company_doc:
                 # REJECT: Company doesn't exist in database
                 log_step("VALIDATION FAILED", f"Company does not exist: {company_name}")

@@ -124,7 +124,7 @@ async def create_company_user(
 
         # Step 1: Validate company exists
         logger.info(f"[CREATE_COMPANY_USER] Validating company exists...")
-        company = await database.companies.find_one({"company_name": company_name})
+        company = await database.company.find_one({"company_name": company_name})
 
         if not company:
             logger.warning(f"[CREATE_COMPANY_USER] Company not found: {company_name}")
@@ -304,7 +304,7 @@ async def get_company_users(
         if company_name:
             # Validate company exists first
             logger.info(f"[GET_COMPANY_USERS] Validating company exists: {company_name}")
-            company = await database.companies.find_one({"company_name": company_name})
+            company = await database.company.find_one({"company_name": company_name})
 
             if not company:
                 logger.warning(f"[GET_COMPANY_USERS] Company not found: {company_name}")

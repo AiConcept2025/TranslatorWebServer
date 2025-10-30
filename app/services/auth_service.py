@@ -64,7 +64,7 @@ class AuthService:
 
         # Step 1: Verify company exists by company_name
         logger.info(f"[AUTH] Step 1: Verifying company '{company_name}' exists...")
-        company = await database.companies.find_one({"company_name": company_name})
+        company = await database.company.find_one({"company_name": company_name})
         if not company:
             logger.warning(f"[AUTH] FAILED - Company not found: {company_name}")
             raise AuthenticationError("Invalid credentials")

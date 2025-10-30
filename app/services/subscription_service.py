@@ -47,7 +47,7 @@ class SubscriptionService:
 
         # Verify company exists (CRITICAL: Enforce referential integrity)
         # company_name should match a company.company_name in the database
-        company = await database.companies.find_one({"company_name": subscription_data.company_name})
+        company = await database.company.find_one({"company_name": subscription_data.company_name})
         if not company:
             logger.error(f"[SUBSCRIPTION] REJECTED: Company does not exist: {subscription_data.company_name}")
             raise SubscriptionError(f"Cannot create subscription: Company '{subscription_data.company_name}' does not exist in database")

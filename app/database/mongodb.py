@@ -121,17 +121,17 @@ class MongoDB:
         # Previously, if one collection failed, ALL subsequent collections were skipped
         # Now each collection failure is isolated and doesn't block others
 
-        # Companies collection indexes
+        # Company collection indexes (singular collection name)
         try:
             companies_indexes = [
                 IndexModel([("company_name", ASCENDING)], unique=True, name="company_name_unique"),
                 IndexModel([("created_at", ASCENDING)], name="created_at_asc")
             ]
-            await self.db.companies.create_indexes(companies_indexes)
-            logger.info("[MongoDB] Companies indexes created")
+            await self.db.company.create_indexes(companies_indexes)
+            logger.info("[MongoDB] Company indexes created")
             success_count += 1
         except (OperationFailure, Exception) as e:
-            logger.warning(f"[MongoDB] Companies index creation failed: {e}")
+            logger.warning(f"[MongoDB] Company index creation failed: {e}")
             failed_count += 1
 
         # Users collection indexes
@@ -307,10 +307,15 @@ class MongoDB:
 
     # Collection accessors
     @property
+    def company(self):
+        """Get company collection (singular)."""
+        return self.db.company if self.db is not None else None
+
+    @property
     def companies(self):
-        """Get companies collection."""
+        """Get companies collection (maps to 'company' singular collection)."""
         if self.db is not None:
-            return self.db.companies  # Correct collection name (plural)
+            return self.db.company  # Using singular 'company' collection
         return None
 
     @property

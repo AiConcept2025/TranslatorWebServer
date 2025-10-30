@@ -80,10 +80,47 @@ class UserLoginResponse(BaseModel):
     user: Optional[dict] = None
 
 
+class AdminLoginRequest(BaseModel):
+    """Request model for admin login."""
+    email: EmailStr = Field(..., description="Admin email address")
+    password: str = Field(..., min_length=1, description="Admin password")
+
+    @validator('email')
+    def validate_email(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Email cannot be empty")
+        return v.lower().strip()
+
+    @validator('password')
+    def validate_password(cls, v):
+        if not v:
+            raise ValueError("Password cannot be empty")
+        return v
+
+
+class AdminUser(BaseModel):
+    """Admin user data model (excludes sensitive fields)."""
+    user_id: str = Field(..., description="Admin user ID")
+    user_name: str = Field(..., description="Admin full name")
+    user_email: EmailStr = Field(..., description="Admin email")
+    permission_level: str = Field(default="admin", description="Permission level (always 'admin')")
+
+
+class AdminLoginResponse(BaseModel):
+    """Response model for admin login."""
+    success: bool
+    message: str
+    data: Optional[dict] = None
+    error: Optional[dict] = None
+
+
 # Export all models
 __all__ = [
     "UserSignupRequest",
     "UserSignupResponse",
     "UserLoginRequest",
-    "UserLoginResponse"
+    "UserLoginResponse",
+    "AdminLoginRequest",
+    "AdminUser",
+    "AdminLoginResponse"
 ]

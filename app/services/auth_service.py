@@ -493,6 +493,155 @@ class AuthService:
             "expires_at": expires_at.isoformat()
         }
 
+    async def authenticate_admin(
+        self,
+        email: str,
+        password: str
+    ) -> Dict[str, Any]:
+        """
+        Authenticate admin user against iris-admins collection.
+
+        Args:
+            email: Admin email address
+            password: Admin password (plain text)
+
+        Returns:
+            dict: {session_token, user_data, expires_at}
+
+        Raises:
+            AuthenticationError: If authentication fails
+        """
+        logger.info("=" * 80)
+        logger.info(f"[AUTH ADMIN] {datetime.now(timezone.utc).isoformat()} - Admin login attempt")
+        logger.info(f"[AUTH ADMIN] Email: {email}")
+        logger.info("=" * 80)
+
+        # Check database connection
+        if not database.is_connected:
+            logger.error("[AUTH ADMIN] FAILED - MongoDB not connected")
+            raise AuthenticationError("Service temporarily unavailable")
+
+        # Step 1: Find admin user by email in iris-admins collection
+        logger.info(f"[AUTH ADMIN] Step 1: Looking up admin user by email...")
+        admin = await database.db["iris-admins"].find_one({
+            "user_email": email
+        })
+
+        if not admin:
+            logger.warning(f"[AUTH ADMIN] FAILED - Admin not found")
+            logger.warning(f"[AUTH ADMIN]   Email: {email}")
+            raise AuthenticationError("Invalid credentials")
+
+        logger.info(f"[AUTH ADMIN] SUCCESS - Admin found in 'iris-admins' collection")
+        logger.info(f"[AUTH ADMIN]   Admin ID: {admin.get('_id')}")
+        logger.info(f"[AUTH ADMIN]   User Name: {admin.get('user_name')}")
+        logger.info(f"[AUTH ADMIN]   Email: {admin.get('user_email')}")
+
+        # Step 2: Verify password with bcrypt
+        logger.info(f"[AUTH ADMIN] Step 2: Verifying password...")
+        password_hash = admin.get("password")
+        if not password_hash:
+            logger.error(f"[AUTH ADMIN] FAILED - No password hash found for admin")
+            raise AuthenticationError("Invalid credentials")
+
+        try:
+            # Verify password with bcrypt - run in thread pool to avoid blocking event loop
+            # IMPORTANT: bcrypt has a 72-byte limit, so we truncate if needed
+            import asyncio
+            from functools import partial
+
+            password_bytes = password.encode('utf-8')[:72]  # Truncate to 72 bytes (bcrypt limit)
+
+            loop = asyncio.get_event_loop()
+            password_valid = await loop.run_in_executor(
+                None,  # Use default ThreadPoolExecutor
+                partial(
+                    bcrypt.checkpw,
+                    password_bytes,
+                    password_hash.encode('utf-8')
+                )
+            )
+            logger.info(f"[AUTH ADMIN] Password verification completed (non-blocking)")
+        except Exception as e:
+            logger.error(f"[AUTH ADMIN] FAILED - Error verifying password: {e}")
+            raise AuthenticationError("Invalid credentials")
+
+        if not password_valid:
+            logger.warning(f"[AUTH ADMIN] FAILED - Password verification failed")
+            raise AuthenticationError("Invalid credentials")
+
+        logger.info(f"[AUTH ADMIN] SUCCESS - Password verified with bcrypt")
+
+        # Step 3: Create JWT token with admin permission level
+        logger.info(f"[AUTH ADMIN] Step 3: Creating JWT access token with admin claims...")
+        from app.services.jwt_service import jwt_service
+        from datetime import timedelta
+        import uuid
+
+        # Generate user_id if not present (for backward compatibility)
+        user_id = admin.get("user_id") or f"admin_{uuid.uuid4().hex[:16]}"
+
+        # Include both internal JWT fields and frontend-facing fields
+        user_token_data = {
+            "user_id": user_id,  # Required by JWT service
+            "email": admin.get("user_email"),
+            "fullName": admin.get("user_name"),  # Frontend expects this
+            "user_name": admin.get("user_name"),  # For JWT compatibility
+            "company": None,  # Admins have no company
+            "company_name": None,  # For JWT compatibility
+            "permission_level": "admin"  # CRITICAL: Admin permission level
+        }
+
+        # Create JWT token with 8-hour expiration
+        expires_delta = timedelta(hours=self.SESSION_EXPIRATION_HOURS)
+        access_token = jwt_service.create_access_token(user_token_data, expires_delta)
+
+        expires_at = datetime.now(timezone.utc) + expires_delta
+
+        logger.info(f"[AUTH ADMIN] SUCCESS - JWT token created")
+        logger.info(f"[AUTH ADMIN]   Token type: JWT (self-contained, NO database lookup needed)")
+        logger.info(f"[AUTH ADMIN]   Token: {access_token[:16]}...{access_token[-8:]}")
+        logger.info(f"[AUTH ADMIN]   Expires: {expires_at.isoformat()}")
+        logger.info(f"[AUTH ADMIN]   Permission Level: admin")
+
+        # Step 4: Update login_date
+        logger.info(f"[AUTH ADMIN] Step 4: Updating login_date timestamp...")
+        now = datetime.now(timezone.utc)
+
+        await database.db["iris-admins"].update_one(
+            {"_id": admin["_id"]},
+            {
+                "$set": {
+                    "login_date": now,
+                    "updated_at": now
+                }
+            }
+        )
+
+        logger.info(f"[AUTH ADMIN] SUCCESS - Login date updated to {now.isoformat()}")
+
+        # Prepare user data response (exclude sensitive fields)
+        user_data = {
+            "user_id": user_id,
+            "user_name": admin.get("user_name"),
+            "email": admin.get("user_email"),
+            "permission_level": "admin"
+        }
+
+        logger.info("=" * 80)
+        logger.info(f"[AUTH ADMIN] AUTHENTICATION SUCCESSFUL")
+        logger.info(f"[AUTH ADMIN] Admin: {email}")
+        logger.info(f"[AUTH ADMIN] Permission: admin")
+        logger.info(f"[AUTH ADMIN] Token expires: {expires_at.isoformat()}")
+        logger.info(f"[AUTH ADMIN] Token type: JWT (NO database queries on subsequent requests!)")
+        logger.info("=" * 80)
+
+        return {
+            "session_token": access_token,  # JWT token
+            "user": user_token_data,
+            "expires_at": expires_at.isoformat()
+        }
+
 
 # Global auth service instance
 auth_service = AuthService()

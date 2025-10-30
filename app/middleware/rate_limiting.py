@@ -31,6 +31,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             '/api/v1/files/upload': {'requests': 20, 'window': 3600},  # 20 per hour
             '/api/v1/languages': {'requests': 200, 'window': 3600},  # 200 per hour
             '/api/v1/payments': {'requests': 30, 'window': 3600},  # 30 per hour
+            '/login/admin': {'requests': 5, 'window': 900},  # 5 attempts per 15 minutes (brute force protection)
         }
     
     async def dispatch(self, request: Request, call_next):

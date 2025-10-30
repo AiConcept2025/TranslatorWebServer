@@ -20,8 +20,8 @@ from app.config import settings
 from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users
 from app.routers import payment_simplified as payment
 
-# Import middleware and utilities (will create these next)
-# Rate limiting removed per user request
+# Import middleware and utilities
+from app.middleware.rate_limiting import RateLimitMiddleware
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.encoding_fix import EncodingFixMiddleware
 from app.middleware.auth_middleware import get_current_user, get_optional_user
@@ -83,6 +83,7 @@ app = FastAPI(
 # app.add_middleware(RequestBodyDebugMiddleware)
 app.add_middleware(EncodingFixMiddleware)
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(RateLimitMiddleware)  # Rate limiting for brute force protection
 
 # Add CORS middleware LAST (so it's closest to the endpoint and processes ALL responses)
 app.add_middleware(

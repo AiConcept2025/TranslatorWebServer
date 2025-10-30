@@ -125,7 +125,6 @@ class MongoDB:
         try:
             companies_indexes = [
                 IndexModel([("company_name", ASCENDING)], unique=True, name="company_name_unique"),
-                IndexModel([("company_id", ASCENDING)], unique=True, name="company_id_unique"),
                 IndexModel([("created_at", ASCENDING)], name="created_at_asc")
             ]
             await self.db.companies.create_indexes(companies_indexes)
@@ -140,8 +139,8 @@ class MongoDB:
             users_indexes = [
                 IndexModel([("user_id", ASCENDING)], unique=True, name="user_id_unique"),
                 IndexModel([("email", ASCENDING)], name="email_idx"),
-                IndexModel([("company_id", ASCENDING)], name="company_id_idx"),
-                IndexModel([("email", ASCENDING), ("company_id", ASCENDING)], name="email_company_idx"),
+                IndexModel([("company_name", ASCENDING)], name="company_name_idx"),
+                IndexModel([("email", ASCENDING), ("company_name", ASCENDING)], name="email_company_idx"),
                 IndexModel([("status", ASCENDING)], name="status_idx"),
                 IndexModel([("created_at", ASCENDING)], name="created_at_asc")
             ]
@@ -154,15 +153,15 @@ class MongoDB:
 
         # Company users collection indexes (for enterprise/corporate users)
         try:
-            # Drop old company_id indexes if they exist (migration from company_id to company_name)
+            # Drop old indexes if they exist (migration cleanup)
             try:
-                await self.db.company_users.drop_index("company_id_idx")
-                logger.info("[MongoDB] Dropped old company_id_idx index")
+                await self.db.company_users.drop_index("old_company_idx")
+                logger.info("[MongoDB] Dropped old company index")
             except (OperationFailure, Exception):
                 pass
             try:
-                await self.db.company_users.drop_index("email_company_idx")
-                logger.info("[MongoDB] Dropped old email_company_idx index (had company_id)")
+                await self.db.company_users.drop_index("old_email_company_idx")
+                logger.info("[MongoDB] Dropped old email_company index")
             except (OperationFailure, Exception):
                 pass
 
@@ -191,20 +190,20 @@ class MongoDB:
         # Subscriptions collection indexes
         # UNIQUE constraint: ONE subscription per company (company_name_unique)
         try:
-            # Drop old company_id indexes if they exist
+            # Drop old indexes if they exist (migration cleanup)
             try:
-                await self.db.subscriptions.drop_index("company_id_idx")
-                logger.info("[MongoDB] Dropped old company_id_idx index")
+                await self.db.subscriptions.drop_index("old_company_idx")
+                logger.info("[MongoDB] Dropped old company index")
             except (OperationFailure, Exception):
                 pass
             try:
-                await self.db.subscriptions.drop_index("company_id_unique")
-                logger.info("[MongoDB] Dropped old company_id_unique index")
+                await self.db.subscriptions.drop_index("old_company_unique")
+                logger.info("[MongoDB] Dropped old company unique index")
             except (OperationFailure, Exception):
                 pass
             try:
-                await self.db.subscriptions.drop_index("company_status_idx")
-                logger.info("[MongoDB] Dropped old company_status_idx index (had company_id)")
+                await self.db.subscriptions.drop_index("old_company_status_idx")
+                logger.info("[MongoDB] Dropped old company status index")
             except (OperationFailure, Exception):
                 pass
 
@@ -239,10 +238,10 @@ class MongoDB:
 
         # Translation transactions collection indexes
         try:
-            # Drop old company_id index if it exists (migration from company_id to company_name)
+            # Drop old indexes if they exist (migration cleanup)
             try:
-                await self.db.translation_transactions.drop_index("company_status_idx")
-                logger.info("[MongoDB] Dropped old company_status_idx index (had company_id)")
+                await self.db.translation_transactions.drop_index("old_company_status_idx")
+                logger.info("[MongoDB] Dropped old company status index")
             except (OperationFailure, Exception):
                 pass
 
@@ -279,14 +278,14 @@ class MongoDB:
         # NOTE: square_payment_id is NOT unique to support stub implementation with hardcoded IDs
         try:
             payments_indexes = [
-                IndexModel([("square_payment_id", ASCENDING)], name="square_payment_id_idx"),  # Removed unique=True for stub
-                IndexModel([("company_id", ASCENDING)], name="company_id_idx"),
+                IndexModel([("square_payment_id", ASCENDING)], name="square_payment_id_idx"),
+                IndexModel([("company_name", ASCENDING)], name="company_name_idx"),
                 IndexModel([("subscription_id", ASCENDING)], name="subscription_id_idx"),
                 IndexModel([("user_id", ASCENDING)], name="user_id_idx"),
                 IndexModel([("payment_status", ASCENDING)], name="payment_status_idx"),
                 IndexModel([("payment_date", ASCENDING)], name="payment_date_idx"),
                 IndexModel([("user_email", ASCENDING)], name="user_email_idx"),
-                IndexModel([("company_id", ASCENDING), ("payment_status", ASCENDING)], name="company_status_idx"),
+                IndexModel([("company_name", ASCENDING), ("payment_status", ASCENDING)], name="company_status_idx"),
                 IndexModel([("user_id", ASCENDING), ("payment_date", ASCENDING)], name="user_payment_date_idx"),
                 IndexModel([("square_order_id", ASCENDING)], name="square_order_id_idx"),
                 IndexModel([("square_customer_id", ASCENDING)], name="square_customer_id_idx"),
@@ -310,10 +309,8 @@ class MongoDB:
     @property
     def companies(self):
         """Get companies collection."""
-        # Check both 'companies' (plural) and 'company' (singular) collections
-        # Prefer 'company' if it exists, fallback to 'companies'
         if self.db is not None:
-            return self.db.company  # Actual collection name in database
+            return self.db.companies  # Correct collection name (plural)
         return None
 
     @property

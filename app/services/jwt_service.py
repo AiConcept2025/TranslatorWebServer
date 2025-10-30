@@ -39,7 +39,6 @@ class JWTService:
                     "user_id": str,
                     "email": str,
                     "user_name": str,
-                    "company_id": str,
                     "company_name": str,
                     "permission_level": str
                 }
@@ -99,7 +98,6 @@ class JWTService:
                 "user_id": payload.get("user_id"),
                 "email": payload.get("email"),
                 "user_name": payload.get("user_name"),
-                "company_id": payload.get("company_id"),
                 "company_name": payload.get("company_name"),
                 "permission_level": payload.get("permission_level", "user")
             }

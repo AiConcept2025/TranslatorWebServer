@@ -37,7 +37,6 @@ class RefundSchema(BaseModel):
 
 class Payment(BaseModel):
     """Payment schema for payments collection."""
-    company_id: str = Field(..., description="Company identifier")
     company_name: str = Field(..., description="Company name")
     user_email: EmailStr = Field(..., description="User email address")
     square_payment_id: str = Field(..., description="Square payment ID")
@@ -52,7 +51,6 @@ class Payment(BaseModel):
     model_config = {
         'json_schema_extra': {
             'example': {
-                'company_id': 'cmp_00123',
                 'company_name': 'Acme Health LLC',
                 'user_email': 'test5@yahoo.com',
                 'square_payment_id': 'payment_sq_1761244600756_u12vb3tx6',
@@ -70,7 +68,6 @@ class Payment(BaseModel):
 
 class PaymentCreate(BaseModel):
     """Schema for creating a new payment."""
-    company_id: str
     company_name: str
     user_email: EmailStr
     square_payment_id: str
@@ -82,7 +79,6 @@ class PaymentCreate(BaseModel):
     model_config = {
         'json_schema_extra': {
             'example': {
-                'company_id': 'cmp_00123',
                 'company_name': 'Acme Health LLC',
                 'user_email': 'test5@yahoo.com',
                 'square_payment_id': 'payment_sq_1761244600756_u12vb3tx6',
@@ -103,7 +99,6 @@ class PaymentUpdate(BaseModel):
 class PaymentResponse(BaseModel):
     """Schema for payment API responses."""
     id: str = Field(..., alias="_id")
-    company_id: str
     company_name: str
     user_email: EmailStr
     square_payment_id: str
@@ -137,6 +132,47 @@ class RefundRequest(BaseModel):
     }
 
 
+class SubscriptionPaymentCreate(BaseModel):
+    """Schema for manually creating a subscription payment record (admin use)."""
+    company_name: str = Field(..., description="Company name")
+    subscription_id: str = Field(..., description="Subscription ObjectId")
+    square_payment_id: str = Field(..., description="Square payment ID")
+    square_order_id: Optional[str] = Field(None, description="Square order ID")
+    square_customer_id: Optional[str] = Field(None, description="Square customer ID")
+    user_email: EmailStr = Field(..., description="User email who made payment")
+    user_id: Optional[str] = Field(None, description="User ID")
+    amount: int = Field(..., gt=0, description="Amount in cents")
+    currency: str = Field(default="USD", description="Currency code")
+    payment_status: str = Field(default="COMPLETED", description="Payment status")
+    payment_method: Optional[str] = Field("card", description="Payment method")
+    card_brand: Optional[str] = Field(None, description="Card brand (VISA, MASTERCARD)")
+    card_last_4: Optional[str] = Field(None, description="Last 4 digits of card")
+    receipt_url: Optional[str] = Field(None, description="Receipt URL")
+    payment_date: Optional[datetime] = Field(None, description="Payment date (defaults to now)")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'company_name': 'Acme Translation Corp',
+                'subscription_id': '690023c7eb2bceb90e274133',
+                'square_payment_id': 'sq_payment_e59858fff0794614',
+                'square_order_id': 'sq_order_e4dce86988a847b1',
+                'square_customer_id': 'sq_customer_c7b478ddc7b04f99',
+                'user_email': 'admin@acme.com',
+                'user_id': 'user_9db5a0fbe769442d',
+                'amount': 9000,
+                'currency': 'USD',
+                'payment_status': 'COMPLETED',
+                'payment_method': 'card',
+                'card_brand': 'VISA',
+                'card_last_4': '1234',
+                'receipt_url': 'https://squareup.com/receipt/preview/b05a59b993294167',
+                'payment_date': '2025-10-28T11:18:04.213Z'
+            }
+        }
+    }
+
+
 class PaymentListItem(BaseModel):
     """
     Individual payment item in the company payments list.
@@ -145,7 +181,6 @@ class PaymentListItem(BaseModel):
     All datetime fields are returned as ISO 8601 strings.
     """
     id: str = Field(..., alias="_id", description="MongoDB ObjectId of the payment record")
-    company_id: str = Field(..., description="Company identifier (e.g., cmp_00123)")
     company_name: str = Field(..., description="Full company name")
     user_email: EmailStr = Field(..., description="Email address of the user who made the payment")
     square_payment_id: str = Field(..., description="Square payment identifier")
@@ -162,7 +197,6 @@ class PaymentListItem(BaseModel):
         'json_schema_extra': {
             'example': {
                 '_id': '68fad3c2a0f41c24037c4810',
-                'company_id': 'cmp_00123',
                 'company_name': 'Acme Health LLC',
                 'user_email': 'test5@yahoo.com',
                 'square_payment_id': 'payment_sq_1761244600756',
@@ -180,18 +214,22 @@ class PaymentListItem(BaseModel):
 
 class PaymentListFilters(BaseModel):
     """Filters applied to the payment list query."""
-    company_id: str = Field(..., description="Company identifier used for filtering")
+    company_name: Optional[str] = Field(None, description="Company name used for filtering")
     status: Optional[str] = Field(None, description="Payment status filter (COMPLETED, PENDING, FAILED, REFUNDED) or None if not filtered")
 
     model_config = {
         'json_schema_extra': {
             'examples': [
                 {
-                    'company_id': 'cmp_00123',
+                    'company_name': 'Acme Health LLC',
                     'status': 'COMPLETED'
                 },
                 {
-                    'company_id': 'cmp_00123',
+                    'company_name': 'Acme Health LLC',
+                    'status': None
+                },
+                {
+                    'company_name': None,
                     'status': None
                 }
             ]
@@ -203,6 +241,7 @@ class PaymentListData(BaseModel):
     """Data payload containing payments list with pagination and filter information."""
     payments: List[PaymentListItem] = Field(..., description="Array of payment records matching the query")
     count: int = Field(..., ge=0, description="Number of payments returned in this response")
+    total: int = Field(..., ge=0, description="Total number of payments matching the filters (for pagination)")
     limit: int = Field(..., ge=1, le=100, description="Maximum number of results requested")
     skip: int = Field(..., ge=0, description="Number of results skipped (pagination offset)")
     filters: PaymentListFilters = Field(..., description="Filters applied to the query")
@@ -217,7 +256,6 @@ class PaymentListData(BaseModel):
                         'payments': [
                             {
                                 '_id': '68fad3c2a0f41c24037c4810',
-                                'company_id': 'cmp_00123',
                                 'company_name': 'Acme Health LLC',
                                 'user_email': 'test5@yahoo.com',
                                 'square_payment_id': 'payment_sq_1761244600756',
@@ -231,7 +269,6 @@ class PaymentListData(BaseModel):
                             },
                             {
                                 '_id': '68fad3c2a0f41c24037c4811',
-                                'company_id': 'cmp_00123',
                                 'company_name': 'Acme Health LLC',
                                 'user_email': 'admin@acmehealth.com',
                                 'square_payment_id': 'payment_sq_1761268674',
@@ -245,10 +282,11 @@ class PaymentListData(BaseModel):
                             }
                         ],
                         'count': 2,
+                        'total': 2,
                         'limit': 50,
                         'skip': 0,
                         'filters': {
-                            'company_id': 'cmp_00123',
+                            'company_name': 'Acme Health LLC',
                             'status': 'COMPLETED'
                         }
                     }
@@ -259,10 +297,11 @@ class PaymentListData(BaseModel):
                     'value': {
                         'payments': [],
                         'count': 0,
+                        'total': 0,
                         'limit': 50,
                         'skip': 0,
                         'filters': {
-                            'company_id': 'cmp_00999',
+                            'company_name': 'Unknown Company',
                             'status': None
                         }
                     }
@@ -276,7 +315,7 @@ class PaymentListResponse(BaseModel):
     """
     Standardized response wrapper for company payments list endpoint.
 
-    This is the root response object returned by GET /api/v1/payments/company/{company_id}
+    This is the root response object returned by GET /api/v1/payments/company/{company_name}
     """
     success: bool = Field(True, description="Indicates if the request was successful")
     data: PaymentListData = Field(..., description="Payment list data with pagination and filters")
@@ -293,7 +332,6 @@ class PaymentListResponse(BaseModel):
                             'payments': [
                                 {
                                     '_id': '68fad3c2a0f41c24037c4810',
-                                    'company_id': 'cmp_00123',
                                     'company_name': 'Acme Health LLC',
                                     'user_email': 'test5@yahoo.com',
                                     'square_payment_id': 'payment_sq_1761244600756',
@@ -307,10 +345,11 @@ class PaymentListResponse(BaseModel):
                                 }
                             ],
                             'count': 1,
+                            'total': 1,
                             'limit': 50,
                             'skip': 0,
                             'filters': {
-                                'company_id': 'cmp_00123',
+                                'company_name': 'Acme Health LLC',
                                 'status': 'COMPLETED'
                             }
                         }
@@ -324,10 +363,11 @@ class PaymentListResponse(BaseModel):
                         'data': {
                             'payments': [],
                             'count': 0,
+                            'total': 0,
                             'limit': 50,
                             'skip': 0,
                             'filters': {
-                                'company_id': 'cmp_00999',
+                                'company_name': 'Unknown Company',
                                 'status': None
                             }
                         }
@@ -531,5 +571,153 @@ class UserTransactionRefundRequest(BaseModel):
                 'idempotency_key': 'rfd_c8e1a4b5-1c7a-4f9b-9f2d-1a2b3c4d5e6f',
                 'reason': 'Customer request'
             }
+        }
+    }
+
+
+# ============================================================================
+# Admin Payment Models (for GET /api/v1/payments - Admin View)
+# ============================================================================
+
+class AllPaymentsFilters(BaseModel):
+    """Filters applied to the admin all payments query."""
+    status: Optional[str] = Field(None, description="Payment status filter (COMPLETED, PENDING, FAILED, REFUNDED) or None")
+    company_name: Optional[str] = Field(None, description="Company name filter or None")
+
+    model_config = {
+        'json_schema_extra': {
+            'examples': [
+                {
+                    'status': 'COMPLETED',
+                    'company_name': 'Acme Health LLC'
+                },
+                {
+                    'status': None,
+                    'company_name': None
+                }
+            ]
+        }
+    }
+
+
+class AllPaymentsData(BaseModel):
+    """Data payload for admin all payments list with pagination and filters."""
+    payments: List[PaymentListItem] = Field(..., description="Array of payment records matching the query")
+    count: int = Field(..., ge=0, description="Number of payments returned in this response")
+    total: int = Field(..., ge=0, description="Total number of payments matching filters (across all pages)")
+    limit: int = Field(..., ge=1, le=100, description="Maximum number of results requested")
+    skip: int = Field(..., ge=0, description="Number of results skipped (pagination offset)")
+    filters: AllPaymentsFilters = Field(..., description="Filters applied to the query")
+
+    model_config = {
+        'json_schema_extra': {
+            'examples': [
+                {
+                    'summary': 'Multiple payments across companies',
+                    'value': {
+                        'payments': [
+                            {
+                                '_id': '68fad3c2a0f41c24037c4810',
+                                'company_name': 'Acme Health LLC',
+                                'user_email': 'test5@yahoo.com',
+                                'square_payment_id': 'payment_sq_1761244600756',
+                                'amount': 1299,
+                                'currency': 'USD',
+                                'payment_status': 'COMPLETED',
+                                'refunds': [],
+                                'payment_date': '2025-10-24T01:17:54.544Z',
+                                'created_at': '2025-10-24T01:17:54.544Z',
+                                'updated_at': '2025-10-24T01:17:54.544Z'
+                            },
+                            {
+                                '_id': '68fad3c2a0f41c24037c4811',
+                                'company_name': 'TechCorp Inc',
+                                'user_email': 'admin@techcorp.com',
+                                'square_payment_id': 'payment_sq_1761268674',
+                                'amount': 2499,
+                                'currency': 'USD',
+                                'payment_status': 'COMPLETED',
+                                'refunds': [],
+                                'payment_date': '2025-10-24T02:30:15.123Z',
+                                'created_at': '2025-10-24T02:30:15.123Z',
+                                'updated_at': '2025-10-24T02:30:15.123Z'
+                            }
+                        ],
+                        'count': 2,
+                        'total': 125,
+                        'limit': 50,
+                        'skip': 0,
+                        'filters': {
+                            'status': 'COMPLETED',
+                            'company_name': None
+                        }
+                    }
+                }
+            ]
+        }
+    }
+
+
+class AllPaymentsResponse(BaseModel):
+    """
+    Standardized response wrapper for admin all payments endpoint.
+
+    This is the root response object returned by GET /api/v1/payments (admin only)
+    """
+    success: bool = Field(True, description="Indicates if the request was successful")
+    data: AllPaymentsData = Field(..., description="All payments data with pagination and filters")
+
+    model_config = {
+        'json_schema_extra': {
+            'examples': [
+                {
+                    'summary': 'Success with payments',
+                    'value': {
+                        'success': True,
+                        'data': {
+                            'payments': [
+                                {
+                                    '_id': '68fad3c2a0f41c24037c4810',
+                                    'company_name': 'Acme Health LLC',
+                                    'user_email': 'test5@yahoo.com',
+                                    'square_payment_id': 'payment_sq_1761244600756',
+                                    'amount': 1299,
+                                    'currency': 'USD',
+                                    'payment_status': 'COMPLETED',
+                                    'refunds': [],
+                                    'payment_date': '2025-10-24T01:17:54.544Z',
+                                    'created_at': '2025-10-24T01:17:54.544Z',
+                                    'updated_at': '2025-10-24T01:17:54.544Z'
+                                }
+                            ],
+                            'count': 1,
+                            'total': 125,
+                            'limit': 50,
+                            'skip': 0,
+                            'filters': {
+                                'status': None,
+                                'company_name': None
+                            }
+                        }
+                    }
+                },
+                {
+                    'summary': 'Empty result',
+                    'value': {
+                        'success': True,
+                        'data': {
+                            'payments': [],
+                            'count': 0,
+                            'total': 0,
+                            'limit': 50,
+                            'skip': 0,
+                            'filters': {
+                                'status': 'PENDING',
+                                'company_name': None
+                            }
+                        }
+                    }
+                }
+            ]
         }
     }

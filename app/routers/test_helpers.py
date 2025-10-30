@@ -50,7 +50,7 @@ async def reset_test_data():
         )
 
     # Clean ONLY test-specific collections
-    # CRITICAL: NEVER delete translation_transactions, user_transactions, payments, invoices - these are production data
+    # CRITICAL: NEVER delete production collections
     collections_cleaned = 0
     for collection_name in ["sessions", "users_login"]:
         try:
@@ -184,13 +184,13 @@ async def seed_subscription_data():
 
     created_count = 0
     updated_count = 0
-    company_ids_processed = []
+    companies_processed = []
 
     # For each company, create or update ONE subscription
     for idx, company in enumerate(companies):
-        # Get company_name (String, not ObjectId)
+        # Get company_name
         company_name = company.get("company_name", "Unknown")
-        company_ids_processed.append(company_name)
+        companies_processed.append(company_name)
 
         # Use template based on index (cycle through templates if more companies than templates)
         template = subscription_templates[idx % len(subscription_templates)]
@@ -218,7 +218,7 @@ async def seed_subscription_data():
         "message": "Subscription test data seeded successfully (ONE per company)",
         "subscriptions_created": created_count,
         "subscriptions_updated": updated_count,
-        "companies_processed": company_ids_processed,
+        "companies_processed": companies_processed,
         "timestamp": datetime.utcnow().isoformat()
     }
 
@@ -260,11 +260,10 @@ async def seed_translation_transactions():
         )
 
     # Build company mapping from actual database records
-    # Store both company_id (ObjectId) and company_name (String)
     company_data = []
     for company in companies:
         company_data.append({
-            "id": company["_id"],  # ObjectId
+            "id": company["_id"],
             "name": company.get("company_name", "Unknown Company")
         })
 
@@ -301,7 +300,6 @@ async def seed_translation_transactions():
 
     # Create transactions for each EXISTING company
     for company in company_data:
-        company_id = company["id"]  # ObjectId
         company_name = company["name"]
         num_transactions = random.randint(5, 10)
         company_transactions = []
@@ -374,8 +372,7 @@ async def seed_translation_transactions():
                 "error_message": error_message,
                 "created_at": created_at,
                 "updated_at": updated_at,
-                "company_id": company_id,  # ObjectId - REQUIRED for queries to work
-                "company_name": company_name,  # String - for display
+                "company_name": company_name,
                 "subscription_id": subscription_id,
                 "unit_type": "page"
             }

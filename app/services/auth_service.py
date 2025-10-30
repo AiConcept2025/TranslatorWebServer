@@ -72,7 +72,7 @@ class AuthService:
         logger.info(f"[AUTH] SUCCESS - Company found")
         logger.info(f"[AUTH]   Company Name: {company.get('company_name')}")
 
-        # Step 2: Find user by email, company_name, and user_name (MIGRATED from company_id)
+        # Step 2: Find user by email, company_name, and user_name
         logger.info(f"[AUTH] Step 2: Looking up user in database...")
         logger.info(f"[AUTH]   Searching with:")
         logger.info(f"[AUTH]     - email: {email}")
@@ -157,8 +157,7 @@ class AuthService:
             "user_id": user.get("user_id"),  # Required by JWT service
             "email": user.get("email"),
             "fullName": user.get("user_name"),  # Frontend expects this
-            "company": str(company_id),  # Frontend expects company_id (for payments query)
-            "company_id": str(company_id),  # Backend needs ObjectId as string for enterprise detection
+            "company": company_name,  # Frontend expects company (now using company_name)
             "company_name": company_name,  # JWT service expects this field name
             "permission_level": user.get("permission_level", "user")
         }
@@ -229,7 +228,7 @@ class AuthService:
     async def create_session(
         self,
         user_object_id: ObjectId,
-        company_id: ObjectId,
+        company_name: str,
         user_id: str
     ) -> Dict[str, Any]:
         """
@@ -237,7 +236,7 @@ class AuthService:
 
         Args:
             user_object_id: MongoDB ObjectId of the user
-            company_id: MongoDB ObjectId of the company
+            company_name: Company name
             user_id: User's string ID
 
         Returns:
@@ -255,7 +254,7 @@ class AuthService:
             "session_token": session_token,
             "user_id": user_id,
             "user_object_id": user_object_id,
-            "company_id": company_id,
+            "company_name": company_name,
             "created_at": created_at,
             "expires_at": expires_at,
             "is_active": True
@@ -372,7 +371,7 @@ class AuthService:
         logger.info(f"[AUTH INDIVIDUAL] Step 1: Looking up individual user by email...")
         user = await database.users.find_one({
             "email": email,
-            "company_id": None  # Individual users have no company
+            "company_name": None  # Individual users have no company
         })
 
         if user:
@@ -420,7 +419,7 @@ class AuthService:
                 "user_id": user_id,
                 "user_name": user_name,
                 "email": email,
-                "company_id": None,  # No company for individual users
+                "company_name": None,  # No company for individual users
                 "permission_level": "user",  # Individual users are regular users
                 "status": "active",
                 "created_at": now,

@@ -88,6 +88,34 @@ async def get_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
+    # Helper function to serialize usage periods
+    def serialize_usage_period(period):
+        """Convert datetime objects in usage period to ISO format and calculate derived fields."""
+        subscription_units = period.get("subscription_units", 0)
+        used_units = period.get("used_units", 0)
+        promotional_units = period.get("promotional_units", 0)
+
+        # Calculate total allocated units (subscription + promotional)
+        units_allocated = subscription_units + promotional_units
+
+        # Calculate remaining units
+        units_remaining = units_allocated - used_units
+
+        return {
+            # Backend fields
+            "subscription_units": subscription_units,
+            "used_units": used_units,
+            "promotional_units": promotional_units,
+            "price_per_unit": period.get("price_per_unit", 0.0),
+            "period_start": period["period_start"].isoformat() if period.get("period_start") else None,
+            "period_end": period["period_end"].isoformat() if period.get("period_end") else None,
+            # Frontend compatibility fields
+            "units_allocated": units_allocated,
+            "units_used": used_units,
+            "units_remaining": units_remaining,
+            "last_updated": period.get("updated_at", period.get("period_end")).isoformat() if period.get("updated_at") or period.get("period_end") else None
+        }
+
     return JSONResponse(
         content={
             "success": True,
@@ -103,7 +131,7 @@ async def get_subscription(
                 "start_date": subscription["start_date"].isoformat(),
                 "end_date": subscription["end_date"].isoformat() if subscription.get("end_date") else None,
                 "status": subscription["status"],
-                "usage_periods": subscription.get("usage_periods", []),
+                "usage_periods": [serialize_usage_period(period) for period in subscription.get("usage_periods", [])],
                 "created_at": subscription["created_at"].isoformat(),
                 "updated_at": subscription["updated_at"].isoformat()
             }
@@ -130,6 +158,34 @@ async def get_company_subscriptions(
         company_name, status=status, active_only=active_only
     )
 
+    # Helper function to serialize usage periods
+    def serialize_usage_period(period):
+        """Convert datetime objects in usage period to ISO format and calculate derived fields."""
+        subscription_units = period.get("subscription_units", 0)
+        used_units = period.get("used_units", 0)
+        promotional_units = period.get("promotional_units", 0)
+
+        # Calculate total allocated units (subscription + promotional)
+        units_allocated = subscription_units + promotional_units
+
+        # Calculate remaining units
+        units_remaining = units_allocated - used_units
+
+        return {
+            # Backend fields
+            "subscription_units": subscription_units,
+            "used_units": used_units,
+            "promotional_units": promotional_units,
+            "price_per_unit": period.get("price_per_unit", 0.0),
+            "period_start": period["period_start"].isoformat() if period.get("period_start") else None,
+            "period_end": period["period_end"].isoformat() if period.get("period_end") else None,
+            # Frontend compatibility fields
+            "units_allocated": units_allocated,
+            "units_used": used_units,
+            "units_remaining": units_remaining,
+            "last_updated": period.get("updated_at", period.get("period_end")).isoformat() if period.get("updated_at") or period.get("period_end") else None
+        }
+
     return JSONResponse(
         content={
             "success": True,
@@ -149,7 +205,7 @@ async def get_company_subscriptions(
                         "status": sub["status"],
                         "start_date": sub["start_date"].isoformat(),
                         "end_date": sub["end_date"].isoformat() if sub.get("end_date") else None,
-                        "usage_periods": sub.get("usage_periods", []),
+                        "usage_periods": [serialize_usage_period(period) for period in sub.get("usage_periods", [])],
                         "created_at": sub["created_at"].isoformat(),
                         "updated_at": sub["updated_at"].isoformat()
                     }
@@ -267,7 +323,7 @@ async def record_usage(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    # Check company name (migrated from company_id)
+    # Check company name
     user_company_name = current_user.get("company_name") or current_user.get("company")
     if user_company_name and subscription.get("company_name") != user_company_name:
         if current_user.get("permission_level") != "admin":

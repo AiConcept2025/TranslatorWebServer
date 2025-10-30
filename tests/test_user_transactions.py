@@ -898,6 +898,144 @@ class TestTranslateUserEndpoint:
 
 
 # ============================================================================
+# PART 4: INTEGRATION TESTS FOR USER TRANSACTION API ENDPOINTS
+# ============================================================================
+
+
+class TestUserTransactionAPIEndpoints:
+    """Integration tests for user transaction API endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_get_all_user_transactions_success(self, test_client):
+        """Test successful retrieval of all user transactions."""
+        # Mock database operations
+        with patch("app.routers.user_transactions.database") as mock_db:
+            mock_transactions = [
+                {
+                    "_id": "68fac0c78d81a68274ac140b",
+                    "user_name": "John Doe",
+                    "user_email": "john.doe@example.com",
+                    "document_url": "https://drive.google.com/file/d/1ABC/view",
+                    "number_of_units": 10,
+                    "unit_type": "page",
+                    "cost_per_unit": 0.15,
+                    "source_language": "en",
+                    "target_language": "es",
+                    "square_transaction_id": "SQR-1EC28E70F10B4D9E",
+                    "date": datetime.now(timezone.utc),
+                    "status": "completed",
+                    "total_cost": 1.5,
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            ]
+
+            mock_cursor = MagicMock()
+            mock_cursor.to_list = AsyncMock(return_value=mock_transactions)
+            mock_db.user_transactions.aggregate = Mock(return_value=mock_cursor)
+            mock_db.user_transactions.count_documents = AsyncMock(return_value=1)
+
+            # Execute
+            response = test_client.get("/api/v1/user-transactions")
+
+            # Verify
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert "data" in data
+            assert "transactions" in data["data"]
+            assert data["data"]["count"] == 1
+            assert data["data"]["total"] == 1
+            assert data["data"]["limit"] == 100
+            assert data["data"]["skip"] == 0
+
+    @pytest.mark.asyncio
+    async def test_get_all_user_transactions_with_status_filter(self, test_client):
+        """Test filtering all transactions by status."""
+        with patch("app.routers.user_transactions.database") as mock_db:
+            mock_transactions = [
+                {
+                    "_id": "id1",
+                    "user_email": "user1@example.com",
+                    "status": "completed",
+                    "created_at": datetime.now(timezone.utc),
+                }
+            ]
+
+            mock_cursor = MagicMock()
+            mock_cursor.to_list = AsyncMock(return_value=mock_transactions)
+            mock_db.user_transactions.aggregate = Mock(return_value=mock_cursor)
+            mock_db.user_transactions.count_documents = AsyncMock(return_value=1)
+
+            # Execute with status filter
+            response = test_client.get("/api/v1/user-transactions?status=completed")
+
+            # Verify
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert data["data"]["filters"]["status"] == "completed"
+
+            # Verify aggregation was called with correct filter
+            call_args = mock_db.user_transactions.aggregate.call_args[0][0]
+            assert {"$match": {"status": "completed"}} in call_args
+
+    @pytest.mark.asyncio
+    async def test_get_all_user_transactions_with_pagination(self, test_client):
+        """Test pagination parameters."""
+        with patch("app.routers.user_transactions.database") as mock_db:
+            mock_cursor = MagicMock()
+            mock_cursor.to_list = AsyncMock(return_value=[])
+            mock_db.user_transactions.aggregate = Mock(return_value=mock_cursor)
+            mock_db.user_transactions.count_documents = AsyncMock(return_value=0)
+
+            # Execute with pagination
+            response = test_client.get("/api/v1/user-transactions?limit=50&skip=10")
+
+            # Verify
+            assert response.status_code == 200
+            data = response.json()
+            assert data["data"]["limit"] == 50
+            assert data["data"]["skip"] == 10
+
+            # Verify aggregation pipeline includes skip and limit
+            call_args = mock_db.user_transactions.aggregate.call_args[0][0]
+            assert {"$skip": 10} in call_args
+            assert {"$limit": 50} in call_args
+
+    @pytest.mark.asyncio
+    async def test_get_all_user_transactions_invalid_status(self, test_client):
+        """Test rejection of invalid status filter."""
+        # Execute with invalid status
+        response = test_client.get("/api/v1/user-transactions?status=invalid")
+
+        # Verify
+        assert response.status_code == 400
+        data = response.json()
+        assert "Invalid transaction status" in data["detail"]
+
+    @pytest.mark.asyncio
+    async def test_get_all_user_transactions_empty_result(self, test_client):
+        """Test response when no transactions exist."""
+        with patch("app.routers.user_transactions.database") as mock_db:
+            mock_cursor = MagicMock()
+            mock_cursor.to_list = AsyncMock(return_value=[])
+            mock_db.user_transactions.aggregate = Mock(return_value=mock_cursor)
+            mock_db.user_transactions.count_documents = AsyncMock(return_value=0)
+
+            # Execute
+            response = test_client.get("/api/v1/user-transactions")
+
+            # Verify
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert data["data"]["transactions"] == []
+            assert data["data"]["count"] == 0
+            assert data["data"]["total"] == 0
+
+
+# ============================================================================
 # RUN TESTS
 # ============================================================================
 

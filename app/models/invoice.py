@@ -20,8 +20,7 @@ class InvoiceListItem(BaseModel):
     """
     id: str = Field(..., alias="_id", description="MongoDB ObjectId of the invoice record")
     invoice_id: Optional[str] = Field(None, description="Legacy invoice ID field (optional)")
-    company_id: str = Field(..., description="Company identifier (e.g., cmp_00123)")
-    company_name: Optional[str] = Field(None, description="Full company name (optional)")
+    company_name: str = Field(..., description="Company name (e.g., 'Acme Health LLC')")
     subscription_id: str = Field(..., description="Subscription identifier linked to this invoice")
     invoice_number: str = Field(..., description="Unique invoice number (e.g., INV-2025-001)")
     invoice_date: str = Field(..., description="Invoice date in ISO 8601 format")
@@ -39,7 +38,6 @@ class InvoiceListItem(BaseModel):
             'example': {
                 '_id': '671b2bc25c62a0b61c084b34',
                 'invoice_id': 'inv_legacy_001',
-                'company_id': 'cmp_00123',
                 'company_name': 'Acme Health LLC',
                 'subscription_id': 'sub_abc123',
                 'invoice_number': 'INV-2025-001',
@@ -58,18 +56,18 @@ class InvoiceListItem(BaseModel):
 
 class InvoiceListFilters(BaseModel):
     """Filters applied to the invoice list query."""
-    company_id: str = Field(..., description="Company identifier used for filtering")
+    company_name: str = Field(..., description="Company name used for filtering")
     status: Optional[str] = Field(None, description="Invoice status filter (sent, paid, overdue, cancelled) or None if not filtered")
 
     model_config = {
         'json_schema_extra': {
             'examples': [
                 {
-                    'company_id': 'cmp_00123',
+                    'company_name': 'Acme Health LLC',
                     'status': 'sent'
                 },
                 {
-                    'company_id': 'cmp_00123',
+                    'company_name': 'Acme Health LLC',
                     'status': None
                 }
             ]
@@ -96,7 +94,6 @@ class InvoiceListData(BaseModel):
                             {
                                 '_id': '671b2bc25c62a0b61c084b34',
                                 'invoice_id': 'inv_001',
-                                'company_id': 'cmp_00123',
                                 'company_name': 'Acme Health LLC',
                                 'subscription_id': 'sub_abc123',
                                 'invoice_number': 'INV-2025-001',
@@ -112,7 +109,6 @@ class InvoiceListData(BaseModel):
                             {
                                 '_id': '671b2bc25c62a0b61c084b35',
                                 'invoice_id': 'inv_002',
-                                'company_id': 'cmp_00123',
                                 'company_name': 'Acme Health LLC',
                                 'subscription_id': 'sub_abc123',
                                 'invoice_number': 'INV-2025-002',
@@ -130,7 +126,7 @@ class InvoiceListData(BaseModel):
                         'limit': 50,
                         'skip': 0,
                         'filters': {
-                            'company_id': 'cmp_00123',
+                            'company_name': 'Acme Health LLC',
                             'status': None
                         }
                     }
@@ -144,7 +140,7 @@ class InvoiceListData(BaseModel):
                         'limit': 50,
                         'skip': 0,
                         'filters': {
-                            'company_id': 'cmp_00999',
+                            'company_name': 'Unknown Company',
                             'status': None
                         }
                     }
@@ -158,7 +154,7 @@ class InvoiceListResponse(BaseModel):
     """
     Standardized response wrapper for company invoices list endpoint.
 
-    This is the root response object returned by GET /api/v1/invoices/company/{company_id}
+    This is the root response object returned by GET /api/v1/invoices/company/{company_name}
     """
     success: bool = Field(True, description="Indicates if the request was successful")
     data: InvoiceListData = Field(..., description="Invoice list data with pagination and filters")
@@ -176,7 +172,6 @@ class InvoiceListResponse(BaseModel):
                                 {
                                     '_id': '671b2bc25c62a0b61c084b34',
                                     'invoice_id': 'inv_001',
-                                    'company_id': 'cmp_00123',
                                     'company_name': 'Acme Health LLC',
                                     'subscription_id': 'sub_abc123',
                                     'invoice_number': 'INV-2025-001',
@@ -194,7 +189,7 @@ class InvoiceListResponse(BaseModel):
                             'limit': 50,
                             'skip': 0,
                             'filters': {
-                                'company_id': 'cmp_00123',
+                                'company_name': 'Acme Health LLC',
                                 'status': 'sent'
                             }
                         }
@@ -211,7 +206,7 @@ class InvoiceListResponse(BaseModel):
                             'limit': 50,
                             'skip': 0,
                             'filters': {
-                                'company_id': 'cmp_00999',
+                                'company_name': 'Unknown Company',
                                 'status': None
                             }
                         }

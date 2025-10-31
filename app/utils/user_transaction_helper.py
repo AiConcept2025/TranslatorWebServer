@@ -154,12 +154,33 @@ async def create_user_transaction(
         }
 
         # Insert into database
-        await collection.insert_one(transaction_doc)
+        try:
+            result = await collection.insert_one(transaction_doc)
 
-        logger.info(
-            f"[UserTransaction] Created transaction {square_transaction_id} "
-            f"for user {user_email} with status {status}, payment_status {payment_status}"
-        )
+            logger.info(
+                f"[UserTransaction] Created transaction {square_transaction_id} "
+                f"for user {user_email} with status {status}, payment_status {payment_status}, "
+                f"MongoDB ID: {result.inserted_id}"
+            )
+
+            # Debug: Verify insert by querying back
+            verification = await collection.find_one({"square_transaction_id": square_transaction_id})
+            if verification:
+                logger.info(
+                    f"[UserTransaction] VERIFIED: Transaction {square_transaction_id} "
+                    f"exists in database with ID {verification.get('_id')}"
+                )
+            else:
+                logger.warning(
+                    f"[UserTransaction] WARNING: Transaction {square_transaction_id} "
+                    f"was reported as inserted but cannot be found in database!"
+                )
+        except Exception as db_error:
+            logger.error(
+                f"[UserTransaction] FAILED to insert transaction {square_transaction_id}: {type(db_error).__name__}: {str(db_error)}",
+                exc_info=True
+            )
+            raise
 
         return square_transaction_id
 

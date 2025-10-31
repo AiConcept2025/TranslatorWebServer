@@ -7,7 +7,7 @@ with full MongoDB database authentication.
 Also provides simple user signup and login endpoints for users_login collection.
 """
 
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
@@ -28,8 +28,15 @@ from app.models.auth_models import (
 )
 from app.database.mongodb import database
 
+# Import slowapi for rate limiting
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/login", tags=["Authentication"])
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 
 class CorporateLoginRequest(BaseModel):
@@ -73,7 +80,8 @@ class IndividualLoginResponse(BaseModel):
 
 
 @router.post("/admin", response_model=AdminLoginResponse)
-async def admin_login(request: AdminLoginRequest):
+@limiter.limit("10/5minutes")  # Brute force protection: 10 attempts per 5 minutes
+async def admin_login(req: AdminLoginRequest, request: Request):
     """
     Admin login endpoint with MongoDB authentication.
 
@@ -111,14 +119,14 @@ async def admin_login(request: AdminLoginRequest):
     logger.info("=" * 80)
     logger.info(f"🔑 ADMIN LOGIN REQUEST")
     logger.info("=" * 80)
-    logger.info(f"  Email: {request.email}")
+    logger.info(f"  Email: {req.email}")
     logger.info("=" * 80)
 
     try:
         # Authenticate admin user via MongoDB iris-admins collection
         auth_result = await auth_service.authenticate_admin(
-            email=request.email,
-            password=request.password
+            email=req.email,
+            password=req.password
         )
 
         # Prepare successful response
@@ -149,7 +157,7 @@ async def admin_login(request: AdminLoginRequest):
         logger.warning(f"❌ ADMIN AUTHENTICATION FAILED")
         logger.warning("=" * 80)
         logger.warning(f"  Reason: {str(e)}")
-        logger.warning(f"  Email: {request.email}")
+        logger.warning(f"  Email: {req.email}")
         logger.warning("=" * 80)
 
         error_response = {
@@ -298,7 +306,8 @@ async def individual_login(request: IndividualLoginRequest):
 
 
 @router.post("/corporate", response_model=CorporateLoginResponse)
-async def corporate_login(request: CorporateLoginRequest):
+@limiter.limit("20/5minutes")  # Brute force protection: 20 attempts per 5 minutes
+async def corporate_login(req: CorporateLoginRequest, request: Request):
     """
     Corporate login endpoint with MongoDB authentication.
 
@@ -341,19 +350,19 @@ async def corporate_login(request: CorporateLoginRequest):
     logger.info("=" * 80)
     logger.info(f"🔐 CORPORATE LOGIN REQUEST")
     logger.info("=" * 80)
-    logger.info(f"  Company: {request.company_name}")
-    logger.info(f"  Email: {request.user_email}")
-    logger.info(f"  User: {request.user_full_name}")
-    logger.info(f"  Login Time: {request.login_date_time}")
+    logger.info(f"  Company: {req.company_name}")
+    logger.info(f"  Email: {req.user_email}")
+    logger.info(f"  User: {req.user_full_name}")
+    logger.info(f"  Login Time: {req.login_date_time}")
     logger.info("=" * 80)
 
     try:
         # Authenticate user via MongoDB
         auth_result = await auth_service.authenticate_user(
-            company_name=request.company_name,
-            password=request.password,
-            user_name=request.user_full_name,
-            email=request.user_email
+            company_name=req.company_name,
+            password=req.password,
+            user_name=req.user_full_name,
+            email=req.user_email
         )
 
         # Prepare successful response
@@ -366,7 +375,7 @@ async def corporate_login(request: CorporateLoginRequest):
                 "expiresIn": 28800,  # 8 hours in seconds
                 "expiresAt": auth_result["expires_at"],
                 "user": auth_result["user"],
-                "loginDateTime": request.login_date_time
+                "loginDateTime": req.login_date_time
             }
         }
 
@@ -385,8 +394,8 @@ async def corporate_login(request: CorporateLoginRequest):
         logger.warning(f"❌ AUTHENTICATION FAILED")
         logger.warning("=" * 80)
         logger.warning(f"  Reason: {str(e)}")
-        logger.warning(f"  Company: {request.company_name}")
-        logger.warning(f"  Email: {request.user_email}")
+        logger.warning(f"  Company: {req.company_name}")
+        logger.warning(f"  Email: {req.user_email}")
         logger.warning("=" * 80)
 
         error_response = {

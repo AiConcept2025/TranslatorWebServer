@@ -17,11 +17,11 @@ import asyncio
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions
+from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users
 from app.routers import payment_simplified as payment
 
-# Import middleware and utilities (will create these next)
-# Rate limiting removed per user request
+# Import middleware and utilities
+from app.middleware.rate_limiting import RateLimitMiddleware
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.encoding_fix import EncodingFixMiddleware
 from app.middleware.auth_middleware import get_current_user, get_optional_user
@@ -83,6 +83,7 @@ app = FastAPI(
 # app.add_middleware(RequestBodyDebugMiddleware)
 app.add_middleware(EncodingFixMiddleware)
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(RateLimitMiddleware)  # Rate limiting for brute force protection
 
 # Add CORS middleware LAST (so it's closest to the endpoint and processes ALL responses)
 app.add_middleware(
@@ -102,6 +103,7 @@ app.include_router(payments.router)  # Payment management API
 app.include_router(user_transactions.router)  # User transaction payment API
 app.include_router(invoices.router)  # Invoice management API
 app.include_router(translation_transactions.router)  # Translation transaction management API
+app.include_router(company_users.router)  # Company user management API
 app.include_router(auth.router)
 app.include_router(subscriptions.router)
 app.include_router(translate_user.router)
@@ -138,7 +140,6 @@ async def create_transaction_record(
     user_data: dict,
     request_data: TranslateRequest,
     subscription: Optional[dict],
-    company_id: Optional[str],
     company_name: Optional[str],
     price_per_page: float
 ) -> Optional[str]:
@@ -150,7 +151,6 @@ async def create_transaction_record(
         user_data: Current authenticated user data
         request_data: Original TranslateRequest
         subscription: Enterprise subscription (or None for individual)
-        company_id: Enterprise company_id (or None for individual)
         company_name: Enterprise company name (or None for individual)
         price_per_page: Calculated pricing (subscription or default)
 
@@ -187,14 +187,12 @@ async def create_transaction_record(
         }
 
         # Add enterprise-specific fields if applicable
-        if company_id and subscription:
-            transaction_doc["company_id"] = ObjectId(company_id)
+        if company_name and subscription:
             transaction_doc["company_name"] = company_name  # Store company name for folder lookup
             transaction_doc["subscription_id"] = ObjectId(str(subscription["_id"]))
             transaction_doc["unit_type"] = subscription.get("subscription_unit", "page")
         else:
             # Individual customer (no company or subscription)
-            transaction_doc["company_id"] = None
             transaction_doc["company_name"] = None
             transaction_doc["subscription_id"] = None
             transaction_doc["unit_type"] = "page"
@@ -236,7 +234,7 @@ async def translate_files(
     print("=" * 100)
     print("[RAW INCOMING DATA] /translate ENDPOINT REACHED - Pydantic validation passed")
     print(f"[RAW INCOMING DATA] Authenticated User: {current_user.get('email', 'N/A') if current_user else 'None (Individual User)'}")
-    print(f"[RAW INCOMING DATA] Company ID: {current_user.get('company_id', 'N/A') if current_user else 'None (Individual User)'}")
+    print(f"[RAW INCOMING DATA] Company Name: {current_user.get('company_name', 'N/A') if current_user else 'None (Individual User)'}")
     print(f"[RAW INCOMING DATA] Permission: {current_user.get('permission_level', 'N/A') if current_user else 'None (Individual User)'}")
     print(f"[RAW INCOMING DATA] Request Data:")
     print(f"[RAW INCOMING DATA]   - Customer Email: {request.email}")
@@ -261,7 +259,7 @@ async def translate_files(
         logging.info(msg)
         print(msg)
 
-    log_step("REQUEST RECEIVED", f"User: {current_user.get('email') if current_user else 'Individual'}, Company: {current_user.get('company_id') if current_user else 'None'}")
+    log_step("REQUEST RECEIVED", f"User: {current_user.get('email') if current_user else 'Individual'}, Company: {current_user.get('company_name') if current_user else 'None'}")
     log_step("REQUEST DETAILS", f"Email: {request.email}, {request.sourceLanguage} -> {request.targetLanguage}, Files: {len(request.files)}")
 
     # Log request payload
@@ -346,42 +344,51 @@ async def translate_files(
     from app.services.google_drive_service import google_drive_service
     from app.exceptions.google_drive_exceptions import GoogleDriveError, google_drive_error_to_http_exception
 
-    # Detect customer type (enterprise with company_id vs individual without)
+    # Detect customer type (enterprise with company_name vs individual without)
     # IMPORTANT: Do this BEFORE creating folders so we know which structure to create
-    company_id = current_user.get("company_id") if current_user else None
-    is_enterprise = company_id is not None
-    company_name = None
+    company_name = current_user.get("company_name") if current_user else None
+    is_enterprise = company_name is not None
 
     # Enhanced customer type logging
-    log_step("CUSTOMER TYPE DETECTED", f"{'Enterprise' if is_enterprise else 'Individual'} (company_id: {company_id})")
+    log_step("CUSTOMER TYPE DETECTED", f"{'Enterprise' if is_enterprise else 'Individual'} (company: {company_name})")
     logging.info(f"[CUSTOMER TYPE] {'✓ Enterprise' if is_enterprise else '○ Individual'}")
     logging.info(f"[CUSTOMER TYPE]   User Email: {request.email}")
     if current_user:
         logging.info(f"[CUSTOMER TYPE]   User ID: {current_user.get('user_id')}")
         logging.info(f"[CUSTOMER TYPE]   User Name: {current_user.get('user_name', 'N/A')}")
-    logging.info(f"[CUSTOMER TYPE]   Company ID: {company_id if company_id else 'N/A (individual customer)'}")
+    logging.info(f"[CUSTOMER TYPE]   Company Name: {company_name if company_name else 'N/A (individual customer)'}")
 
     print(f"\n👤 Customer Type: {'Enterprise' if is_enterprise else 'Individual'}")
     if is_enterprise:
-        print(f"   Company ID: {company_id}")
+        print(f"   Company: {company_name}")
     print(f"   User: {current_user.get('user_name', 'N/A')} ({request.email})")
 
-    # For enterprise users, get company name from database
+    # For enterprise users, validate company exists in database
+    # CRITICAL: Enforce referential integrity - REJECT if company doesn't exist
     if is_enterprise:
         from app.database import database
-        from bson import ObjectId
         try:
-            company_doc = await database.companies.find_one({"_id": ObjectId(company_id)})
-            if company_doc:
-                company_name = company_doc.get("company_name", "Unknown Company")
-                log_step("COMPANY NAME", f"Enterprise: {company_name}")
-                print(f"Enterprise company: {company_name}")
-            else:
-                log_step("COMPANY NOT FOUND", f"Using company_id as fallback: {company_id}")
-                company_name = f"Company_{company_id}"
+            company_doc = await database.company.find_one({"company_name": company_name})
+            if not company_doc:
+                # REJECT: Company doesn't exist in database
+                log_step("VALIDATION FAILED", f"Company does not exist: {company_name}")
+                logging.error(f"[VALIDATION] REJECTED: Company '{company_name}' does not exist in database")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid company: Company '{company_name}' does not exist in database. Cannot create translation for non-existent company."
+                )
+
+            log_step("COMPANY VALIDATED", f"Enterprise: {company_name}")
+            print(f"Enterprise company validated: {company_name}")
+        except HTTPException:
+            raise  # Re-raise HTTP exceptions
         except Exception as e:
             log_step("COMPANY LOOKUP FAILED", f"Error: {e}")
-            company_name = f"Company_{company_id}"
+            logging.error(f"[VALIDATION] Database error while validating company: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database error while validating company: {str(e)}"
+            )
 
     # Create Google Drive folder structure with proper hierarchy
     log_step("FOLDER CREATE START", f"Creating structure for: {request.email}")
@@ -522,14 +529,14 @@ async def translate_files(
     # For enterprise customers, get subscription pricing
     transaction_ids = []  # Changed from transaction_id to transaction_ids (array)
     if is_enterprise:
-        log_step("SUBSCRIPTION QUERY", f"Querying for company_id: {company_id}")
-        logging.info(f"Querying subscription for company_id: {company_id}")
+        log_step("SUBSCRIPTION QUERY", f"Querying for company: {company_name}")
+        logging.info(f"Querying subscription for company: {company_name}")
         from app.services.subscription_service import subscription_service
         from bson import ObjectId
         from datetime import datetime, timezone
 
         subscriptions = await subscription_service.get_company_subscriptions(
-            str(company_id),
+            company_name,
             active_only=True
         )
 
@@ -551,7 +558,7 @@ async def translate_files(
             status = subscription.get("status", "unknown")
 
             log_step("SUBSCRIPTION FOUND", f"Status: {status}, Price: ${price_per_page} per {subscription_unit}")
-            logging.info(f"[SUBSCRIPTION] ✓ Active subscription found for company {company_id}")
+            logging.info(f"[SUBSCRIPTION] ✓ Active subscription found for company {company_name}")
             logging.info(f"[SUBSCRIPTION]   Subscription ID: {subscription.get('_id')}")
             logging.info(f"[SUBSCRIPTION]   Status: {status}")
             logging.info(f"[SUBSCRIPTION]   Price: ${price_per_page} per {subscription_unit}")
@@ -566,8 +573,8 @@ async def translate_files(
             print(f"   Remaining Units: {total_remaining} {subscription_unit}s")
             print(f"   Price: ${price_per_page} per {subscription_unit}")
         else:
-            log_step("SUBSCRIPTION NOT FOUND", f"Using default pricing for company {company_id}")
-            logging.warning(f"[SUBSCRIPTION] ⚠ No active subscription found for company {company_id}, using default pricing")
+            log_step("SUBSCRIPTION NOT FOUND", f"Using default pricing for company {company_name}")
+            logging.warning(f"[SUBSCRIPTION] ⚠ No active subscription found for company {company_name}, using default pricing")
             print(f"\n⚠️  No active subscription found - will require payment")
             # Set default values for when subscription doesn't exist
             total_remaining = 0
@@ -611,7 +618,6 @@ async def translate_files(
                 user_data=current_user,
                 request_data=request,
                 subscription=subscription if is_enterprise else None,
-                company_id=company_id if is_enterprise else None,
                 company_name=company_name if is_enterprise else None,
                 price_per_page=price_per_page
             )

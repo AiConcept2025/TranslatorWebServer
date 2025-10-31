@@ -22,7 +22,9 @@ from app.models.auth_models import (
     UserSignupRequest,
     UserSignupResponse,
     UserLoginRequest,
-    UserLoginResponse
+    UserLoginResponse,
+    AdminLoginRequest,
+    AdminLoginResponse
 )
 from app.database.mongodb import database
 
@@ -68,6 +70,116 @@ class IndividualLoginResponse(BaseModel):
     message: str
     data: Optional[dict] = None
     error: Optional[dict] = None
+
+
+@router.post("/admin", response_model=AdminLoginResponse)
+async def admin_login(request: AdminLoginRequest):
+    """
+    Admin login endpoint with MongoDB authentication.
+
+    Authenticates against iris-admins collection with email + password.
+    Returns JWT token with permission_level="admin".
+
+    Request body:
+    ```json
+    {
+        "email": "admin@example.com",
+        "password": "adminpassword"
+    }
+    ```
+
+    Response:
+    ```json
+    {
+        "success": true,
+        "message": "Admin login successful",
+        "data": {
+            "authToken": "jwt-token-here",
+            "tokenType": "Bearer",
+            "expiresIn": 28800,
+            "expiresAt": "2025-10-15T18:30:00Z",
+            "user": {
+                "user_id": "admin_XXXXXXXX",
+                "user_name": "Admin Name",
+                "email": "admin@example.com",
+                "permission_level": "admin"
+            }
+        }
+    }
+    ```
+    """
+    logger.info("=" * 80)
+    logger.info(f"🔑 ADMIN LOGIN REQUEST")
+    logger.info("=" * 80)
+    logger.info(f"  Email: {request.email}")
+    logger.info("=" * 80)
+
+    try:
+        # Authenticate admin user via MongoDB iris-admins collection
+        auth_result = await auth_service.authenticate_admin(
+            email=request.email,
+            password=request.password
+        )
+
+        # Prepare successful response
+        response_content = {
+            "success": True,
+            "message": "Admin login successful",
+            "data": {
+                "authToken": auth_result["session_token"],
+                "tokenType": "Bearer",
+                "expiresIn": 28800,  # 8 hours in seconds
+                "expiresAt": auth_result["expires_at"],
+                "user": auth_result["user"]
+            }
+        }
+
+        logger.info("=" * 80)
+        logger.info("✅ ADMIN LOGIN SUCCESSFUL")
+        logger.info("=" * 80)
+        logger.info(f"  Admin: {auth_result['user']['email']}")
+        logger.info(f"  Permission: {auth_result['user']['permission_level']}")
+        logger.info(f"  Token expires: {auth_result['expires_at']}")
+        logger.info("=" * 80)
+
+        return JSONResponse(content=response_content)
+
+    except AuthenticationError as e:
+        logger.warning("=" * 80)
+        logger.warning(f"❌ ADMIN AUTHENTICATION FAILED")
+        logger.warning("=" * 80)
+        logger.warning(f"  Reason: {str(e)}")
+        logger.warning(f"  Email: {request.email}")
+        logger.warning("=" * 80)
+
+        error_response = {
+            "success": False,
+            "message": "Authentication failed",
+            "error": {
+                "code": "AUTH_FAILED",
+                "message": str(e)
+            }
+        }
+
+        raise HTTPException(status_code=401, detail=str(e))
+
+    except Exception as e:
+        logger.error("=" * 80)
+        logger.error(f"💥 ADMIN LOGIN UNEXPECTED ERROR")
+        logger.error("=" * 80)
+        logger.error(f"  Error: {e}", exc_info=True)
+        logger.error("=" * 80)
+
+        error_response = {
+            "success": False,
+            "message": "Login processing failed",
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred during admin login"
+            }
+        }
+
+        raise HTTPException(status_code=500, detail="Admin login processing failed")
 
 
 @router.post("/individual", response_model=IndividualLoginResponse)

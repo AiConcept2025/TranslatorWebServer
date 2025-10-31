@@ -4,6 +4,7 @@ User Transaction Payment API Router.
 This module provides payment management endpoints for user_transactions collection:
 - Creating user transactions with Square payment details
 - Processing refunds
+- Retrieving all user transactions (admin endpoint)
 - Retrieving transaction history by email
 - Updating payment status
 """
@@ -317,6 +318,158 @@ async def process_transaction_refund(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process refund: {str(e)}"
+        )
+
+
+@router.get("")
+async def get_all_user_transactions(
+    status: Optional[str] = Query(None, description="Filter by transaction status"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of transactions to return"),
+    skip: int = Query(0, ge=0, description="Number of transactions to skip for pagination")
+):
+    """
+    Get all user transactions from the database (admin endpoint).
+
+    Retrieves all transactions from the user_transactions collection, with optional status filtering
+    and pagination. Returns complete transaction records sorted by date (newest first).
+
+    **Query Parameters:**
+    - `status`: Optional filter by transaction status (completed | pending | failed)
+    - `limit`: Maximum number of results (1-1000, default: 100)
+    - `skip`: Number of results to skip for pagination (default: 0)
+
+    **Response Example:**
+    ```json
+    {
+        "success": true,
+        "data": {
+            "transactions": [
+                {
+                    "_id": "68fac0c78d81a68274ac140b",
+                    "user_name": "John Doe",
+                    "user_email": "john.doe@example.com",
+                    "document_url": "https://drive.google.com/file/d/1ABC_sample_document/view",
+                    "number_of_units": 10,
+                    "unit_type": "page",
+                    "cost_per_unit": 0.15,
+                    "source_language": "en",
+                    "target_language": "es",
+                    "square_transaction_id": "SQR-1EC28E70F10B4D9E",
+                    "date": "2025-10-23T23:56:55.438Z",
+                    "status": "completed",
+                    "total_cost": 1.5,
+                    "created_at": "2025-10-23T23:56:55.438Z",
+                    "updated_at": "2025-10-23T23:56:55.438Z"
+                }
+            ],
+            "count": 1,
+            "limit": 100,
+            "skip": 0,
+            "filters": {
+                "status": "completed"
+            }
+        }
+    }
+    ```
+
+    **Status Codes:**
+    - **200**: Transaction list retrieved (may be empty array)
+    - **400**: Invalid status filter value
+    - **500**: Internal server error
+
+    **cURL Examples:**
+    ```bash
+    # Get all transactions (first 100)
+    curl -X GET "http://localhost:8000/api/v1/user-transactions"
+
+    # Get all completed transactions
+    curl -X GET "http://localhost:8000/api/v1/user-transactions?status=completed"
+
+    # Get transactions with pagination (50 per page, page 2)
+    curl -X GET "http://localhost:8000/api/v1/user-transactions?limit=50&skip=50"
+
+    # Get up to 500 pending transactions
+    curl -X GET "http://localhost:8000/api/v1/user-transactions?status=pending&limit=500"
+    ```
+    """
+    try:
+        logger.info(
+            f"Retrieving all user transactions, "
+            f"status filter: {status or 'all'}, limit={limit}, skip={skip}"
+        )
+
+        # Validate status filter if provided
+        valid_statuses = ["completed", "pending", "failed"]
+        if status and status not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid transaction status. Must be one of: {', '.join(valid_statuses)}"
+            )
+
+        # Build query filter
+        match_stage = {}
+        if status:
+            match_stage["status"] = status
+
+        # Query transactions with sorting (newest first) using aggregation
+        from app.database.mongodb import database
+        from bson.decimal128 import Decimal128
+
+        pipeline = []
+        if match_stage:
+            pipeline.append({"$match": match_stage})
+
+        pipeline.extend([
+            {"$sort": {"created_at": -1}},  # Sort by created_at descending (newest first)
+            {"$skip": skip},
+            {"$limit": limit}
+        ])
+
+        # Execute aggregation
+        transactions = await database.user_transactions.aggregate(pipeline).to_list(length=None)
+
+        # Get total count for the query
+        total_count = await database.user_transactions.count_documents(match_stage)
+
+        # Convert ObjectIds and data types to JSON-serializable format
+        for txn in transactions:
+            if "_id" in txn:
+                txn["_id"] = str(txn["_id"])
+
+            # Convert Decimal128 fields to float
+            for key, value in list(txn.items()):
+                if isinstance(value, Decimal128):
+                    txn[key] = float(value.to_decimal())
+
+            # Convert datetime fields to ISO format strings
+            datetime_fields = ["date", "created_at", "updated_at", "payment_date"]
+            for field in datetime_fields:
+                if field in txn and hasattr(txn[field], "isoformat"):
+                    txn[field] = txn[field].isoformat()
+
+        logger.info(f"Found {len(transactions)} transactions (total: {total_count})")
+
+        return JSONResponse(content={
+            "success": True,
+            "data": {
+                "transactions": transactions,
+                "count": len(transactions),
+                "total": total_count,
+                "limit": limit,
+                "skip": skip,
+                "filters": {
+                    "status": status
+                }
+            }
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to retrieve all transactions: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve transactions: {str(e)}"
         )
 
 

@@ -145,7 +145,6 @@ class ContactPerson(BaseModel):
 class Company(BaseModel):
     """Company/customer information."""
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
-    company_id: Optional[str] = None
     company_name: str = Field(..., max_length=255)
     description: Optional[str] = None
     address: Optional[Address] = None
@@ -167,7 +166,7 @@ class CompanyUser(BaseModel):
     """Authorized users per company with role-based access."""
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
     user_id: str = Field(..., max_length=255)
-    company_id: PyObjectId
+    company_name: str = Field(..., max_length=255)
     user_name: str = Field(..., max_length=255)
     email: EmailStr
     phone_number: Optional[str] = Field(None, max_length=50)
@@ -191,7 +190,7 @@ class CompanyUser(BaseModel):
 class Subscription(BaseModel):
     """Customer subscription plans with usage tracking."""
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
-    company_id: PyObjectId
+    company_name: str = Field(..., max_length=255)
     subscription_unit: SubscriptionUnit
     units_per_subscription: int
     price_per_unit: float
@@ -217,7 +216,7 @@ class Subscription(BaseModel):
 class Invoice(BaseModel):
     """Customer invoices for billing."""
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
-    company_id: PyObjectId
+    company_name: str = Field(..., max_length=255)
     subscription_id: Optional[PyObjectId] = None
     invoice_number: str = Field(..., max_length=50)
     invoice_date: datetime
@@ -241,7 +240,7 @@ class Invoice(BaseModel):
 class Payment(BaseModel):
     """Square payment transactions."""
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
-    company_id: PyObjectId
+    company_name: str = Field(..., max_length=255)
     subscription_id: Optional[PyObjectId] = None
     square_payment_id: str = Field(..., max_length=255)
     square_order_id: Optional[str] = None
@@ -273,7 +272,7 @@ class Payment(BaseModel):
 class TranslationTransaction(BaseModel):
     """Translation job transactions with file metadata."""
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
-    company_id: PyObjectId
+    company_name: str = Field(..., max_length=255)
     subscription_id: Optional[PyObjectId] = None
     requester_id: str
     user_name: str

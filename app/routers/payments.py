@@ -10,10 +10,10 @@ This module provides comprehensive payment management endpoints for:
 Uses the existing payment_repository for database operations.
 """
 
-from fastapi import APIRouter, HTTPException, Query, Path, status
+from fastapi import APIRouter, HTTPException, Query, Path, status, Depends
 from fastapi.responses import JSONResponse
-from typing import List, Optional
-from datetime import datetime
+from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone
 from bson import ObjectId
 from pydantic import EmailStr
 import logging
@@ -26,9 +26,15 @@ from app.models.payment import (
     PaymentListResponse,
     PaymentListData,
     PaymentListFilters,
-    PaymentListItem
+    PaymentListItem,
+    AllPaymentsResponse,
+    AllPaymentsData,
+    AllPaymentsFilters,
+    SubscriptionPaymentCreate
 )
 from app.services.payment_repository import payment_repository
+from app.middleware.auth_middleware import get_admin_user
+from app.database.mongodb import database
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +74,12 @@ def payment_doc_to_response(payment_doc: dict) -> dict:
     if not payment_doc:
         return None
 
+    # Convert company_name if needed
+    company_name = payment_doc.get("company_name")
+
     return {
         "_id": str(payment_doc["_id"]),
-        "company_id": payment_doc.get("company_id"),
-        "company_name": payment_doc.get("company_name"),
+        "company_name": company_name,
         "user_email": payment_doc["user_email"],
         "square_payment_id": payment_doc["square_payment_id"],
         "amount": payment_doc["amount"],
@@ -84,6 +92,375 @@ def payment_doc_to_response(payment_doc: dict) -> dict:
     }
 
 
+@router.get(
+    "/",
+    response_model=AllPaymentsResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "Successfully retrieved all payments (admin only)",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "all_payments": {
+                            "summary": "All payments across companies",
+                            "description": "Example response showing payments from multiple companies",
+                            "value": {
+                                "success": True,
+                                "data": {
+                                    "payments": [
+                                        {
+                                            "_id": "68fad3c2a0f41c24037c4810",
+                                            "company_name": "Acme Health LLC",
+                                            "user_email": "test5@yahoo.com",
+                                            "square_payment_id": "payment_sq_1761244600756",
+                                            "amount": 1299,
+                                            "currency": "USD",
+                                            "payment_status": "COMPLETED",
+                                            "refunds": [],
+                                            "payment_date": "2025-10-24T01:17:54.544Z",
+                                            "created_at": "2025-10-24T01:17:54.544Z",
+                                            "updated_at": "2025-10-24T01:17:54.544Z"
+                                        },
+                                        {
+                                            "_id": "68fad3c2a0f41c24037c4811",
+                                            "company_name": "TechCorp Inc",
+                                            "user_email": "admin@techcorp.com",
+                                            "square_payment_id": "payment_sq_1761268674",
+                                            "amount": 2499,
+                                            "currency": "USD",
+                                            "payment_status": "COMPLETED",
+                                            "refunds": [],
+                                            "payment_date": "2025-10-24T02:30:15.123Z",
+                                            "created_at": "2025-10-24T02:30:15.123Z",
+                                            "updated_at": "2025-10-24T02:30:15.123Z"
+                                        }
+                                    ],
+                                    "count": 2,
+                                    "total": 2,
+                                    "limit": 50,
+                                    "skip": 0,
+                                    "filters": {
+                                        "status": None,
+                                        "company_name": None
+                                    }
+                                }
+                            }
+                        },
+                        "filtered_by_status": {
+                            "summary": "Filter by payment status",
+                            "description": "Only show completed payments",
+                            "value": {
+                                "success": True,
+                                "data": {
+                                    "payments": [
+                                        {
+                                            "_id": "68fad3c2a0f41c24037c4810",
+                                            "company_name": "Acme Health LLC",
+                                            "user_email": "test5@yahoo.com",
+                                            "square_payment_id": "payment_sq_1761244600756",
+                                            "amount": 1299,
+                                            "currency": "USD",
+                                            "payment_status": "COMPLETED",
+                                            "refunds": [],
+                                            "payment_date": "2025-10-24T01:17:54.544Z",
+                                            "created_at": "2025-10-24T01:17:54.544Z",
+                                            "updated_at": "2025-10-24T01:17:54.544Z"
+                                        }
+                                    ],
+                                    "count": 1,
+                                    "total": 120,
+                                    "limit": 50,
+                                    "skip": 0,
+                                    "filters": {
+                                        "status": "COMPLETED",
+                                        "company_name": None
+                                    }
+                                }
+                            }
+                        },
+                        "empty_result": {
+                            "summary": "No payments found",
+                            "description": "Response when no payments match the filters",
+                            "value": {
+                                "success": True,
+                                "data": {
+                                    "payments": [],
+                                    "count": 0,
+                                    "total": 0,
+                                    "limit": 50,
+                                    "skip": 0,
+                                    "filters": {
+                                        "status": "PENDING",
+                                        "company_name": None
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Unauthorized - Missing or invalid authentication",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Authorization header missing"
+                    }
+                }
+            }
+        },
+        403: {
+            "description": "Forbidden - Admin permissions required",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Admin permissions required"
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid request parameters",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Invalid payment status. Must be one of: COMPLETED, PENDING, FAILED, REFUNDED"
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Failed to retrieve payments: Database connection error"
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_all_payments(
+    admin_user: Dict[str, Any] = Depends(get_admin_user),
+    status_filter: Optional[str] = Query(
+        None,
+        description="Filter by payment status. Valid values: COMPLETED, PENDING, FAILED, REFUNDED",
+        example="COMPLETED",
+        alias="status"
+    ),
+    company_name: Optional[str] = Query(
+        None,
+        description="Filter by company name (e.g., Acme Health LLC)",
+        example="Acme Health LLC"
+    ),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=100,
+        description="Maximum number of results to return (1-100)",
+        example=50
+    ),
+    skip: int = Query(
+        0,
+        ge=0,
+        description="Number of results to skip for pagination",
+        example=0
+    ),
+    sort_by: str = Query(
+        "payment_date",
+        description="Field to sort by",
+        example="payment_date"
+    ),
+    sort_order: str = Query(
+        "desc",
+        description="Sort order: asc or desc",
+        pattern="^(asc|desc)$",
+        example="desc"
+    )
+):
+    """
+    Get all subscription payments (Admin Only).
+
+    This endpoint retrieves all payment records across all companies for admin dashboard viewing.
+    Requires admin authentication via Bearer token.
+
+    ## Authentication
+    **Required:** Admin user with Bearer token in Authorization header
+
+    ## Query Parameters
+    - **status** *(optional)*: Filter payments by status
+        - `COMPLETED`: Successfully processed payments
+        - `PENDING`: Payments awaiting processing
+        - `FAILED`: Failed payment attempts
+        - `REFUNDED`: Payments that have been refunded (fully or partially)
+    - **company_name** *(optional)*: Filter by specific company name
+    - **limit** *(default: 50)*: Maximum number of records to return (1-100)
+    - **skip** *(default: 0)*: Number of records to skip (for pagination)
+    - **sort_by** *(default: payment_date)*: Field to sort results by
+    - **sort_order** *(default: desc)*: Sort direction (asc or desc)
+
+    ## Response Structure
+    Returns a standardized response wrapper containing:
+    - **success**: Boolean indicating request success
+    - **data**: Object containing:
+        - **payments**: Array of payment records
+        - **count**: Number of payments in this response
+        - **total**: Total number of payments matching filters (across all pages)
+        - **limit**: Limit value used
+        - **skip**: Skip value used
+        - **filters**: Applied filter values
+
+    ## Payment Record Fields
+    Each payment record includes:
+    - **_id**: MongoDB ObjectId (24-character hex string)
+    - **square_payment_id**: Square payment identifier
+    - **square_order_id**: Square order identifier (if available)
+    - **square_customer_id**: Square customer identifier (if available)
+    - **company_name**: Full company name
+    - **subscription_id**: Subscription identifier (if available)
+    - **user_id**: User identifier
+    - **user_email**: Email of user who made the payment
+    - **amount**: Payment amount in cents (e.g., 1299 = $12.99)
+    - **currency**: Currency code (ISO 4217, e.g., USD)
+    - **payment_status**: Current payment status
+    - **payment_date**: Payment processing date (ISO 8601)
+    - **payment_method**: Payment method type (if available)
+    - **card_brand**: Card brand (e.g., Visa, Mastercard) if card payment
+    - **card_last_4**: Last 4 digits of card (if card payment)
+    - **receipt_url**: URL to payment receipt (if available)
+    - **refunds**: Array of refund objects (empty if no refunds)
+    - **created_at**: Record creation timestamp (ISO 8601)
+    - **updated_at**: Last update timestamp (ISO 8601)
+
+    ## Usage Examples
+
+    ### Get all payments (first 50)
+    ```bash
+    curl -X GET "http://localhost:8000/api/v1/payments" \\
+         -H "Authorization: Bearer {admin_token}"
+    ```
+
+    ### Filter by status (completed only)
+    ```bash
+    curl -X GET "http://localhost:8000/api/v1/payments?status=COMPLETED" \\
+         -H "Authorization: Bearer {admin_token}"
+    ```
+
+    ### Filter by company
+    ```bash
+    curl -X GET "http://localhost:8000/api/v1/payments?company_name=Acme%20Health%20LLC" \\
+         -H "Authorization: Bearer {admin_token}"
+    ```
+
+    ### Combine filters with pagination
+    ```bash
+    curl -X GET "http://localhost:8000/api/v1/payments?status=COMPLETED&company_name=Acme%20Health%20LLC&limit=20&skip=20" \\
+         -H "Authorization: Bearer {admin_token}"
+    ```
+
+    ### Sort by amount (ascending)
+    ```bash
+    curl -X GET "http://localhost:8000/api/v1/payments?sort_by=amount&sort_order=asc&limit=10" \\
+         -H "Authorization: Bearer {admin_token}"
+    ```
+
+    ## Notes
+    - Admin authentication is required - returns 401/403 if not authenticated or not admin
+    - Returns empty array if no payments match the criteria
+    - All datetime fields are returned in ISO 8601 format
+    - Amount is always in cents (divide by 100 for dollar amount)
+    - Total count reflects all matching records, not just the current page
+    - Refunds array shows detailed refund history when applicable
+    - Use pagination (skip/limit) for large datasets
+    """
+    try:
+        logger.info(
+            f"[ADMIN] Fetching all payments - Admin: {admin_user.get('email')}, "
+            f"status={status_filter}, company={company_name}, limit={limit}, skip={skip}, "
+            f"sort_by={sort_by}, sort_order={sort_order}"
+        )
+
+        # Validate status filter if provided
+        valid_statuses = ["COMPLETED", "PENDING", "FAILED", "REFUNDED"]
+        if status_filter and status_filter not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid payment status. Must be one of: {', '.join(valid_statuses)}"
+            )
+
+        # Validate sort_order
+        if sort_order not in ["asc", "desc"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid sort_order. Must be 'asc' or 'desc'"
+            )
+
+        # Get payments with total count from repository
+        payments, total_count = await payment_repository.get_all_payments(
+            status=status_filter,
+            company_name=company_name,
+            limit=limit,
+            skip=skip,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+
+        logger.info(
+            f"[ADMIN] Retrieved {len(payments)} payments (total: {total_count} matching filters)"
+        )
+
+        # Helper function to recursively convert ObjectIds and datetimes
+        def convert_doc(obj):
+            """Recursively convert ObjectIds and datetimes to JSON-serializable types."""
+            if isinstance(obj, ObjectId):
+                return str(obj)
+            elif isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, dict):
+                return {key: convert_doc(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_doc(item) for item in obj]
+            else:
+                return obj
+
+        # Convert all payments using recursive converter
+        converted_payments = [convert_doc(payment) for payment in payments]
+
+        # Build response
+        response_content = {
+            "success": True,
+            "data": {
+                "payments": converted_payments,
+                "count": len(converted_payments),
+                "total": total_count,
+                "limit": limit,
+                "skip": skip,
+                "filters": {
+                    "status": status_filter,
+                    "company_name": company_name
+                }
+            }
+        }
+
+        logger.info(
+            f"[ADMIN] Successfully prepared response with {len(converted_payments)} payments"
+        )
+
+        return JSONResponse(content=response_content)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[ADMIN] Failed to retrieve all payments: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve payments: {str(e)}"
+        )
+
+
 @router.post("/", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
 async def create_payment(payment_data: PaymentCreate):
     """
@@ -92,7 +469,6 @@ async def create_payment(payment_data: PaymentCreate):
     This endpoint creates a payment record in the database with Square payment details.
 
     **Required Fields:**
-    - `company_id`: Company identifier (e.g., "cmp_00123")
     - `company_name`: Company name
     - `user_email`: User email address
     - `square_payment_id`: Square payment ID
@@ -106,7 +482,6 @@ async def create_payment(payment_data: PaymentCreate):
     **Request Example:**
     ```json
     {
-        "company_id": "cmp_00123",
         "company_name": "Acme Health LLC",
         "user_email": "test5@yahoo.com",
         "square_payment_id": "payment_sq_1761244600756",
@@ -120,7 +495,6 @@ async def create_payment(payment_data: PaymentCreate):
     ```json
     {
         "_id": "68fad3c2a0f41c24037c4810",
-        "company_id": "cmp_00123",
         "company_name": "Acme Health LLC",
         "user_email": "test5@yahoo.com",
         "square_payment_id": "payment_sq_1761244600756",
@@ -144,7 +518,6 @@ async def create_payment(payment_data: PaymentCreate):
     curl -X POST "http://localhost:8000/api/v1/payments" \\
          -H "Content-Type: application/json" \\
          -d '{
-           "company_id": "cmp_00123",
            "company_name": "Acme Health LLC",
            "user_email": "test5@yahoo.com",
            "square_payment_id": "payment_sq_1761244600756",
@@ -180,6 +553,317 @@ async def create_payment(payment_data: PaymentCreate):
         )
 
 
+@router.post(
+    "/subscription",
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        201: {
+            "description": "Subscription payment created successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Subscription payment created successfully",
+                        "data": {
+                            "_id": "690023c7eb2bceb90e274140",
+                            "square_payment_id": "sq_payment_e59858fff0794614",
+                            "square_order_id": "sq_order_e4dce86988a847b1",
+                            "square_customer_id": "sq_customer_c7b478ddc7b04f99",
+                            "company_name": "Acme Translation Corp",
+                            "subscription_id": "690023c7eb2bceb90e274133",
+                            "user_id": "user_9db5a0fbe769442d",
+                            "user_email": "admin@acme.com",
+                            "amount": 9000,
+                            "currency": "USD",
+                            "payment_status": "COMPLETED",
+                            "payment_date": "2025-10-28T11:18:04.213Z",
+                            "payment_method": "card",
+                            "card_brand": "VISA",
+                            "card_last_4": "1234",
+                            "receipt_url": "https://squareup.com/receipt/preview/b05a59b993294167",
+                            "created_at": "2025-10-30T12:00:00.000Z",
+                            "updated_at": "2025-10-30T12:00:00.000Z"
+                        }
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid request data",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_subscription_id": {
+                            "summary": "Invalid subscription ID format",
+                            "value": {
+                                "detail": "Invalid subscription_id format: must be a valid 24-character ObjectId"
+                            }
+                        },
+                        "subscription_not_found": {
+                            "summary": "Subscription does not exist",
+                            "value": {
+                                "detail": "Subscription not found with ID: 690023c7eb2bceb90e274133"
+                            }
+                        },
+                        "company_mismatch": {
+                            "summary": "Company name does not match subscription",
+                            "value": {
+                                "detail": "Company name mismatch: provided 'Wrong Company' but subscription belongs to 'Acme Translation Corp'"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Unauthorized - Missing or invalid authentication",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Authorization header missing"
+                    }
+                }
+            }
+        },
+        403: {
+            "description": "Forbidden - Admin permissions required",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Admin permissions required"
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Failed to create subscription payment: Database connection error"
+                    }
+                }
+            }
+        }
+    }
+)
+async def create_subscription_payment(
+    payment_data: SubscriptionPaymentCreate,
+    admin_user: Dict[str, Any] = Depends(get_admin_user)
+):
+    """
+    Create a subscription payment record (Admin Only).
+
+    This endpoint allows admins to manually record a subscription payment in the database.
+    It validates that the subscription exists and matches the provided company name before
+    creating the payment record.
+
+    ## Authentication
+    **Required:** Admin user with Bearer token in Authorization header
+
+    ## Purpose
+    This endpoint is for **manual entry** of subscription payment records by administrators.
+    It does NOT:
+    - Process actual payments through Square
+    - Modify existing payment records
+    - Automatically create payments (that's a separate feature)
+
+    ## Validation Rules
+    1. **Subscription exists:** The subscription_id must reference an existing subscription
+    2. **Company match:** The company_name must match the subscription's company_name
+    3. **Valid ObjectId:** The subscription_id must be a valid 24-character MongoDB ObjectId
+    4. **Admin only:** Only authenticated admin users can create payment records
+
+    ## Request Body
+    All fields from the existing payment structure in the database are supported:
+    - **company_name** *(required)*: Company name (must match subscription)
+    - **subscription_id** *(required)*: Subscription ObjectId
+    - **square_payment_id** *(required)*: Square payment identifier
+    - **user_email** *(required)*: Email of user who made the payment
+    - **amount** *(required)*: Payment amount in cents (e.g., 9000 = $90.00)
+    - **square_order_id** *(optional)*: Square order ID
+    - **square_customer_id** *(optional)*: Square customer ID
+    - **user_id** *(optional)*: User identifier
+    - **currency** *(optional, default: "USD")*: Currency code
+    - **payment_status** *(optional, default: "COMPLETED")*: Payment status
+    - **payment_method** *(optional, default: "card")*: Payment method
+    - **card_brand** *(optional)*: Card brand (VISA, MASTERCARD, etc.)
+    - **card_last_4** *(optional)*: Last 4 digits of card
+    - **receipt_url** *(optional)*: URL to payment receipt
+    - **payment_date** *(optional)*: Payment date (defaults to current time)
+
+    ## Response Structure
+    Returns a standardized response containing:
+    - **success**: Boolean indicating request success
+    - **message**: Human-readable success message
+    - **data**: Complete payment record including:
+        - **_id**: MongoDB ObjectId of created payment
+        - All provided payment fields
+        - **created_at**: Timestamp when record was created
+        - **updated_at**: Timestamp when record was last updated
+
+    ## Usage Examples
+
+    ### Create subscription payment with all details
+    ```bash
+    curl -X POST "http://localhost:8000/api/v1/payments/subscription" \\
+         -H "Authorization: Bearer {admin_token}" \\
+         -H "Content-Type: application/json" \\
+         -d '{
+           "company_name": "Acme Translation Corp",
+           "subscription_id": "690023c7eb2bceb90e274133",
+           "square_payment_id": "sq_payment_e59858fff0794614",
+           "square_order_id": "sq_order_e4dce86988a847b1",
+           "square_customer_id": "sq_customer_c7b478ddc7b04f99",
+           "user_email": "admin@acme.com",
+           "user_id": "user_9db5a0fbe769442d",
+           "amount": 9000,
+           "currency": "USD",
+           "payment_status": "COMPLETED",
+           "payment_method": "card",
+           "card_brand": "VISA",
+           "card_last_4": "1234",
+           "receipt_url": "https://squareup.com/receipt/preview/b05a59b993294167"
+         }'
+    ```
+
+    ### Create minimal subscription payment
+    ```bash
+    curl -X POST "http://localhost:8000/api/v1/payments/subscription" \\
+         -H "Authorization: Bearer {admin_token}" \\
+         -H "Content-Type: application/json" \\
+         -d '{
+           "company_name": "Acme Translation Corp",
+           "subscription_id": "690023c7eb2bceb90e274133",
+           "square_payment_id": "sq_payment_abc123",
+           "user_email": "admin@acme.com",
+           "amount": 9000
+         }'
+    ```
+
+    ## Notes
+    - Admin authentication is required - returns 401/403 if not authenticated or not admin
+    - Timestamps (created_at, updated_at) are automatically generated
+    - payment_date defaults to current time if not provided
+    - All amount values are in cents (divide by 100 for dollar amount)
+    - Subscription validation ensures referential integrity with subscriptions collection
+    - This creates NEW payment records only - does not modify existing records
+    """
+    try:
+        logger.info(
+            f"[ADMIN] Creating subscription payment - Admin: {admin_user.get('email')}, "
+            f"Company: {payment_data.company_name}, Subscription: {payment_data.subscription_id}, "
+            f"Amount: {payment_data.amount} cents"
+        )
+
+        # Validate subscription_id format
+        try:
+            subscription_obj_id = ObjectId(payment_data.subscription_id)
+        except Exception:
+            logger.error(f"[ADMIN] Invalid subscription_id format: {payment_data.subscription_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid subscription_id format: must be a valid 24-character ObjectId"
+            )
+
+        # Validate subscription exists
+        subscription = await database.subscriptions.find_one({"_id": subscription_obj_id})
+        if not subscription:
+            logger.error(f"[ADMIN] Subscription not found: {payment_data.subscription_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Subscription not found with ID: {payment_data.subscription_id}"
+            )
+
+        # Validate company name matches subscription
+        subscription_company = subscription.get("company_name")
+        if subscription_company != payment_data.company_name:
+            logger.error(
+                f"[ADMIN] Company name mismatch - provided: {payment_data.company_name}, "
+                f"subscription has: {subscription_company}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Company name mismatch: provided '{payment_data.company_name}' "
+                       f"but subscription belongs to '{subscription_company}'"
+            )
+
+        # Create payment document with all fields
+        now = datetime.now(timezone.utc)
+        payment_doc = {
+            "square_payment_id": payment_data.square_payment_id,
+            "square_order_id": payment_data.square_order_id,
+            "square_customer_id": payment_data.square_customer_id,
+            "company_name": payment_data.company_name,
+            "subscription_id": payment_data.subscription_id,
+            "user_id": payment_data.user_id,
+            "user_email": payment_data.user_email,
+            "amount": payment_data.amount,
+            "currency": payment_data.currency,
+            "payment_status": payment_data.payment_status,
+            "payment_date": payment_data.payment_date or now,
+            "payment_method": payment_data.payment_method,
+            "card_brand": payment_data.card_brand,
+            "card_last_4": payment_data.card_last_4,
+            "receipt_url": payment_data.receipt_url,
+            "refunds": [],  # Initialize empty refunds array
+            "created_at": now,
+            "updated_at": now
+        }
+
+        # Remove None values to keep document clean
+        payment_doc = {k: v for k, v in payment_doc.items() if v is not None}
+
+        # Insert into MongoDB
+        result = await database.payments.insert_one(payment_doc)
+        payment_id = str(result.inserted_id)
+
+        logger.info(
+            f"[ADMIN] Subscription payment created successfully - "
+            f"Payment ID: {payment_id}, Square ID: {payment_data.square_payment_id}"
+        )
+
+        # Retrieve the created payment to return complete document
+        created_payment = await database.payments.find_one({"_id": result.inserted_id})
+
+        # Convert ObjectId and datetime fields for JSON response
+        def convert_doc(obj):
+            """Recursively convert ObjectIds and datetimes to JSON-serializable types."""
+            if isinstance(obj, ObjectId):
+                return str(obj)
+            elif isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, dict):
+                return {key: convert_doc(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_doc(item) for item in obj]
+            else:
+                return obj
+
+        created_payment_json = convert_doc(created_payment)
+
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED,
+            content={
+                "success": True,
+                "message": "Subscription payment created successfully",
+                "data": created_payment_json
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"[ADMIN] Failed to create subscription payment: {e}",
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create subscription payment: {str(e)}"
+        )
+
+
 @router.get("/{payment_id}", response_model=PaymentResponse)
 async def get_payment_by_id(
     payment_id: str = Path(..., description="MongoDB ObjectId of the payment")
@@ -194,7 +878,7 @@ async def get_payment_by_id(
 
     **Response:**
     - **200**: Payment found and returned
-    - **400**: Invalid payment_id format
+    - **400**: Invalid payment ID format
     - **404**: Payment not found
     - **500**: Internal server error
 
@@ -204,7 +888,7 @@ async def get_payment_by_id(
     ```
     """
     try:
-        validate_object_id(payment_id, "payment_id")
+        validate_object_id(payment_id, "payment ID")
 
         logger.info(f"Fetching payment by ID: {payment_id}")
         payment_doc = await payment_repository.get_payment_by_id(payment_id)
@@ -275,7 +959,7 @@ async def get_payment_by_square_id(
 
 
 @router.get(
-    "/company/{company_id}",
+    "/company/{company_name}",
     response_model=PaymentListResponse,
     status_code=status.HTTP_200_OK,
     responses={
@@ -293,7 +977,6 @@ async def get_payment_by_square_id(
                                     "payments": [
                                         {
                                             "_id": "68fad3c2a0f41c24037c4810",
-                                            "company_id": "cmp_00123",
                                             "company_name": "Acme Health LLC",
                                             "user_email": "test5@yahoo.com",
                                             "square_payment_id": "payment_sq_1761244600756",
@@ -307,7 +990,6 @@ async def get_payment_by_square_id(
                                         },
                                         {
                                             "_id": "68fad3c2a0f41c24037c4811",
-                                            "company_id": "cmp_00123",
                                             "company_name": "Acme Health LLC",
                                             "user_email": "admin@acmehealth.com",
                                             "square_payment_id": "payment_sq_1761268674",
@@ -321,7 +1003,6 @@ async def get_payment_by_square_id(
                                         },
                                         {
                                             "_id": "68fad3c2a0f41c24037c4812",
-                                            "company_id": "cmp_00123",
                                             "company_name": "Acme Health LLC",
                                             "user_email": "billing@acmehealth.com",
                                             "square_payment_id": "payment_sq_1761278900",
@@ -338,7 +1019,7 @@ async def get_payment_by_square_id(
                                     "limit": 50,
                                     "skip": 0,
                                     "filters": {
-                                        "company_id": "cmp_00123",
+                                        "company_name": "Acme Health LLC",
                                         "status": "COMPLETED"
                                     }
                                 }
@@ -355,7 +1036,7 @@ async def get_payment_by_square_id(
                                     "limit": 50,
                                     "skip": 0,
                                     "filters": {
-                                        "company_id": "cmp_00999",
+                                        "company_name": "Unknown Company",
                                         "status": None
                                     }
                                 }
@@ -370,7 +1051,6 @@ async def get_payment_by_square_id(
                                     "payments": [
                                         {
                                             "_id": "68fad3c2a0f41c24037c4820",
-                                            "company_id": "cmp_00123",
                                             "company_name": "Acme Health LLC",
                                             "user_email": "refund@example.com",
                                             "square_payment_id": "payment_sq_1761300000",
@@ -396,7 +1076,7 @@ async def get_payment_by_square_id(
                                     "limit": 50,
                                     "skip": 0,
                                     "filters": {
-                                        "company_id": "cmp_00123",
+                                        "company_name": "Acme Health LLC",
                                         "status": "REFUNDED"
                                     }
                                 }
@@ -411,8 +1091,8 @@ async def get_payment_by_square_id(
             "content": {
                 "application/json": {
                     "examples": {
-                        "invalid_company_id": {
-                            "summary": "Invalid company_id format",
+                        "invalid_company_name": {
+                            "summary": "Invalid company name format",
                             "value": {
                                 "detail": "Invalid company identifier format"
                             }
@@ -432,7 +1112,7 @@ async def get_payment_by_square_id(
             "content": {
                 "application/json": {
                     "example": {
-                        "detail": "Company not found: cmp_00999"
+                        "detail": "Company not found: Unknown Company"
                     }
                 }
             }
@@ -450,10 +1130,10 @@ async def get_payment_by_square_id(
     }
 )
 async def get_company_payments(
-    company_id: str = Path(
+    company_name: str = Path(
         ...,
-        description="Company identifier (e.g., cmp_00123)",
-        example="cmp_00123"
+        description="Company name (e.g., Acme Health LLC)",
+        example="Acme Health LLC"
     ),
     status_filter: Optional[str] = Query(
         None,
@@ -478,11 +1158,11 @@ async def get_company_payments(
     """
     Get all payments for a company with filtering and pagination.
 
-    Retrieves a list of payment records associated with a specific company ID.
+    Retrieves a list of payment records associated with a specific company name.
     Results can be filtered by payment status and paginated using limit/skip parameters.
 
     ## Path Parameters
-    - **company_id**: Company identifier (format: cmp_XXXXX)
+    - **company_name**: Company name (e.g., Acme Health LLC)
 
     ## Query Parameters
     - **status** *(optional)*: Filter payments by status
@@ -506,7 +1186,6 @@ async def get_company_payments(
     ## Payment Record Fields
     Each payment record includes:
     - **_id**: MongoDB ObjectId (24-character hex string)
-    - **company_id**: Company identifier
     - **company_name**: Full company name
     - **user_email**: Email of user who made the payment
     - **square_payment_id**: Square payment identifier
@@ -522,22 +1201,22 @@ async def get_company_payments(
 
     ### Get all completed payments
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/payments/company/cmp_00123?status=COMPLETED&limit=20"
+    curl -X GET "http://localhost:8000/api/v1/payments/company/Acme%20Health%20LLC?status=COMPLETED&limit=20"
     ```
 
     ### Get second page of payments (pagination)
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/payments/company/cmp_00123?skip=20&limit=20"
+    curl -X GET "http://localhost:8000/api/v1/payments/company/Acme%20Health%20LLC?skip=20&limit=20"
     ```
 
     ### Get all payments regardless of status
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/payments/company/cmp_00123"
+    curl -X GET "http://localhost:8000/api/v1/payments/company/Acme%20Health%20LLC"
     ```
 
     ### Filter by refunded payments only
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/payments/company/cmp_00123?status=REFUNDED"
+    curl -X GET "http://localhost:8000/api/v1/payments/company/Acme%20Health%20LLC?status=REFUNDED"
     ```
 
     ## Notes
@@ -547,52 +1226,72 @@ async def get_company_payments(
     - Refunds array shows detailed refund history when applicable
     """
     try:
-        logger.info(f"Fetching payments for company {company_id}, status={status_filter}, limit={limit}, skip={skip}")
+        print(f"[PAYMENTS DEBUG] Fetching payments for company {company_name}, status={status_filter}, limit={limit}, skip={skip}")
+        logger.info(f"Fetching payments for company {company_name}, status={status_filter}, limit={limit}, skip={skip}")
 
         payments = await payment_repository.get_payments_by_company(
-            company_id=company_id,
+            company_name=company_name,
             status=status_filter,
             limit=limit,
             skip=skip
         )
 
-        # Convert ObjectIds and datetime objects to JSON-serializable format
-        for payment in payments:
-            payment["_id"] = str(payment["_id"])
-            # Convert datetime objects to ISO format strings
-            if "created_at" in payment and hasattr(payment["created_at"], "isoformat"):
-                payment["created_at"] = payment["created_at"].isoformat()
-            if "updated_at" in payment and hasattr(payment["updated_at"], "isoformat"):
-                payment["updated_at"] = payment["updated_at"].isoformat()
-            if "payment_date" in payment and hasattr(payment["payment_date"], "isoformat"):
-                payment["payment_date"] = payment["payment_date"].isoformat()
+        print(f"[PAYMENTS DEBUG] Retrieved {len(payments)} payments from repository")
+        logger.info(f"Retrieved {len(payments)} payments from repository")
 
-            # Convert datetime objects in refunds array
-            if "refunds" in payment and isinstance(payment["refunds"], list):
-                for refund in payment["refunds"]:
-                    if "created_at" in refund and hasattr(refund["created_at"], "isoformat"):
-                        refund["created_at"] = refund["created_at"].isoformat()
+        # Helper function to recursively convert ObjectIds and datetimes
+        def convert_doc(obj):
+            """Recursively convert ObjectIds and datetimes to JSON-serializable types."""
+            if isinstance(obj, ObjectId):
+                return str(obj)
+            elif isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, dict):
+                return {key: convert_doc(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_doc(item) for item in obj]
+            else:
+                return obj
 
-        logger.info(f"Found {len(payments)} payments for company {company_id}")
+        # Convert all payments using recursive converter
+        for idx, payment in enumerate(payments):
+            print(f"[PAYMENTS DEBUG] Processing payment {idx + 1}")
+            # Apply recursive conversion
+            payments[idx] = convert_doc(payment)
+            print(f"[PAYMENTS DEBUG] Payment {idx + 1} converted successfully")
 
-        return JSONResponse(content={
-            "success": True,
-            "data": {
-                "payments": payments,
-                "count": len(payments),
-                "limit": limit,
-                "skip": skip,
-                "filters": {
-                    "company_id": company_id,
-                    "status": status_filter
+        logger.info(f"Found {len(payments)} payments for company {company_name}, creating response")
+
+        # Try to serialize the response before returning it
+        import json
+        try:
+            response_content = {
+                "success": True,
+                "data": {
+                    "payments": payments,
+                    "count": len(payments),
+                    "limit": limit,
+                    "skip": skip,
+                    "filters": {
+                        "company_name": company_name,
+                        "status": status_filter
+                    }
                 }
             }
-        })
+            # Test serialization
+            test_json = json.dumps(response_content, default=str)
+            logger.info(f"Response serialization successful, size: {len(test_json)} bytes")
+        except Exception as json_err:
+            logger.error(f"JSON serialization test failed: {json_err}")
+            logger.error(f"Problematic data: {payments}")
+            raise
+
+        return JSONResponse(content=response_content)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to retrieve payments for company {company_id}: {e}", exc_info=True)
+        logger.error(f"Failed to retrieve payments for company {company_name}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve company payments: {str(e)}"
@@ -772,7 +1471,6 @@ async def process_refund(
         "data": {
             "payment": {
                 "_id": "68fad3c2a0f41c24037c4810",
-                "company_id": "cmp_00123",
                 "company_name": "Acme Health LLC",
                 "user_email": "test5@yahoo.com",
                 "square_payment_id": "payment_sq_1761268674_852e5fe3",
@@ -891,9 +1589,9 @@ async def process_refund(
         )
 
 
-@router.get("/company/{company_id}/stats")
+@router.get("/company/{company_name}/stats")
 async def get_company_payment_stats(
-    company_id: str = Path(..., description="Company ObjectId"),
+    company_name: str = Path(..., description="Company name"),
     start_date: Optional[datetime] = Query(None, description="Start date filter (ISO 8601)"),
     end_date: Optional[datetime] = Query(None, description="End date filter (ISO 8601)")
 ):
@@ -904,7 +1602,7 @@ async def get_company_payment_stats(
     amounts, refunds, and success/failure rates.
 
     **Path Parameters:**
-    - `company_id`: Company MongoDB ObjectId
+    - `company_name`: Company name
 
     **Query Parameters:**
     - `start_date`: Filter payments from this date (ISO 8601 format, optional)
@@ -912,7 +1610,7 @@ async def get_company_payment_stats(
 
     **Response:**
     - **200**: Payment statistics
-    - **400**: Invalid company_id or date format
+    - **400**: Invalid company name or date format
     - **500**: Internal server error
 
     **Response Format:**
@@ -920,7 +1618,7 @@ async def get_company_payment_stats(
     {
         "success": true,
         "data": {
-            "company_id": "68ec42a48ca6a1781d9fe5c2",
+            "company_name": "Acme Health LLC",
             "total_payments": 125,
             "total_amount_cents": 1325000,
             "total_amount_dollars": 13250.00,
@@ -940,19 +1638,17 @@ async def get_company_payment_stats(
     **Example:**
     ```bash
     # Get all-time stats
-    curl -X GET "http://localhost:8000/api/v1/payments/company/68ec42a48ca6a1781d9fe5c2/stats"
+    curl -X GET "http://localhost:8000/api/v1/payments/company/Acme%20Health%20LLC/stats"
 
     # Get stats for date range
-    curl -X GET "http://localhost:8000/api/v1/payments/company/68ec42a48ca6a1781d9fe5c2/stats?start_date=2025-01-01T00:00:00Z&end_date=2025-12-31T23:59:59Z"
+    curl -X GET "http://localhost:8000/api/v1/payments/company/Acme%20Health%20LLC/stats?start_date=2025-01-01T00:00:00Z&end_date=2025-12-31T23:59:59Z"
     ```
     """
     try:
-        validate_object_id(company_id, "company_id")
-
-        logger.info(f"Fetching payment stats for company {company_id}, start={start_date}, end={end_date}")
+        logger.info(f"Fetching payment stats for company {company_name}, start={start_date}, end={end_date}")
 
         stats = await payment_repository.get_payment_stats_by_company(
-            company_id=company_id,
+            company_name=company_name,
             start_date=start_date,
             end_date=end_date
         )
@@ -962,12 +1658,12 @@ async def get_company_payment_stats(
         completed_payments = stats.get("completed_payments", 0)
         success_rate = (completed_payments / total_payments * 100) if total_payments > 0 else 0.0
 
-        logger.info(f"Retrieved stats for company {company_id}: {total_payments} total payments")
+        logger.info(f"Retrieved stats for company {company_name}: {total_payments} total payments")
 
         return JSONResponse(content={
             "success": True,
             "data": {
-                "company_id": company_id,
+                "company_name": company_name,
                 **stats,
                 "success_rate": round(success_rate, 2),
                 "date_range": {
@@ -980,7 +1676,7 @@ async def get_company_payment_stats(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to retrieve stats for company {company_id}: {e}", exc_info=True)
+        logger.error(f"Failed to retrieve stats for company {company_name}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve payment statistics: {str(e)}"

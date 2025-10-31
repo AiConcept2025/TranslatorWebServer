@@ -34,8 +34,7 @@ class TranslationTransactionListItem(BaseModel):
     error_message: str = Field(default="", description="Error message if status is failed")
     created_at: str = Field(..., description="Record creation timestamp in ISO 8601 format")
     updated_at: str = Field(..., description="Record update timestamp in ISO 8601 format")
-    company_id: Optional[str] = Field(None, description="Company identifier (ObjectId) if enterprise customer")
-    company_name: Optional[str] = Field(None, description="Company name (from $lookup) if enterprise customer")
+    company_name: Optional[str] = Field(None, description="Company name if enterprise customer")
     subscription_id: Optional[str] = Field(None, description="Subscription identifier (ObjectId) if enterprise customer")
     unit_type: str = Field(..., description="Unit type for billing: page | word")
 
@@ -59,7 +58,6 @@ class TranslationTransactionListItem(BaseModel):
                 'error_message': '',
                 'created_at': '2025-10-26T13:15:10.913+00:00',
                 'updated_at': '2025-10-26T13:15:10.913+00:00',
-                'company_id': '68ec42a48ca6a1781d9fe5c9',
                 'company_name': 'Iris Trading',
                 'subscription_id': '68fa6add22b0c739f4f4b273',
                 'unit_type': 'page'
@@ -70,18 +68,18 @@ class TranslationTransactionListItem(BaseModel):
 
 class TranslationTransactionListFilters(BaseModel):
     """Filters applied to the translation transaction list query."""
-    company_id: str = Field(..., description="Company identifier used for filtering")
+    company_name: str = Field(..., description="Company name used for filtering")
     status: Optional[str] = Field(None, description="Transaction status filter (started, confirmed, pending, failed) or None if not filtered")
 
     model_config = {
         'json_schema_extra': {
             'examples': [
                 {
-                    'company_id': '68ec42a48ca6a1781d9fe5c9',
+                    'company_name': 'Iris Trading',
                     'status': 'started'
                 },
                 {
-                    'company_id': '68ec42a48ca6a1781d9fe5c9',
+                    'company_name': 'Iris Trading',
                     'status': None
                 }
             ]
@@ -122,7 +120,6 @@ class TranslationTransactionListData(BaseModel):
                                 'error_message': '',
                                 'created_at': '2025-10-26T13:15:10.913+00:00',
                                 'updated_at': '2025-10-26T13:15:10.913+00:00',
-                                'company_id': '68ec42a48ca6a1781d9fe5c9',
                                 'company_name': 'Iris Trading',
                                 'subscription_id': '68fa6add22b0c739f4f4b273',
                                 'unit_type': 'page'
@@ -144,7 +141,6 @@ class TranslationTransactionListData(BaseModel):
                                 'error_message': '',
                                 'created_at': '2025-10-25T10:30:00.000+00:00',
                                 'updated_at': '2025-10-25T11:00:00.000+00:00',
-                                'company_id': '68ec42a48ca6a1781d9fe5c9',
                                 'company_name': 'Iris Trading',
                                 'subscription_id': '68fa6add22b0c739f4f4b273',
                                 'unit_type': 'page'
@@ -154,7 +150,7 @@ class TranslationTransactionListData(BaseModel):
                         'limit': 50,
                         'skip': 0,
                         'filters': {
-                            'company_id': '68ec42a48ca6a1781d9fe5c9',
+                            'company_name': 'Iris Trading',
                             'status': None
                         }
                     }
@@ -168,7 +164,7 @@ class TranslationTransactionListData(BaseModel):
                         'limit': 50,
                         'skip': 0,
                         'filters': {
-                            'company_id': '68ec42a48ca6a1781d9fe999',
+                            'company_name': 'Unknown Company',
                             'status': None
                         }
                     }
@@ -182,7 +178,7 @@ class TranslationTransactionListResponse(BaseModel):
     """
     Standardized response wrapper for company translation transactions list endpoint.
 
-    This is the root response object returned by GET /api/v1/translation-transactions/company/{company_id}
+    This is the root response object returned by GET /api/v1/translation-transactions/company/{company_name}
     """
     success: bool = Field(True, description="Indicates if the request was successful")
     data: TranslationTransactionListData = Field(..., description="Transaction list data with pagination and filters")
@@ -214,7 +210,6 @@ class TranslationTransactionListResponse(BaseModel):
                                     'error_message': '',
                                     'created_at': '2025-10-26T13:15:10.913+00:00',
                                     'updated_at': '2025-10-26T13:15:10.913+00:00',
-                                    'company_id': '68ec42a48ca6a1781d9fe5c9',
                                     'company_name': 'Iris Trading',
                                     'subscription_id': '68fa6add22b0c739f4f4b273',
                                     'unit_type': 'page'
@@ -224,7 +219,7 @@ class TranslationTransactionListResponse(BaseModel):
                             'limit': 50,
                             'skip': 0,
                             'filters': {
-                                'company_id': '68ec42a48ca6a1781d9fe5c9',
+                                'company_name': 'Iris Trading',
                                 'status': 'started'
                             }
                         }
@@ -241,7 +236,7 @@ class TranslationTransactionListResponse(BaseModel):
                             'limit': 50,
                             'skip': 0,
                             'filters': {
-                                'company_id': '68ec42a48ca6a1781d9fe999',
+                                'company_name': 'Unknown Company',
                                 'status': None
                             }
                         }
@@ -271,7 +266,6 @@ class TranslationTransactionListResponse(BaseModel):
                                     'error_message': '',
                                     'created_at': '2025-10-25T10:30:00.000+00:00',
                                     'updated_at': '2025-10-25T11:00:00.000+00:00',
-                                    'company_id': '68ec42a48ca6a1781d9fe5c9',
                                     'company_name': 'Iris Trading',
                                     'subscription_id': '68fa6add22b0c739f4f4b273',
                                     'unit_type': 'page'
@@ -281,7 +275,7 @@ class TranslationTransactionListResponse(BaseModel):
                             'limit': 50,
                             'skip': 0,
                             'filters': {
-                                'company_id': '68ec42a48ca6a1781d9fe5c9',
+                                'company_name': 'Iris Trading',
                                 'status': 'confirmed'
                             }
                         }

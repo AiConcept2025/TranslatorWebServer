@@ -62,30 +62,28 @@ class AuthService:
             logger.error("[AUTH] FAILED - MongoDB not connected")
             raise AuthenticationError("Service temporarily unavailable")
 
-        # Step 1: Find company by company_name
-        logger.info(f"[AUTH] Step 1: Looking up company '{company_name}'...")
-        company = await database.companies.find_one({"company_name": company_name})
+        # Step 1: Verify company exists by company_name
+        logger.info(f"[AUTH] Step 1: Verifying company '{company_name}' exists...")
+        company = await database.company.find_one({"company_name": company_name})
         if not company:
             logger.warning(f"[AUTH] FAILED - Company not found: {company_name}")
             raise AuthenticationError("Invalid credentials")
 
-        company_id = company["_id"]
         logger.info(f"[AUTH] SUCCESS - Company found")
-        logger.info(f"[AUTH]   Company ID: {company_id}")
         logger.info(f"[AUTH]   Company Name: {company.get('company_name')}")
 
-        # Step 2: Find user by email, company_id, and user_name
+        # Step 2: Find user by email, company_name, and user_name
         logger.info(f"[AUTH] Step 2: Looking up user in database...")
         logger.info(f"[AUTH]   Searching with:")
         logger.info(f"[AUTH]     - email: {email}")
-        logger.info(f"[AUTH]     - company_id: {company_id}")
+        logger.info(f"[AUTH]     - company_name: {company_name}")
         logger.info(f"[AUTH]     - user_name: {user_name}")
 
         # Enterprise users: Use company_users collection ONLY (no fallback to users)
         logger.info(f"[AUTH]   Looking up enterprise user in 'company_users' collection...")
         user = await database.company_users.find_one({
             "email": email,
-            "company_id": company_id,
+            "company_name": company_name,
             "user_name": user_name
         })
 
@@ -95,7 +93,7 @@ class AuthService:
             logger.warning(f"[AUTH] FAILED - User not found")
             logger.warning(f"[AUTH]   Email: {email}")
             logger.warning(f"[AUTH]   User Name: {user_name}")
-            logger.warning(f"[AUTH]   Company ID: {company_id}")
+            logger.warning(f"[AUTH]   Company Name: {company_name}")
             raise AuthenticationError("Invalid credentials")
 
         logger.info(f"[AUTH] SUCCESS - User found in '{collection_used}' collection")
@@ -159,8 +157,7 @@ class AuthService:
             "user_id": user.get("user_id"),  # Required by JWT service
             "email": user.get("email"),
             "fullName": user.get("user_name"),  # Frontend expects this
-            "company": str(company_id),  # Frontend expects company_id (for payments query)
-            "company_id": str(company_id),  # Backend needs ObjectId as string for enterprise detection
+            "company": company_name,  # Frontend expects company (now using company_name)
             "company_name": company_name,  # JWT service expects this field name
             "permission_level": user.get("permission_level", "user")
         }
@@ -231,7 +228,7 @@ class AuthService:
     async def create_session(
         self,
         user_object_id: ObjectId,
-        company_id: ObjectId,
+        company_name: str,
         user_id: str
     ) -> Dict[str, Any]:
         """
@@ -239,7 +236,7 @@ class AuthService:
 
         Args:
             user_object_id: MongoDB ObjectId of the user
-            company_id: MongoDB ObjectId of the company
+            company_name: Company name
             user_id: User's string ID
 
         Returns:
@@ -257,7 +254,7 @@ class AuthService:
             "session_token": session_token,
             "user_id": user_id,
             "user_object_id": user_object_id,
-            "company_id": company_id,
+            "company_name": company_name,
             "created_at": created_at,
             "expires_at": expires_at,
             "is_active": True
@@ -374,7 +371,7 @@ class AuthService:
         logger.info(f"[AUTH INDIVIDUAL] Step 1: Looking up individual user by email...")
         user = await database.users.find_one({
             "email": email,
-            "company_id": None  # Individual users have no company
+            "company_name": None  # Individual users have no company
         })
 
         if user:
@@ -422,7 +419,7 @@ class AuthService:
                 "user_id": user_id,
                 "user_name": user_name,
                 "email": email,
-                "company_id": None,  # No company for individual users
+                "company_name": None,  # No company for individual users
                 "permission_level": "user",  # Individual users are regular users
                 "status": "active",
                 "created_at": now,
@@ -488,6 +485,155 @@ class AuthService:
         logger.info(f"[AUTH INDIVIDUAL] User Type: Individual (no company)")
         logger.info(f"[AUTH INDIVIDUAL] Token expires: {expires_at.isoformat()}")
         logger.info(f"[AUTH INDIVIDUAL] Token type: JWT (NO database queries on subsequent requests!)")
+        logger.info("=" * 80)
+
+        return {
+            "session_token": access_token,  # JWT token
+            "user": user_token_data,
+            "expires_at": expires_at.isoformat()
+        }
+
+    async def authenticate_admin(
+        self,
+        email: str,
+        password: str
+    ) -> Dict[str, Any]:
+        """
+        Authenticate admin user against iris-admins collection.
+
+        Args:
+            email: Admin email address
+            password: Admin password (plain text)
+
+        Returns:
+            dict: {session_token, user_data, expires_at}
+
+        Raises:
+            AuthenticationError: If authentication fails
+        """
+        logger.info("=" * 80)
+        logger.info(f"[AUTH ADMIN] {datetime.now(timezone.utc).isoformat()} - Admin login attempt")
+        logger.info(f"[AUTH ADMIN] Email: {email}")
+        logger.info("=" * 80)
+
+        # Check database connection
+        if not database.is_connected:
+            logger.error("[AUTH ADMIN] FAILED - MongoDB not connected")
+            raise AuthenticationError("Service temporarily unavailable")
+
+        # Step 1: Find admin user by email in iris-admins collection
+        logger.info(f"[AUTH ADMIN] Step 1: Looking up admin user by email...")
+        admin = await database.db["iris-admins"].find_one({
+            "user_email": email
+        })
+
+        if not admin:
+            logger.warning(f"[AUTH ADMIN] FAILED - Admin not found")
+            logger.warning(f"[AUTH ADMIN]   Email: {email}")
+            raise AuthenticationError("Invalid credentials")
+
+        logger.info(f"[AUTH ADMIN] SUCCESS - Admin found in 'iris-admins' collection")
+        logger.info(f"[AUTH ADMIN]   Admin ID: {admin.get('_id')}")
+        logger.info(f"[AUTH ADMIN]   User Name: {admin.get('user_name')}")
+        logger.info(f"[AUTH ADMIN]   Email: {admin.get('user_email')}")
+
+        # Step 2: Verify password with bcrypt
+        logger.info(f"[AUTH ADMIN] Step 2: Verifying password...")
+        password_hash = admin.get("password")
+        if not password_hash:
+            logger.error(f"[AUTH ADMIN] FAILED - No password hash found for admin")
+            raise AuthenticationError("Invalid credentials")
+
+        try:
+            # Verify password with bcrypt - run in thread pool to avoid blocking event loop
+            # IMPORTANT: bcrypt has a 72-byte limit, so we truncate if needed
+            import asyncio
+            from functools import partial
+
+            password_bytes = password.encode('utf-8')[:72]  # Truncate to 72 bytes (bcrypt limit)
+
+            loop = asyncio.get_event_loop()
+            password_valid = await loop.run_in_executor(
+                None,  # Use default ThreadPoolExecutor
+                partial(
+                    bcrypt.checkpw,
+                    password_bytes,
+                    password_hash.encode('utf-8')
+                )
+            )
+            logger.info(f"[AUTH ADMIN] Password verification completed (non-blocking)")
+        except Exception as e:
+            logger.error(f"[AUTH ADMIN] FAILED - Error verifying password: {e}")
+            raise AuthenticationError("Invalid credentials")
+
+        if not password_valid:
+            logger.warning(f"[AUTH ADMIN] FAILED - Password verification failed")
+            raise AuthenticationError("Invalid credentials")
+
+        logger.info(f"[AUTH ADMIN] SUCCESS - Password verified with bcrypt")
+
+        # Step 3: Create JWT token with admin permission level
+        logger.info(f"[AUTH ADMIN] Step 3: Creating JWT access token with admin claims...")
+        from app.services.jwt_service import jwt_service
+        from datetime import timedelta
+        import uuid
+
+        # Generate user_id if not present (for backward compatibility)
+        user_id = admin.get("user_id") or f"admin_{uuid.uuid4().hex[:16]}"
+
+        # Include both internal JWT fields and frontend-facing fields
+        user_token_data = {
+            "user_id": user_id,  # Required by JWT service
+            "email": admin.get("user_email"),
+            "fullName": admin.get("user_name"),  # Frontend expects this
+            "user_name": admin.get("user_name"),  # For JWT compatibility
+            "company": None,  # Admins have no company
+            "company_name": None,  # For JWT compatibility
+            "permission_level": "admin"  # CRITICAL: Admin permission level
+        }
+
+        # Create JWT token with 8-hour expiration
+        expires_delta = timedelta(hours=self.SESSION_EXPIRATION_HOURS)
+        access_token = jwt_service.create_access_token(user_token_data, expires_delta)
+
+        expires_at = datetime.now(timezone.utc) + expires_delta
+
+        logger.info(f"[AUTH ADMIN] SUCCESS - JWT token created")
+        logger.info(f"[AUTH ADMIN]   Token type: JWT (self-contained, NO database lookup needed)")
+        logger.info(f"[AUTH ADMIN]   Token: {access_token[:16]}...{access_token[-8:]}")
+        logger.info(f"[AUTH ADMIN]   Expires: {expires_at.isoformat()}")
+        logger.info(f"[AUTH ADMIN]   Permission Level: admin")
+
+        # Step 4: Update login_date
+        logger.info(f"[AUTH ADMIN] Step 4: Updating login_date timestamp...")
+        now = datetime.now(timezone.utc)
+
+        await database.db["iris-admins"].update_one(
+            {"_id": admin["_id"]},
+            {
+                "$set": {
+                    "login_date": now,
+                    "updated_at": now
+                }
+            }
+        )
+
+        logger.info(f"[AUTH ADMIN] SUCCESS - Login date updated to {now.isoformat()}")
+
+        # Prepare user data response (exclude sensitive fields)
+        user_data = {
+            "user_id": user_id,
+            "user_name": admin.get("user_name"),
+            "email": admin.get("user_email"),
+            "permission_level": "admin"
+        }
+
+        logger.info("=" * 80)
+        logger.info(f"[AUTH ADMIN] AUTHENTICATION SUCCESSFUL")
+        logger.info(f"[AUTH ADMIN] Admin: {email}")
+        logger.info(f"[AUTH ADMIN] Permission: admin")
+        logger.info(f"[AUTH ADMIN] Token expires: {expires_at.isoformat()}")
+        logger.info(f"[AUTH ADMIN] Token type: JWT (NO database queries on subsequent requests!)")
         logger.info("=" * 80)
 
         return {

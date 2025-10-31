@@ -20,7 +20,7 @@ router = APIRouter(
 
 
 @router.get(
-    "/company/{company_id}",
+    "/company/{company_name}",
     response_model=TranslationTransactionListResponse,
     status_code=status.HTTP_200_OK,
     responses={
@@ -53,7 +53,6 @@ router = APIRouter(
                                             "error_message": "",
                                             "created_at": "2025-10-26T13:15:10.913+00:00",
                                             "updated_at": "2025-10-26T13:15:10.913+00:00",
-                                            "company_id": "68ec42a48ca6a1781d9fe5c9",
                                             "company_name": "Iris Trading",
                                             "subscription_id": "68fa6add22b0c739f4f4b273",
                                             "unit_type": "page"
@@ -75,7 +74,6 @@ router = APIRouter(
                                             "error_message": "",
                                             "created_at": "2025-10-25T10:30:00.000+00:00",
                                             "updated_at": "2025-10-25T11:00:00.000+00:00",
-                                            "company_id": "68ec42a48ca6a1781d9fe5c9",
                                             "company_name": "Iris Trading",
                                             "subscription_id": "68fa6add22b0c739f4f4b273",
                                             "unit_type": "page"
@@ -97,7 +95,6 @@ router = APIRouter(
                                             "error_message": "",
                                             "created_at": "2025-10-24T08:00:00.000+00:00",
                                             "updated_at": "2025-10-24T08:30:00.000+00:00",
-                                            "company_id": "68ec42a48ca6a1781d9fe5c9",
                                             "company_name": "Iris Trading",
                                             "subscription_id": "68fa6add22b0c739f4f4b273",
                                             "unit_type": "page"
@@ -107,7 +104,6 @@ router = APIRouter(
                                     "limit": 50,
                                     "skip": 0,
                                     "filters": {
-                                        "company_id": "68ec42a48ca6a1781d9fe5c9",
                                         "status": None
                                     }
                                 }
@@ -124,7 +120,6 @@ router = APIRouter(
                                     "limit": 50,
                                     "skip": 0,
                                     "filters": {
-                                        "company_id": "68ec42a48ca6a1781d9fe999",
                                         "status": None
                                     }
                                 }
@@ -154,7 +149,6 @@ router = APIRouter(
                                             "error_message": "",
                                             "created_at": "2025-10-25T10:30:00.000+00:00",
                                             "updated_at": "2025-10-25T11:00:00.000+00:00",
-                                            "company_id": "68ec42a48ca6a1781d9fe5c9",
                                             "company_name": "Iris Trading",
                                             "subscription_id": "68fa6add22b0c739f4f4b273",
                                             "unit_type": "page"
@@ -164,7 +158,6 @@ router = APIRouter(
                                     "limit": 50,
                                     "skip": 0,
                                     "filters": {
-                                        "company_id": "68ec42a48ca6a1781d9fe5c9",
                                         "status": "confirmed"
                                     }
                                 }
@@ -179,8 +172,8 @@ router = APIRouter(
             "content": {
                 "application/json": {
                     "examples": {
-                        "invalid_company_id": {
-                            "summary": "Invalid company_id format",
+                        "invalid_company_name": {
+                            "summary": "Invalid company_name format",
                             "value": {
                                 "detail": "Invalid company identifier format"
                             }
@@ -218,10 +211,10 @@ router = APIRouter(
     }
 )
 async def get_company_translation_transactions(
-    company_id: str = Path(
+    company_name: str = Path(
         ...,
-        description="Company identifier (ObjectId string)",
-        example="68ec42a48ca6a1781d9fe5c9"
+        description="Company name",
+        example="Iris Trading"
     ),
     status_filter: Optional[str] = Query(
         None,
@@ -246,11 +239,11 @@ async def get_company_translation_transactions(
     """
     Get all translation transactions for a company with filtering and pagination.
 
-    Retrieves a list of translation transaction records associated with a specific company ID.
+    Retrieves a list of translation transaction records associated with a specific company name.
     Results can be filtered by transaction status and paginated using limit/skip parameters.
 
     ## Path Parameters
-    - **company_id**: Company identifier (MongoDB ObjectId as string)
+    - **company_name**: Company name (string)
 
     ## Query Parameters
     - **status** *(optional)*: Filter transactions by status
@@ -289,7 +282,7 @@ async def get_company_translation_transactions(
     - **error_message**: Error message if status is failed
     - **created_at**: Record creation timestamp (ISO 8601)
     - **updated_at**: Record update timestamp (ISO 8601)
-    - **company_id**: Company identifier (optional, for enterprise)
+    - **company_name**: Company name (for enterprise transactions)
     - **company_name**: Company name (optional, from $lookup)
     - **subscription_id**: Subscription identifier (optional, for enterprise)
     - **unit_type**: Unit type for billing (page or word)
@@ -298,27 +291,27 @@ async def get_company_translation_transactions(
 
     ### Get all transactions for a company
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/translation-transactions/company/68ec42a48ca6a1781d9fe5c9"
+    curl -X GET "http://localhost:8000/api/v1/translation-transactions/company/Iris%20Trading"
     ```
 
     ### Get only started transactions
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/translation-transactions/company/68ec42a48ca6a1781d9fe5c9?status=started"
+    curl -X GET "http://localhost:8000/api/v1/translation-transactions/company/Iris%20Trading?status=started"
     ```
 
     ### Get second page of transactions (pagination)
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/translation-transactions/company/68ec42a48ca6a1781d9fe5c9?skip=20&limit=20"
+    curl -X GET "http://localhost:8000/api/v1/translation-transactions/company/Iris%20Trading?skip=20&limit=20"
     ```
 
     ### Filter by confirmed transactions only
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/translation-transactions/company/68ec42a48ca6a1781d9fe5c9?status=confirmed"
+    curl -X GET "http://localhost:8000/api/v1/translation-transactions/company/Iris%20Trading?status=confirmed"
     ```
 
     ### Get failed transactions with limit
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/translation-transactions/company/68ec42a48ca6a1781d9fe5c9?status=failed&limit=10"
+    curl -X GET "http://localhost:8000/api/v1/translation-transactions/company/Iris%20Trading?status=failed&limit=10"
     ```
 
     ## Notes
@@ -329,7 +322,7 @@ async def get_company_translation_transactions(
     - Company name is populated via $lookup from company collection
     """
     try:
-        logger.info(f"Fetching translation transactions for company {company_id}, status={status_filter}, limit={limit}, skip={skip}")
+        logger.info(f"Fetching translation transactions for company {company_name}, status={status_filter}, limit={limit}, skip={skip}")
 
         # Validate status filter if provided
         valid_statuses = ["started", "confirmed", "pending", "failed"]
@@ -339,84 +332,48 @@ async def get_company_translation_transactions(
                 detail=f"Invalid transaction status. Must be one of: {', '.join(valid_statuses)}"
             )
 
-        # Build aggregation pipeline with $lookup to join company data
-        # Handle both string and ObjectId company_id formats
-        try:
-            company_id_obj = ObjectId(company_id)
-            match_stage = {"company_id": {"$in": [company_id, company_id_obj]}}
-        except:
-            # If company_id is not a valid ObjectId, just use string
-            match_stage = {"company_id": company_id}
+        # Build match stage using company_name
+        match_stage = {"company_name": company_name}
 
         if status_filter:
             match_stage["status"] = status_filter
 
         # Aggregation pipeline:
-        # 1. Match transactions by company_id (and optional status)
+        # 1. Match transactions by company_name (and optional status)
         # 2. Skip/limit for pagination
-        # 3. Lookup company data from company collection
-        # 4. Add company_name field from the joined company document
         pipeline = [
             {"$match": match_stage},
             {"$skip": skip},
-            {"$limit": limit},
-            {
-                "$lookup": {
-                    "from": "company",  # Collection name in MongoDB
-                    "let": {"transaction_company_id": "$company_id"},
-                    "pipeline": [
-                        {
-                            "$match": {
-                                "$expr": {
-                                    "$or": [
-                                        {"$eq": ["$_id", "$$transaction_company_id"]},  # Match as ObjectId
-                                        {"$eq": [{"$toString": "$_id"}, {"$toString": "$$transaction_company_id"}]}  # Match as string
-                                    ]
-                                }
-                            }
-                        }
-                    ],
-                    "as": "company_data"
-                }
-            },
-            {
-                "$addFields": {
-                    "company_name": {"$arrayElemAt": ["$company_data.company_name", 0]}
-                }
-            },
-            {
-                "$project": {
-                    "company_data": 0  # Remove the joined company_data array
-                }
-            }
+            {"$limit": limit}
         ]
 
         # Execute aggregation
         transactions = await database.translation_transactions.aggregate(pipeline).to_list(length=limit)
 
-        # Convert ObjectIds and datetime objects to JSON-serializable format
-        for transaction in transactions:
-            transaction["_id"] = str(transaction["_id"])
+        # Helper function to recursively convert ObjectIds and datetimes
+        from datetime import datetime
+        from bson.decimal128 import Decimal128
 
-            # Convert ObjectId fields to strings
-            objectid_fields = ["company_id", "subscription_id"]
-            for field in objectid_fields:
-                if field in transaction and transaction[field] is not None and isinstance(transaction[field], ObjectId):
-                    transaction[field] = str(transaction[field])
+        def convert_doc(obj):
+            """Recursively convert ObjectIds, datetimes, and Decimal128 to JSON-serializable types."""
+            if isinstance(obj, ObjectId):
+                return str(obj)
+            elif isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, Decimal128):
+                return float(obj.to_decimal())
+            elif isinstance(obj, dict):
+                return {key: convert_doc(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_doc(item) for item in obj]
+            else:
+                return obj
 
-            # Convert Decimal128 fields to float (for MongoDB Decimal128 types)
-            from bson.decimal128 import Decimal128
-            for key, value in list(transaction.items()):
-                if isinstance(value, Decimal128):
-                    transaction[key] = float(value.to_decimal())
+        # Convert all transactions using recursive converter
+        for idx, transaction in enumerate(transactions):
+            transactions[idx] = convert_doc(transaction)
 
-            # Convert datetime fields to ISO format strings
-            datetime_fields = ["created_at", "updated_at"]
-            for field in datetime_fields:
-                if field in transaction and hasattr(transaction[field], "isoformat"):
-                    transaction[field] = transaction[field].isoformat()
-
-        logger.info(f"Found {len(transactions)} translation transactions for company {company_id}")
+        logger.info(f"Found {len(transactions)} translation transactions for company {company_name}")
 
         return JSONResponse(content={
             "success": True,
@@ -426,7 +383,7 @@ async def get_company_translation_transactions(
                 "limit": limit,
                 "skip": skip,
                 "filters": {
-                    "company_id": company_id,
+                    "company_name": company_name,
                     "status": status_filter
                 }
             }
@@ -435,7 +392,7 @@ async def get_company_translation_transactions(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to retrieve translation transactions for company {company_id}: {e}", exc_info=True)
+        logger.error(f"Failed to retrieve translation transactions for company {company_name}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve translation transactions: {str(e)}"

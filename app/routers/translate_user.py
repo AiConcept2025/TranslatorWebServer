@@ -4,7 +4,7 @@ Translate User Router - Individual user translation endpoint.
 This endpoint is designed for non-enterprise individual users who pay per translation.
 Key differences from /translate endpoint:
 - No enterprise/subscription logic
-- No company_id or company_name handling
+- No company association
 - Uses user_transactions collection instead of translation_transactions
 - Fixed pricing ($0.10 per page)
 - Uses Square transaction IDs (format: sqt_{20_random_chars})

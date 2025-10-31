@@ -6,7 +6,7 @@ including creating, retrieving, updating, and querying payment records.
 """
 
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 
@@ -34,7 +34,6 @@ class PaymentRepository:
 
         Example:
             >>> payment = PaymentCreate(
-            ...     company_id="cmp_00123",
             ...     company_name="Acme Health LLC",
             ...     user_email="test5@yahoo.com",
             ...     square_payment_id="payment_sq_1761244600756",
@@ -45,7 +44,6 @@ class PaymentRepository:
             >>> payment_id = await repo.create_payment(payment)
         """
         payment_doc = {
-            "company_id": payment_data.company_id,
             "company_name": payment_data.company_name,
             "user_email": payment_data.user_email,
             "square_payment_id": payment_data.square_payment_id,
@@ -91,7 +89,7 @@ class PaymentRepository:
 
     async def get_payments_by_company(
         self,
-        company_id: str,
+        company_name: str,
         status: Optional[str] = None,
         limit: int = 50,
         skip: int = 0
@@ -100,7 +98,7 @@ class PaymentRepository:
         Get payments for a company.
 
         Args:
-            company_id: Company ObjectId as string
+            company_name: Company name
             status: Optional payment status filter
             limit: Maximum number of results
             skip: Number of results to skip (for pagination)
@@ -108,7 +106,8 @@ class PaymentRepository:
         Returns:
             List of payment documents
         """
-        query = {"company_id": company_id}
+        query = {"company_name": company_name}
+
         if status:
             query["payment_status"] = status
 
@@ -135,6 +134,58 @@ class PaymentRepository:
         """
         cursor = self.collection.find({"user_email": email}).sort("payment_date", -1).skip(skip).limit(limit)
         return await cursor.to_list(length=limit)
+
+    async def get_all_payments(
+        self,
+        status: Optional[str] = None,
+        company_name: Optional[str] = None,
+        limit: int = 50,
+        skip: int = 0,
+        sort_by: str = "payment_date",
+        sort_order: str = "desc"
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        Get all payments with optional filtering and pagination.
+
+        Args:
+            status: Optional payment status filter (COMPLETED, PENDING, FAILED, REFUNDED)
+            company_name: Optional company name filter
+            limit: Maximum number of results to return (1-100)
+            skip: Number of results to skip for pagination
+            sort_by: Field to sort by (default: payment_date)
+            sort_order: Sort order - 'asc' or 'desc' (default: desc)
+
+        Returns:
+            Tuple of (List of payment documents, Total count)
+
+        Example:
+            >>> payments, total = await repo.get_all_payments(
+            ...     status="COMPLETED",
+            ...     company_name="Acme Health LLC",
+            ...     limit=20,
+            ...     skip=0
+            ... )
+        """
+        # Build query filter
+        query: Dict[str, Any] = {}
+
+        if status:
+            query["payment_status"] = status
+
+        if company_name:
+            query["company_name"] = company_name
+
+        # Get total count for pagination
+        total_count = await self.collection.count_documents(query)
+
+        # Determine sort direction
+        sort_direction = -1 if sort_order == "desc" else 1
+
+        # Execute query with sorting and pagination
+        cursor = self.collection.find(query).sort(sort_by, sort_direction).skip(skip).limit(limit)
+        payments = await cursor.to_list(length=limit)
+
+        return payments, total_count
 
     async def update_payment(
         self,
@@ -203,7 +254,7 @@ class PaymentRepository:
 
     async def get_payment_stats_by_company(
         self,
-        company_id: str,
+        company_name: str,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> Dict[str, Any]:
@@ -211,14 +262,14 @@ class PaymentRepository:
         Get payment statistics for a company.
 
         Args:
-            company_id: Company identifier (string)
+            company_name: Company name
             start_date: Optional start date filter
             end_date: Optional end date filter
 
         Returns:
             Dictionary with payment statistics
         """
-        match_query: Dict[str, Any] = {"company_id": company_id}
+        match_query: Dict[str, Any] = {"company_name": company_name}
 
         if start_date or end_date:
             date_query = {}

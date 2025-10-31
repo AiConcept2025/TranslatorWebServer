@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 class JWTService:
     """JWT token generation and verification service."""
 
-    # Use a strong secret key from settings
-    SECRET_KEY = settings.secret_key if hasattr(settings, 'secret_key') else "your-secret-key-change-in-production"
+    # Use a strong secret key from settings (no fallback - fail fast if not configured)
+    SECRET_KEY = settings.secret_key  # Will raise AttributeError if not set
     ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_HOURS = 8  # Match session expiration
 
@@ -39,7 +39,6 @@ class JWTService:
                     "user_id": str,
                     "email": str,
                     "user_name": str,
-                    "company_id": str,
                     "company_name": str,
                     "permission_level": str
                 }
@@ -99,7 +98,6 @@ class JWTService:
                 "user_id": payload.get("user_id"),
                 "email": payload.get("email"),
                 "user_name": payload.get("user_name"),
-                "company_id": payload.get("company_id"),
                 "company_name": payload.get("company_name"),
                 "permission_level": payload.get("permission_level", "user")
             }

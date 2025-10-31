@@ -6,6 +6,7 @@ from fastapi import APIRouter, Path, Query, HTTPException, status
 from fastapi.responses import JSONResponse
 from typing import Optional
 import logging
+import json
 from bson import ObjectId
 
 from app.database.mongodb import database
@@ -20,7 +21,7 @@ router = APIRouter(
 
 
 @router.get(
-    "/company/{company_id}",
+    "/company/{company_name}",
     response_model=InvoiceListResponse,
     status_code=status.HTTP_200_OK,
     responses={
@@ -39,8 +40,7 @@ router = APIRouter(
                                         {
                                             "_id": "671b2bc25c62a0b61c084b34",
                                             "invoice_id": "inv_001",
-                                            "company_id": "cmp_00123",
-                                            "company_name": "Acme Health LLC",
+                                            "company_name": "Acme Translation Corp",
                                             "subscription_id": "sub_abc123",
                                             "invoice_number": "INV-2025-001",
                                             "invoice_date": "2025-10-08T00:07:00.396Z",
@@ -55,8 +55,7 @@ router = APIRouter(
                                         {
                                             "_id": "671b2bc25c62a0b61c084b35",
                                             "invoice_id": "inv_002",
-                                            "company_id": "cmp_00123",
-                                            "company_name": "Acme Health LLC",
+                                            "company_name": "Acme Translation Corp",
                                             "subscription_id": "sub_abc123",
                                             "invoice_number": "INV-2025-002",
                                             "invoice_date": "2025-09-08T00:07:00.396Z",
@@ -71,8 +70,7 @@ router = APIRouter(
                                         {
                                             "_id": "671b2bc25c62a0b61c084b36",
                                             "invoice_id": "inv_003",
-                                            "company_id": "cmp_00123",
-                                            "company_name": "Acme Health LLC",
+                                            "company_name": "Acme Translation Corp",
                                             "subscription_id": "sub_abc123",
                                             "invoice_number": "INV-2025-003",
                                             "invoice_date": "2025-08-08T00:07:00.396Z",
@@ -89,7 +87,7 @@ router = APIRouter(
                                     "limit": 50,
                                     "skip": 0,
                                     "filters": {
-                                        "company_id": "cmp_00123",
+                                        "company_name": "Acme Translation Corp",
                                         "status": None
                                     }
                                 }
@@ -106,7 +104,7 @@ router = APIRouter(
                                     "limit": 50,
                                     "skip": 0,
                                     "filters": {
-                                        "company_id": "cmp_00999",
+                                        "company_name": "Unknown Company",
                                         "status": None
                                     }
                                 }
@@ -122,8 +120,7 @@ router = APIRouter(
                                         {
                                             "_id": "671b2bc25c62a0b61c084b34",
                                             "invoice_id": "inv_001",
-                                            "company_id": "cmp_00123",
-                                            "company_name": "Acme Health LLC",
+                                            "company_name": "Acme Translation Corp",
                                             "subscription_id": "sub_abc123",
                                             "invoice_number": "INV-2025-001",
                                             "invoice_date": "2025-10-08T00:07:00.396Z",
@@ -140,7 +137,7 @@ router = APIRouter(
                                     "limit": 50,
                                     "skip": 0,
                                     "filters": {
-                                        "company_id": "cmp_00123",
+                                        "company_name": "Acme Translation Corp",
                                         "status": "sent"
                                     }
                                 }
@@ -155,10 +152,10 @@ router = APIRouter(
             "content": {
                 "application/json": {
                     "examples": {
-                        "invalid_company_id": {
-                            "summary": "Invalid company_id format",
+                        "invalid_company_name": {
+                            "summary": "Invalid company_name format",
                             "value": {
-                                "detail": "Invalid company identifier format"
+                                "detail": "Invalid company name format"
                             }
                         },
                         "invalid_status": {
@@ -176,7 +173,7 @@ router = APIRouter(
             "content": {
                 "application/json": {
                     "example": {
-                        "detail": "Company not found: cmp_00999"
+                        "detail": "Company not found: Unknown Company"
                     }
                 }
             }
@@ -194,10 +191,10 @@ router = APIRouter(
     }
 )
 async def get_company_invoices(
-    company_id: str = Path(
+    company_name: str = Path(
         ...,
-        description="Company identifier (e.g., cmp_00123)",
-        example="cmp_00123"
+        description="Company name (e.g., 'Acme Translation Corp')",
+        example="Acme Translation Corp"
     ),
     status_filter: Optional[str] = Query(
         None,
@@ -222,11 +219,11 @@ async def get_company_invoices(
     """
     Get all invoices for a company with filtering and pagination.
 
-    Retrieves a list of invoice records associated with a specific company ID.
+    Retrieves a list of invoice records associated with a specific company name.
     Results can be filtered by invoice status and paginated using limit/skip parameters.
 
     ## Path Parameters
-    - **company_id**: Company identifier (format: cmp_XXXXX)
+    - **company_name**: Company name (e.g., "Acme Translation Corp", "Iris Trading")
 
     ## Query Parameters
     - **status** *(optional)*: Filter invoices by status
@@ -251,8 +248,7 @@ async def get_company_invoices(
     Each invoice record includes:
     - **_id**: MongoDB ObjectId (24-character hex string)
     - **invoice_id**: Legacy invoice ID (optional)
-    - **company_id**: Company identifier
-    - **company_name**: Full company name (optional)
+    - **company_name**: Company name
     - **subscription_id**: Subscription identifier
     - **invoice_number**: Unique invoice number (e.g., INV-2025-001)
     - **invoice_date**: Invoice date (ISO 8601)
@@ -268,27 +264,27 @@ async def get_company_invoices(
 
     ### Get all invoices for a company
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/invoices/company/cmp_00123"
+    curl -X GET "http://localhost:8000/api/v1/invoices/company/Acme%20Translation%20Corp"
     ```
 
     ### Get only sent invoices
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/invoices/company/cmp_00123?status=sent"
+    curl -X GET "http://localhost:8000/api/v1/invoices/company/Acme%20Translation%20Corp?status=sent"
     ```
 
     ### Get second page of invoices (pagination)
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/invoices/company/cmp_00123?skip=20&limit=20"
+    curl -X GET "http://localhost:8000/api/v1/invoices/company/Iris%20Trading?skip=20&limit=20"
     ```
 
     ### Filter by paid invoices only
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/invoices/company/cmp_00123?status=paid"
+    curl -X GET "http://localhost:8000/api/v1/invoices/company/Acme%20Translation%20Corp?status=paid"
     ```
 
     ### Get overdue invoices with limit
     ```bash
-    curl -X GET "http://localhost:8000/api/v1/invoices/company/cmp_00123?status=overdue&limit=10"
+    curl -X GET "http://localhost:8000/api/v1/invoices/company/Acme%20Translation%20Corp?status=overdue&limit=10"
     ```
 
     ## Notes
@@ -298,7 +294,8 @@ async def get_company_invoices(
     - Status values are case-sensitive (lowercase)
     """
     try:
-        logger.info(f"Fetching invoices for company {company_id}, status={status_filter}, limit={limit}, skip={skip}")
+        logger.info(f"[INVOICES DEBUG] ========== START REQUEST ==========")
+        logger.info(f"[INVOICES DEBUG] Request params: company_name={company_name}, status={status_filter}, limit={limit}, skip={skip}")
 
         # Validate status filter if provided
         valid_statuses = ["sent", "paid", "overdue", "cancelled"]
@@ -308,74 +305,72 @@ async def get_company_invoices(
                 detail=f"Invalid invoice status. Must be one of: {', '.join(valid_statuses)}"
             )
 
-        # Build aggregation pipeline with $lookup to join company data
-        # Handle both string and ObjectId company_id formats
-        try:
-            company_id_obj = ObjectId(company_id)
-            match_stage = {"company_id": {"$in": [company_id, company_id_obj]}}
-        except:
-            # If company_id is not a valid ObjectId, just use string
-            match_stage = {"company_id": company_id}
+        # Build aggregation pipeline - simplified query using company_name
+        match_stage = {"company_name": company_name}
+        logger.info(f"[INVOICES DEBUG] Querying for company_name: {company_name}")
 
         if status_filter:
             match_stage["status"] = status_filter
 
+        logger.info(f"[INVOICES DEBUG] MongoDB match stage: {json.dumps(match_stage, default=str)}")
+
         # Aggregation pipeline:
-        # 1. Match invoices by company_id (and optional status)
-        # 2. Lookup company data from company collection
-        # 3. Add company_name field from the joined company document
+        # 1. Match invoices by company_name (and optional status)
+        # 2. Apply pagination with skip and limit
         pipeline = [
             {"$match": match_stage},
             {"$skip": skip},
-            {"$limit": limit},
-            {
-                "$lookup": {
-                    "from": "company",  # Collection name in MongoDB
-                    "let": {"invoice_company_id": "$company_id"},
-                    "pipeline": [
-                        {
-                            "$match": {
-                                "$expr": {
-                                    "$or": [
-                                        {"$eq": ["$_id", "$$invoice_company_id"]},  # Match as ObjectId
-                                        {"$eq": [{"$toString": "$_id"}, {"$toString": "$$invoice_company_id"}]}  # Match as string
-                                    ]
-                                }
-                            }
-                        }
-                    ],
-                    "as": "company_data"
-                }
-            },
-            {
-                "$addFields": {
-                    "company_name": {"$arrayElemAt": ["$company_data.company_name", 0]}
-                }
-            },
-            {
-                "$project": {
-                    "company_data": 0  # Remove the joined company_data array
-                }
-            }
+            {"$limit": limit}
         ]
+
+        # Log the complete aggregation pipeline
+        logger.info(f"[INVOICES DEBUG] Full aggregation pipeline:")
+        for i, stage in enumerate(pipeline):
+            logger.info(f"[INVOICES DEBUG]   Stage {i}: {json.dumps(stage, default=str)}")
 
         # Execute aggregation
         invoices = await database.invoices.aggregate(pipeline).to_list(length=limit)
 
+        logger.info(f"[INVOICES DEBUG] ========== RAW MONGODB RESULTS ==========")
+        logger.info(f"[INVOICES DEBUG] MongoDB returned {len(invoices)} documents")
+
+        if invoices:
+            logger.info(f"[INVOICES DEBUG] Document _id list: {[str(inv['_id']) for inv in invoices]}")
+            logger.info(f"[INVOICES DEBUG] Company names: {[inv.get('company_name', 'N/A') for inv in invoices]}")
+            logger.info(f"[INVOICES DEBUG] Invoice numbers: {[inv.get('invoice_number', 'N/A') for inv in invoices]}")
+            logger.info(f"[INVOICES DEBUG] Statuses: {[inv.get('status', 'N/A') for inv in invoices]}")
+
+            # Log full raw documents for inspection
+            for idx, invoice in enumerate(invoices):
+                logger.info(f"[INVOICES DEBUG] === Raw Document {idx + 1} ===")
+                # Convert ObjectId fields to string for logging
+                log_invoice = {}
+                for key, value in invoice.items():
+                    if isinstance(value, ObjectId):
+                        log_invoice[key] = f"ObjectId('{value}')"
+                    else:
+                        log_invoice[key] = value
+                logger.info(f"[INVOICES DEBUG] {json.dumps(log_invoice, indent=2, default=str)}")
+        else:
+            logger.warning(f"[INVOICES DEBUG] NO DOCUMENTS RETURNED FROM MONGODB!")
+
         # Convert ObjectIds and datetime objects to JSON-serializable format
-        for invoice in invoices:
+        logger.info(f"[INVOICES DEBUG] ========== STARTING SERIALIZATION ==========")
+        for idx, invoice in enumerate(invoices):
             invoice["_id"] = str(invoice["_id"])
 
-            # Convert ObjectId fields to strings (for legacy data)
-            objectid_fields = ["company_id", "subscription_id"]
-            for field in objectid_fields:
-                if field in invoice and isinstance(invoice[field], ObjectId):
-                    invoice[field] = str(invoice[field])
+            # Convert subscription_id if it's an ObjectId (for legacy data)
+            if "subscription_id" in invoice and isinstance(invoice["subscription_id"], ObjectId):
+                logger.info(f"[INVOICES DEBUG] Document {idx + 1}: Converting subscription_id from ObjectId to string: {invoice['subscription_id']}")
+                invoice["subscription_id"] = str(invoice["subscription_id"])
+            elif "subscription_id" in invoice:
+                logger.info(f"[INVOICES DEBUG] Document {idx + 1}: subscription_id is already a string: {invoice['subscription_id']} (type: {type(invoice['subscription_id']).__name__})")
 
             # Convert Decimal128 fields to float (for MongoDB Decimal128 types)
             from bson.decimal128 import Decimal128
             for key, value in list(invoice.items()):
                 if isinstance(value, Decimal128):
+                    logger.info(f"[INVOICES DEBUG] Document {idx + 1}: Converting {key} from Decimal128 to float")
                     invoice[key] = float(value.to_decimal())
 
             # Convert datetime fields to ISO format strings
@@ -390,9 +385,13 @@ async def get_company_invoices(
                     if "applied_date" in payment_app and hasattr(payment_app["applied_date"], "isoformat"):
                         payment_app["applied_date"] = payment_app["applied_date"].isoformat()
 
-        logger.info(f"Found {len(invoices)} invoices for company {company_id}")
+            logger.info(f"[INVOICES DEBUG] Document {idx + 1} serialized successfully")
 
-        return JSONResponse(content={
+        logger.info(f"[INVOICES DEBUG] ========== SERIALIZATION COMPLETE ==========")
+        logger.info(f"[INVOICES DEBUG] Total invoices after serialization: {len(invoices)}")
+
+        # Build response payload
+        response_payload = {
             "success": True,
             "data": {
                 "invoices": invoices,
@@ -400,16 +399,29 @@ async def get_company_invoices(
                 "limit": limit,
                 "skip": skip,
                 "filters": {
-                    "company_id": company_id,
+                    "company_name": company_name,
                     "status": status_filter
                 }
             }
-        })
+        }
+
+        logger.info(f"[INVOICES DEBUG] ========== FINAL RESPONSE ==========")
+        logger.info(f"[INVOICES DEBUG] Sending {len(invoices)} invoices to client")
+        logger.info(f"[INVOICES DEBUG] Response invoice IDs: {[inv['_id'] for inv in invoices]}")
+        logger.info(f"[INVOICES DEBUG] Full response JSON:")
+        logger.info(f"[INVOICES DEBUG] {json.dumps(response_payload, indent=2, default=str)}")
+        logger.info(f"[INVOICES DEBUG] ========== END REQUEST ==========")
+
+        return JSONResponse(content=response_payload)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to retrieve invoices for company {company_id}: {e}", exc_info=True)
+        logger.error(f"[INVOICES DEBUG] ========== ERROR OCCURRED ==========")
+        logger.error(f"[INVOICES DEBUG] Error retrieving invoices for company {company_name}")
+        logger.error(f"[INVOICES DEBUG] Error type: {type(e).__name__}")
+        logger.error(f"[INVOICES DEBUG] Error message: {str(e)}")
+        logger.error(f"[INVOICES DEBUG] Full traceback:", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve invoices: {str(e)}"

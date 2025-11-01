@@ -21,11 +21,17 @@ from app.routers import languages, upload, auth, subscriptions, translate_user, 
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities
-from app.middleware.rate_limiting import RateLimitMiddleware
+# RateLimitMiddleware removed - causes file upload failures with BaseHTTPMiddleware
+# Using slowapi for endpoint-specific rate limiting instead
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.encoding_fix import EncodingFixMiddleware
 from app.middleware.auth_middleware import get_current_user, get_optional_user
 from app.utils.health import health_checker
+
+# Import slowapi for endpoint-specific rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 
 # Application lifespan events
@@ -59,6 +65,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Initialize slowapi rate limiter (endpoint-specific, not global middleware)
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # ============================================================================
 # MIDDLEWARE CONFIGURATION - ORDER MATTERS!
 # ============================================================================
@@ -83,7 +94,8 @@ app = FastAPI(
 # app.add_middleware(RequestBodyDebugMiddleware)
 app.add_middleware(EncodingFixMiddleware)
 app.add_middleware(LoggingMiddleware)
-app.add_middleware(RateLimitMiddleware)  # Rate limiting for brute force protection
+# REMOVED: RateLimitMiddleware - causes file upload failures with BaseHTTPMiddleware
+# Using slowapi decorators on specific endpoints instead (see auth.py)
 
 # Add CORS middleware LAST (so it's closest to the endpoint and processes ALL responses)
 app.add_middleware(
@@ -549,29 +561,76 @@ async def translate_files(
             else:
                 price_per_page = float(price_value)
 
-            # Enhanced subscription logging - Calculate totals from usage_periods
+            # Enhanced subscription logging - Find current active period
+            # Database schema: subscription_units, used_units, promotional_units
+            # Formula: total_remaining = (subscription_units + promotional_units) - used_units
             usage_periods = subscription.get("usage_periods", [])
-            total_allocated = sum(p.get("units_allocated", 0) for p in usage_periods)
-            total_used = sum(p.get("units_used", 0) for p in usage_periods)
-            total_remaining = sum(p.get("units_remaining", 0) for p in usage_periods)
             subscription_unit = subscription.get("subscription_unit", "page")
             status = subscription.get("status", "unknown")
+
+            # Find current active period (same logic as subscription_service.py)
+            now = datetime.now(timezone.utc)
+            current_period = None
+            current_period_idx = None
+
+            for idx, period in enumerate(usage_periods):
+                period_start = period.get("period_start")
+                period_end = period.get("period_end")
+
+                # Handle timezone-aware comparison
+                if period_start and not period_start.tzinfo:
+                    period_start = period_start.replace(tzinfo=timezone.utc)
+                if period_end and not period_end.tzinfo:
+                    period_end = period_end.replace(tzinfo=timezone.utc)
+
+                if period_start and period_end and period_start <= now <= period_end:
+                    current_period = period
+                    current_period_idx = idx
+                    break
+
+            # Calculate availability from current active period only
+            if current_period:
+                subscription_units = current_period.get("subscription_units", 0)
+                used_units = current_period.get("used_units", 0)
+                promotional_units = current_period.get("promotional_units", 0)
+                total_allocated = subscription_units + promotional_units
+                total_used = used_units
+                total_remaining = total_allocated - used_units
+            else:
+                # No active period found - cannot use subscription
+                total_allocated = 0
+                total_used = 0
+                total_remaining = 0
 
             log_step("SUBSCRIPTION FOUND", f"Status: {status}, Price: ${price_per_page} per {subscription_unit}")
             logging.info(f"[SUBSCRIPTION] ✓ Active subscription found for company {company_name}")
             logging.info(f"[SUBSCRIPTION]   Subscription ID: {subscription.get('_id')}")
             logging.info(f"[SUBSCRIPTION]   Status: {status}")
             logging.info(f"[SUBSCRIPTION]   Price: ${price_per_page} per {subscription_unit}")
-            logging.info(f"[SUBSCRIPTION]   Total Allocated: {total_allocated} {subscription_unit}s")
-            logging.info(f"[SUBSCRIPTION]   Used Units: {total_used} {subscription_unit}s")
-            logging.info(f"[SUBSCRIPTION]   Remaining Units: {total_remaining} {subscription_unit}s")
 
-            print(f"\n📊 Subscription Details:")
-            print(f"   Status: {status}")
-            print(f"   Total Allocated: {total_allocated} {subscription_unit}s")
-            print(f"   Used Units: {total_used} {subscription_unit}s")
-            print(f"   Remaining Units: {total_remaining} {subscription_unit}s")
-            print(f"   Price: ${price_per_page} per {subscription_unit}")
+            if current_period:
+                logging.info(f"[SUBSCRIPTION]   Current Period: {current_period_idx}")
+                logging.info(f"[SUBSCRIPTION]   Period Start: {current_period.get('period_start')}")
+                logging.info(f"[SUBSCRIPTION]   Period End: {current_period.get('period_end')}")
+                logging.info(f"[SUBSCRIPTION]   Subscription Units: {subscription_units}")
+                logging.info(f"[SUBSCRIPTION]   Promotional Units: {promotional_units}")
+                logging.info(f"[SUBSCRIPTION]   Total Allocated: {total_allocated} {subscription_unit}s")
+                logging.info(f"[SUBSCRIPTION]   Used Units: {total_used} {subscription_unit}s")
+                logging.info(f"[SUBSCRIPTION]   Remaining Units: {total_remaining} {subscription_unit}s")
+
+                print(f"\n📊 Current Subscription Period:")
+                print(f"   Status: {status}")
+                print(f"   Period: {current_period_idx} ({current_period.get('period_start')} to {current_period.get('period_end')})")
+                print(f"   Subscription Units: {subscription_units} {subscription_unit}s")
+                print(f"   Promotional Units: {promotional_units} {subscription_unit}s")
+                print(f"   Total Allocated: {total_allocated} {subscription_unit}s")
+                print(f"   Used Units: {total_used} {subscription_unit}s")
+                print(f"   Remaining Units: {total_remaining} {subscription_unit}s")
+                print(f"   Price: ${price_per_page} per {subscription_unit}")
+            else:
+                logging.warning(f"[SUBSCRIPTION] ⚠ No active period found for current date")
+                print(f"\n⚠️  No active usage period for current date")
+                print(f"   Total usage periods: {len(usage_periods)}")
         else:
             log_step("SUBSCRIPTION NOT FOUND", f"Using default pricing for company {company_name}")
             logging.warning(f"[SUBSCRIPTION] ⚠ No active subscription found for company {company_name}, using default pricing")

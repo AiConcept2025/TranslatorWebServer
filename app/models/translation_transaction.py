@@ -23,6 +23,7 @@ class TranslationTransactionListItem(BaseModel):
     user_id: str = Field(..., description="User email address")
     original_file_url: str = Field(..., description="Google Drive URL of original file")
     translated_file_url: str = Field(default="", description="Google Drive URL of translated file (empty if not yet translated)")
+    translated_file_name: str = Field(default="", description="Translated filename (empty if not yet translated)")
     source_language: str = Field(..., description="Source language code (e.g., en)")
     target_language: str = Field(..., description="Target language code (e.g., fr)")
     file_name: str = Field(..., description="Original filename")
@@ -47,6 +48,7 @@ class TranslationTransactionListItem(BaseModel):
                 'user_id': 'danishevsky@yahoo.com',
                 'original_file_url': 'https://docs.google.com/document/d/1ABCdef123/edit',
                 'translated_file_url': '',
+                'translated_file_name': '',
                 'source_language': 'en',
                 'target_language': 'fr',
                 'file_name': 'TCG.docx',
@@ -109,6 +111,7 @@ class TranslationTransactionListData(BaseModel):
                                 'user_id': 'danishevsky@yahoo.com',
                                 'original_file_url': 'https://docs.google.com/document/d/1ABCdef123/edit',
                                 'translated_file_url': '',
+                                'translated_file_name': '',
                                 'source_language': 'en',
                                 'target_language': 'fr',
                                 'file_name': 'TCG.docx',
@@ -130,6 +133,7 @@ class TranslationTransactionListData(BaseModel):
                                 'user_id': 'user@company.com',
                                 'original_file_url': 'https://docs.google.com/document/d/2XYZabc456/edit',
                                 'translated_file_url': 'https://docs.google.com/document/d/3XYZabc789/edit',
+                                'translated_file_name': 'Document_de.pdf',
                                 'source_language': 'es',
                                 'target_language': 'de',
                                 'file_name': 'Document.pdf',
@@ -199,6 +203,7 @@ class TranslationTransactionListResponse(BaseModel):
                                     'user_id': 'danishevsky@yahoo.com',
                                     'original_file_url': 'https://docs.google.com/document/d/1ABCdef123/edit',
                                     'translated_file_url': '',
+                                    'translated_file_name': '',
                                     'source_language': 'en',
                                     'target_language': 'fr',
                                     'file_name': 'TCG.docx',
@@ -255,6 +260,7 @@ class TranslationTransactionListResponse(BaseModel):
                                     'user_id': 'user@company.com',
                                     'original_file_url': 'https://docs.google.com/document/d/2XYZabc456/edit',
                                     'translated_file_url': 'https://docs.google.com/document/d/3XYZabc789/edit',
+                                    'translated_file_name': 'Document_de.pdf',
                                     'source_language': 'es',
                                     'target_language': 'de',
                                     'file_name': 'Document.pdf',

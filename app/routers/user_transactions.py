@@ -16,6 +16,7 @@ from datetime import datetime
 from pydantic import EmailStr
 import logging
 import uuid
+from bson.decimal128 import Decimal128
 
 from app.models.payment import (
     UserTransactionCreate,
@@ -32,6 +33,47 @@ from app.utils.user_transaction_helper import (
 
 logger = logging.getLogger(__name__)
 
+
+def serialize_transaction_for_json(txn: dict) -> dict:
+    """
+    Convert MongoDB transaction document to JSON-serializable dict.
+
+    Handles:
+    - ObjectId → string
+    - Decimal128 → float
+    - datetime → ISO 8601 string (top-level and nested in documents array)
+
+    Args:
+        txn: Transaction document from MongoDB
+
+    Returns:
+        JSON-serializable dict
+    """
+    # Convert ObjectId
+    if "_id" in txn:
+        txn["_id"] = str(txn["_id"])
+
+    # Convert Decimal128 fields to float
+    for key, value in list(txn.items()):
+        if isinstance(value, Decimal128):
+            txn[key] = float(value.to_decimal())
+
+    # Convert top-level datetime fields to ISO format strings
+    datetime_fields = ["date", "created_at", "updated_at", "payment_date"]
+    for field in datetime_fields:
+        if field in txn and hasattr(txn[field], "isoformat"):
+            txn[field] = txn[field].isoformat()
+
+    # Convert datetime fields in documents array
+    if "documents" in txn and isinstance(txn["documents"], list):
+        for doc in txn["documents"]:
+            doc_datetime_fields = ["uploaded_at", "translated_at"]
+            for field in doc_datetime_fields:
+                if field in doc and doc[field] is not None and hasattr(doc[field], "isoformat"):
+                    doc[field] = doc[field].isoformat()
+
+    return txn
+
 router = APIRouter(prefix="/api/v1/user-transactions", tags=["User Transaction Payments"])
 
 
@@ -46,7 +88,7 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
     **Required Fields:**
     - `user_name`: Full name of the user
     - `user_email`: User email address
-    - `document_url`: URL to the original document
+    - `documents`: Array of document objects (at least one required)
     - `number_of_units`: Number of units (pages, words, or characters)
     - `unit_type`: Type of unit (page | word | character)
     - `cost_per_unit`: Cost per single unit
@@ -56,7 +98,6 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
     - `square_payment_id`: Square payment ID
 
     **Optional Fields (with defaults):**
-    - `translated_url`: URL to the translated document (null initially)
     - `currency`: "USD"
     - `payment_status`: "COMPLETED"
     - `status`: "processing"
@@ -69,8 +110,24 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
     {
         "user_name": "John Doe",
         "user_email": "john.doe@example.com",
-        "document_url": "https://drive.google.com/file/d/1ABC_sample_document/view",
-        "translated_url": "https://drive.google.com/file/d/1ABC_transl_document/view",
+        "documents": [
+            {
+                "document_name": "contract.pdf",
+                "document_url": "https://drive.google.com/file/d/1ABC_contract/view",
+                "translated_url": null,
+                "status": "uploaded",
+                "uploaded_at": "2025-10-23T23:56:55.438Z",
+                "translated_at": null
+            },
+            {
+                "document_name": "invoice.docx",
+                "document_url": "https://drive.google.com/file/d/1DEF_invoice/view",
+                "translated_url": null,
+                "status": "uploaded",
+                "uploaded_at": "2025-10-23T23:57:00.438Z",
+                "translated_at": null
+            }
+        ],
         "number_of_units": 10,
         "unit_type": "page",
         "cost_per_unit": 0.15,
@@ -81,7 +138,7 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
         "amount_cents": 150,
         "currency": "USD",
         "payment_status": "COMPLETED",
-        "status": "completed"
+        "status": "processing"
     }
     ```
 
@@ -91,8 +148,24 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
         "id": "68fad3c2a0f41c24037c4810",
         "user_name": "John Doe",
         "user_email": "john.doe@example.com",
-        "document_url": "https://drive.google.com/file/d/1ABC_sample_document/view",
-        "translated_url": "https://drive.google.com/file/d/1ABC_transl_document/view",
+        "documents": [
+            {
+                "document_name": "contract.pdf",
+                "document_url": "https://drive.google.com/file/d/1ABC_contract/view",
+                "translated_url": null,
+                "status": "uploaded",
+                "uploaded_at": "2025-10-23T23:56:55.438Z",
+                "translated_at": null
+            },
+            {
+                "document_name": "invoice.docx",
+                "document_url": "https://drive.google.com/file/d/1DEF_invoice/view",
+                "translated_url": null,
+                "status": "uploaded",
+                "uploaded_at": "2025-10-23T23:57:00.438Z",
+                "translated_at": null
+            }
+        ],
         "number_of_units": 10,
         "unit_type": "page",
         "cost_per_unit": 0.15,
@@ -100,7 +173,7 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
         "target_language": "es",
         "square_transaction_id": "SQR-1EC28E70F10B4D9E",
         "date": "2025-10-23T23:56:55.438Z",
-        "status": "completed",
+        "status": "processing",
         "total_cost": 1.5,
         "square_payment_id": "SQR-1EC28E70F10B4D9E",
         "amount_cents": 150,
@@ -125,8 +198,16 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
          -d '{
            "user_name": "John Doe",
            "user_email": "john.doe@example.com",
-           "document_url": "https://drive.google.com/file/d/1ABC_sample_document/view",
-           "translated_url": "https://drive.google.com/file/d/1ABC_transl_document/view",
+           "documents": [
+             {
+               "document_name": "contract.pdf",
+               "document_url": "https://drive.google.com/file/d/1ABC_contract/view",
+               "translated_url": null,
+               "status": "uploaded",
+               "uploaded_at": "2025-10-23T23:56:55.438Z",
+               "translated_at": null
+             }
+           ],
            "number_of_units": 10,
            "unit_type": "page",
            "cost_per_unit": 0.15,
@@ -148,12 +229,14 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
         transaction_date = transaction_data.date if transaction_data.date else datetime.utcnow()
         payment_date = transaction_data.payment_date if transaction_data.payment_date else datetime.utcnow()
 
+        # Convert documents to dict format
+        documents_dict = [doc.model_dump() for doc in transaction_data.documents]
+
         # Create transaction using helper function
         result = await create_user_transaction(
             user_name=transaction_data.user_name,
             user_email=transaction_data.user_email,
-            document_url=transaction_data.document_url,
-            translated_url=transaction_data.translated_url,
+            documents=documents_dict,
             number_of_units=transaction_data.number_of_units,
             unit_type=transaction_data.unit_type,
             cost_per_unit=transaction_data.cost_per_unit,
@@ -323,7 +406,7 @@ async def process_transaction_refund(
 
 @router.get("")
 async def get_all_user_transactions(
-    status: Optional[str] = Query(None, description="Filter by transaction status"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by transaction status"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of transactions to return"),
     skip: int = Query(0, ge=0, description="Number of transactions to skip for pagination")
 ):
@@ -395,12 +478,12 @@ async def get_all_user_transactions(
     try:
         logger.info(
             f"Retrieving all user transactions, "
-            f"status filter: {status or 'all'}, limit={limit}, skip={skip}"
+            f"status filter: {status_filter or 'all'}, limit={limit}, skip={skip}"
         )
 
         # Validate status filter if provided
         valid_statuses = ["completed", "pending", "failed"]
-        if status and status not in valid_statuses:
+        if status_filter and status_filter not in valid_statuses:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid transaction status. Must be one of: {', '.join(valid_statuses)}"
@@ -408,12 +491,11 @@ async def get_all_user_transactions(
 
         # Build query filter
         match_stage = {}
-        if status:
-            match_stage["status"] = status
+        if status_filter:
+            match_stage["status"] = status_filter
 
         # Query transactions with sorting (newest first) using aggregation
         from app.database.mongodb import database
-        from bson.decimal128 import Decimal128
 
         pipeline = []
         if match_stage:
@@ -431,21 +513,8 @@ async def get_all_user_transactions(
         # Get total count for the query
         total_count = await database.user_transactions.count_documents(match_stage)
 
-        # Convert ObjectIds and data types to JSON-serializable format
-        for txn in transactions:
-            if "_id" in txn:
-                txn["_id"] = str(txn["_id"])
-
-            # Convert Decimal128 fields to float
-            for key, value in list(txn.items()):
-                if isinstance(value, Decimal128):
-                    txn[key] = float(value.to_decimal())
-
-            # Convert datetime fields to ISO format strings
-            datetime_fields = ["date", "created_at", "updated_at", "payment_date"]
-            for field in datetime_fields:
-                if field in txn and hasattr(txn[field], "isoformat"):
-                    txn[field] = txn[field].isoformat()
+        # Convert all transactions to JSON-serializable format
+        transactions = [serialize_transaction_for_json(txn) for txn in transactions]
 
         logger.info(f"Found {len(transactions)} transactions (total: {total_count})")
 
@@ -458,7 +527,7 @@ async def get_all_user_transactions(
                 "limit": limit,
                 "skip": skip,
                 "filters": {
-                    "status": status
+                    "status": status_filter
                 }
             }
         })
@@ -568,7 +637,6 @@ async def get_user_transaction_history(
 
         # Query transactions with sorting (newest first) using aggregation
         from app.database.mongodb import database
-        from bson.decimal128 import Decimal128
 
         pipeline = [
             {"$match": match_stage},
@@ -580,21 +648,8 @@ async def get_user_transaction_history(
         # Execute aggregation
         transactions = await database.user_transactions.aggregate(pipeline).to_list(length=limit)
 
-        # Convert ObjectIds and data types to JSON-serializable format
-        for txn in transactions:
-            if "_id" in txn:
-                txn["_id"] = str(txn["_id"])
-
-            # Convert Decimal128 fields to float
-            for key, value in list(txn.items()):
-                if isinstance(value, Decimal128):
-                    txn[key] = float(value.to_decimal())
-
-            # Convert datetime fields to ISO format strings
-            datetime_fields = ["date", "created_at", "updated_at", "payment_date"]
-            for field in datetime_fields:
-                if field in txn and hasattr(txn[field], "isoformat"):
-                    txn[field] = txn[field].isoformat()
+        # Convert all transactions to JSON-serializable format
+        transactions = [serialize_transaction_for_json(txn) for txn in transactions]
 
         logger.info(f"Found {len(transactions)} transactions for {email}")
 

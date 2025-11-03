@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 async def create_user_transaction(
     user_name: str,
     user_email: str,
-    document_url: str,
+    documents: List[Dict[str, Any]],
     number_of_units: int,
     unit_type: str,
     cost_per_unit: float,
@@ -36,17 +36,16 @@ async def create_user_transaction(
     payment_status: str = "COMPLETED",
     payment_date: Optional[datetime] = None,
     refunds: Optional[List[Dict[str, Any]]] = None,
-    translated_url: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Create a new user transaction record with Square payment integration.
+    Create a new user transaction record with Square payment integration and multiple documents support.
 
     Automatically calculates total_cost and sets timestamps.
 
     Args:
         user_name: Full name of the user
         user_email: Email address of the user (indexed)
-        document_url: URL or path to the document
+        documents: List of document dictionaries (at least one required)
         number_of_units: Number of units (pages, words, or characters)
         unit_type: Type of unit ("page", "word", "character")
         cost_per_unit: Cost per single unit (decimal)
@@ -61,7 +60,6 @@ async def create_user_transaction(
         payment_status: Payment status ("APPROVED", "COMPLETED", "CANCELED", "FAILED")
         payment_date: Payment processing date (defaults to current UTC time)
         refunds: List of refund dictionaries (default: empty list)
-        translated_url: URL or path to the translated document (optional)
 
     Returns:
         str: square_transaction_id if successful, None if failed
@@ -125,13 +123,17 @@ async def create_user_transaction(
         if refunds is None:
             refunds = []
 
+        # Validate documents array
+        if not documents or len(documents) == 0:
+            logger.error("[UserTransaction] documents array cannot be empty")
+            return None
+
         # Build transaction document with Square payment fields
         transaction_doc = {
             # Core transaction fields
             "user_name": user_name,
             "user_email": user_email,
-            "document_url": document_url,
-            "translated_url": translated_url,
+            "documents": documents,
             "number_of_units": number_of_units,
             "unit_type": unit_type,
             "cost_per_unit": cost_per_unit,

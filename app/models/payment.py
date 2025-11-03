@@ -382,6 +382,32 @@ class PaymentListResponse(BaseModel):
 # User Transaction Models (for users_transactions collection)
 # ============================================================================
 
+class DocumentSchema(BaseModel):
+    """Schema for individual documents in a user transaction."""
+    document_name: str = Field(..., description="Document filename (e.g., 'contract.pdf')")
+    document_url: str = Field(..., description="URL to the original document (Google Drive)")
+    translated_url: Optional[str] = Field(None, description="URL to the translated document (Google Drive)")
+    status: str = Field(
+        default="uploaded",
+        description="Document status: uploaded, translating, completed, failed"
+    )
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow, description="Document upload timestamp")
+    translated_at: Optional[datetime] = Field(None, description="Translation completion timestamp")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'document_name': 'contract.pdf',
+                'document_url': 'https://drive.google.com/file/d/1ABC_original/view',
+                'translated_url': 'https://drive.google.com/file/d/1ABC_translated/view',
+                'status': 'completed',
+                'uploaded_at': '2025-10-23T12:00:00Z',
+                'translated_at': '2025-10-23T12:30:00Z'
+            }
+        }
+    }
+
+
 class UserTransactionRefundSchema(BaseModel):
     """Schema for refund information in user transactions."""
     refund_id: str = Field(..., description="Square refund ID")
@@ -412,12 +438,12 @@ class UserTransactionSchema(BaseModel):
     Schema for user_transactions collection with Square payment integration.
 
     This model represents individual translation transactions with full payment details.
+    Supports multiple documents per transaction.
     """
     # Core transaction fields
     user_name: str = Field(..., description="Full name of the user")
     user_email: EmailStr = Field(..., description="Email address of the user")
-    document_url: str = Field(..., description="URL or path to the document")
-    translated_url: Optional[str] = Field(None, description="URL or path to the translated document")
+    documents: List[DocumentSchema] = Field(..., min_length=1, description="List of documents in this transaction")
     number_of_units: int = Field(..., gt=0, description="Number of units (pages, words, or characters)")
     unit_type: str = Field(..., description="Type of unit: page, word, or character")
     cost_per_unit: float = Field(..., gt=0, description="Cost per single unit")
@@ -449,8 +475,24 @@ class UserTransactionSchema(BaseModel):
             'example': {
                 'user_name': 'John Doe',
                 'user_email': 'john.doe@example.com',
-                'document_url': 'https://drive.google.com/file/d/1ABC_sample_document/view',
-                'translated_url': 'https://drive.google.com/file/d/1ABC_transl_document/view',
+                'documents': [
+                    {
+                        'document_name': 'contract.pdf',
+                        'document_url': 'https://drive.google.com/file/d/1ABC_contract/view',
+                        'translated_url': 'https://drive.google.com/file/d/1ABC_contract_es/view',
+                        'status': 'completed',
+                        'uploaded_at': '2025-10-23T23:56:55.438Z',
+                        'translated_at': '2025-10-23T23:58:30.438Z'
+                    },
+                    {
+                        'document_name': 'invoice.docx',
+                        'document_url': 'https://drive.google.com/file/d/1DEF_invoice/view',
+                        'translated_url': 'https://drive.google.com/file/d/1DEF_invoice_es/view',
+                        'status': 'completed',
+                        'uploaded_at': '2025-10-23T23:57:00.438Z',
+                        'translated_at': '2025-10-23T23:59:15.438Z'
+                    }
+                ],
                 'number_of_units': 10,
                 'unit_type': 'page',
                 'cost_per_unit': 0.15,
@@ -474,11 +516,10 @@ class UserTransactionSchema(BaseModel):
 
 
 class UserTransactionCreate(BaseModel):
-    """Schema for creating a new user transaction."""
+    """Schema for creating a new user transaction with multiple documents support."""
     user_name: str
     user_email: EmailStr
-    document_url: str
-    translated_url: Optional[str] = None
+    documents: List[DocumentSchema] = Field(..., min_length=1, description="List of documents (at least one required)")
     number_of_units: int = Field(..., gt=0)
     unit_type: str = Field(..., pattern="^(page|word|character)$")
     cost_per_unit: float = Field(..., gt=0)
@@ -504,8 +545,16 @@ class UserTransactionCreate(BaseModel):
                 # Required fields
                 'user_name': 'John Doe',
                 'user_email': 'john.doe@example.com',
-                'document_url': 'https://drive.google.com/file/d/1ABC_sample_document/view',
-                'translated_url': 'https://drive.google.com/file/d/1ABC_transl_document/view',
+                'documents': [
+                    {
+                        'document_name': 'contract.pdf',
+                        'document_url': 'https://drive.google.com/file/d/1ABC_contract/view',
+                        'translated_url': None,
+                        'status': 'uploaded',
+                        'uploaded_at': '2025-10-23T23:56:55.438Z',
+                        'translated_at': None
+                    }
+                ],
                 'number_of_units': 10,
                 'unit_type': 'page',
                 'cost_per_unit': 0.15,
@@ -516,7 +565,7 @@ class UserTransactionCreate(BaseModel):
                 # Optional fields (with defaults shown)
                 'currency': 'USD',
                 'payment_status': 'COMPLETED',
-                'status': 'completed',
+                'status': 'processing',
                 # Optional fields
                 'date': '2025-10-23T23:56:55.438Z',
                 'payment_date': '2025-10-23T23:56:55.438Z',
@@ -527,12 +576,11 @@ class UserTransactionCreate(BaseModel):
 
 
 class UserTransactionResponse(BaseModel):
-    """Schema for user transaction API responses."""
+    """Schema for user transaction API responses with multiple documents support."""
     id: str = Field(..., alias="_id")
     user_name: str
     user_email: EmailStr
-    document_url: str
-    translated_url: Optional[str] = None
+    documents: List[DocumentSchema]
     number_of_units: int
     unit_type: str
     cost_per_unit: float

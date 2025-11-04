@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 import logging
 from bson import ObjectId
+from bson.decimal128 import Decimal128
+from datetime import datetime
 
 from app.database.mongodb import database
 from app.models.translation_transaction import TranslationTransactionListResponse
@@ -17,6 +19,50 @@ router = APIRouter(
     prefix="/api/v1/translation-transactions",
     tags=["Translation Transactions"]
 )
+
+
+def serialize_translation_transaction_for_json(txn: dict) -> dict:
+    """
+    Convert MongoDB translation transaction to JSON-serializable dict.
+
+    Handles ObjectId, Decimal128, and datetime fields, including nested documents array.
+    Follows CLAUDE.md Rule #1: MongoDB → JSON Serialization.
+
+    Args:
+        txn: Raw transaction document from MongoDB
+
+    Returns:
+        dict: JSON-serializable transaction with all types converted
+    """
+    # Convert ObjectId → string
+    if "_id" in txn:
+        txn["_id"] = str(txn["_id"])
+
+    # Convert Decimal128 → float
+    for key, value in list(txn.items()):
+        if isinstance(value, Decimal128):
+            txn[key] = float(value.to_decimal())
+
+    # Convert top-level datetime → ISO strings
+    datetime_fields = ["created_at", "updated_at"]
+    for field in datetime_fields:
+        if field in txn and hasattr(txn[field], "isoformat"):
+            txn[field] = txn[field].isoformat()
+
+    # ⚠️ CRITICAL: Convert nested documents array datetime fields
+    # This prevents "Object of type datetime is not JSON serializable" errors
+    if "documents" in txn and isinstance(txn["documents"], list):
+        for doc in txn["documents"]:
+            doc_datetime_fields = [
+                "uploaded_at",
+                "translated_at",
+                "processing_started_at"
+            ]
+            for field in doc_datetime_fields:
+                if field in doc and doc[field] is not None and hasattr(doc[field], "isoformat"):
+                    doc[field] = doc[field].isoformat()
+
+    return txn
 
 
 @router.get(
@@ -350,28 +396,8 @@ async def get_company_translation_transactions(
         # Execute aggregation
         transactions = await database.translation_transactions.aggregate(pipeline).to_list(length=limit)
 
-        # Helper function to recursively convert ObjectIds and datetimes
-        from datetime import datetime
-        from bson.decimal128 import Decimal128
-
-        def convert_doc(obj):
-            """Recursively convert ObjectIds, datetimes, and Decimal128 to JSON-serializable types."""
-            if isinstance(obj, ObjectId):
-                return str(obj)
-            elif isinstance(obj, datetime):
-                return obj.isoformat()
-            elif isinstance(obj, Decimal128):
-                return float(obj.to_decimal())
-            elif isinstance(obj, dict):
-                return {key: convert_doc(value) for key, value in obj.items()}
-            elif isinstance(obj, list):
-                return [convert_doc(item) for item in obj]
-            else:
-                return obj
-
-        # Convert all transactions using recursive converter
-        for idx, transaction in enumerate(transactions):
-            transactions[idx] = convert_doc(transaction)
+        # Serialize all transactions (handles nested documents datetime fields)
+        transactions = [serialize_translation_transaction_for_json(txn) for txn in transactions]
 
         logger.info(f"Found {len(transactions)} translation transactions for company {company_name}")
 
@@ -396,4 +422,92 @@ async def get_company_translation_transactions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve translation transactions: {str(e)}"
+        )
+
+
+@router.get(
+    "/companies",
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "Successfully retrieved unique companies with translation transactions",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "data": {
+                            "companies": ["Iris Trading", "Tech Solutions", "Global Corp"],
+                            "count": 3
+                        }
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Failed to retrieve companies: Database connection error"
+                    }
+                }
+            }
+        }
+    }
+)
+async def get_companies_with_translations():
+    """
+    Get all unique company names that have translation transactions.
+
+    Returns a list of unique company names from the translation_transactions collection.
+    Only returns companies that have at least one transaction record.
+
+    ## Response Structure
+    Returns a standardized response wrapper containing:
+    - **success**: Boolean indicating request success
+    - **data**: Object containing:
+        - **companies**: Array of unique company names (sorted alphabetically)
+        - **count**: Number of unique companies
+
+    ## Usage Examples
+
+    ### Get all companies with transactions
+    ```bash
+    curl -X GET "http://localhost:8000/api/v1/translation-transactions/companies"
+    ```
+
+    ## Notes
+    - Returns empty array if no transactions exist
+    - Company names are sorted alphabetically
+    - Only non-null company names are included
+    - This endpoint dynamically reflects all companies in the database
+    """
+    try:
+        logger.info("Fetching unique companies with translation transactions")
+
+        # Use MongoDB distinct to get unique company names
+        # Filter out null/None values
+        companies = await database.translation_transactions.distinct(
+            "company_name",
+            {"company_name": {"$ne": None}}
+        )
+
+        # Sort alphabetically
+        companies = sorted(companies)
+
+        logger.info(f"Found {len(companies)} unique companies with translation transactions")
+
+        return JSONResponse(content={
+            "success": True,
+            "data": {
+                "companies": companies,
+                "count": len(companies)
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to retrieve companies: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve companies: {str(e)}"
         )

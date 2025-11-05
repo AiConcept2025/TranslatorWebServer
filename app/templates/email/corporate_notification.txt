@@ -1,0 +1,22 @@
+TRANSLATION SERVICES - DOCUMENT READY
+
+Dear {{ user_name }},
+
+The translation process for your documents has been completed. You can download the translated files from the links below:
+
+{% for document in documents %}
+{{ loop.index }}. {{ document.document_name }}
+   - Download Translated: {{ document.translated_url }}
+   - View Original: {{ document.original_url }}
+
+{% endfor %}
+
+IMPORTANT: Please review the translated versions at your earliest convenience and contact the Translation Services team if any revisions are required.
+
+Kind regards,
+Translation Services Team
+{{ translation_service_company }}
+
+---
+{{ company_name }} | Professional Translation Services
+This is an automated notification. For assistance, please contact your Translation Services team.

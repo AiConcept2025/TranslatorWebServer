@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your translated documents are ready for download</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            background-color: #f9f9f9;
+            padding: 30px;
+            border: 1px solid #ddd;
+            border-radius: 0 0 5px 5px;
+        }
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+        .document-list {
+            margin: 20px 0;
+        }
+        .document-item {
+            background-color: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #4CAF50;
+            border-radius: 3px;
+        }
+        .document-name {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        .download-links {
+            margin-top: 8px;
+        }
+        .download-link {
+            display: inline-block;
+            padding: 8px 16px;
+            margin-right: 10px;
+            margin-top: 5px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .download-link:hover {
+            background-color: #45a049;
+        }
+        .download-link.original {
+            background-color: #2196F3;
+        }
+        .download-link.original:hover {
+            background-color: #0b7dda;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #666;
+            font-size: 14px;
+        }
+        .signature {
+            margin-top: 20px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Translation Complete! 🎉</h1>
+    </div>
+
+    <div class="content">
+        <div class="greeting">
+            <p>Hi {{ user_name }},</p>
+        </div>
+
+        <p>Your translation is complete! You can download your translated documents using the links below:</p>
+
+        <div class="document-list">
+            {% for document in documents %}
+            <div class="document-item">
+                <div class="document-name">{{ document.document_name }}</div>
+                <div class="download-links">
+                    <a href="{{ document.translated_url }}" class="download-link" target="_blank">Download Translated</a>
+                    <a href="{{ document.original_url }}" class="download-link original" target="_blank">View Original</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <p>Thank you for using our translation service.</p>
+
+        <div class="signature">
+            <p>Best regards,<br>
+            The Translation Team<br>
+            {{ translation_service_company }}</p>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p><small>This is an automated message. Please do not reply to this email.</small></p>
+    </div>
+</body>
+</html>

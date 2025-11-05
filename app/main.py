@@ -17,7 +17,7 @@ import asyncio
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies
+from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities
@@ -110,6 +110,7 @@ app.add_middleware(
 # Include routers
 app.include_router(languages.router)
 app.include_router(upload.router)
+app.include_router(submit.router)  # File submission endpoint
 app.include_router(payment.router)  # Simplified payment webhooks
 app.include_router(payments.router)  # Payment management API
 app.include_router(user_transactions.router)  # User transaction payment API

@@ -281,6 +281,50 @@ class ServiceConfigurationRequest(BaseModel):
     enabled: bool = Field(True, description="Whether service is enabled")
 
 
+# Submit Request
+class SubmitRequest(BaseModel):
+    """Request model for /submit endpoint."""
+    file_name: str = Field(..., description="Name of the file")
+    file_url: str = Field(..., description="Google Drive shareable URL")
+    user_email: str = Field(..., description="User's email address")
+    company_name: str = Field(..., description="Company name")
+    transaction_id: Optional[str] = Field(None, description="Optional transaction ID")
+
+    @validator('file_name')
+    def validate_file_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError("File name cannot be empty")
+        return v.strip()
+
+    @validator('file_url')
+    def validate_file_url(cls, v):
+        if not v or not v.strip():
+            raise ValueError("File URL cannot be empty")
+        # Basic URL validation for Google Drive URLs
+        if not v.startswith(('http://', 'https://')):
+            raise ValueError("File URL must be a valid HTTP/HTTPS URL")
+        return v.strip()
+
+    @validator('user_email')
+    def validate_user_email(cls, v):
+        import re
+        if not v or not v.strip():
+            raise ValueError("User email cannot be empty")
+
+        # Basic email validation
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, v.strip()):
+            raise ValueError("Invalid email format")
+
+        return v.strip().lower()
+
+    @validator('company_name')
+    def validate_company_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Company name cannot be empty")
+        return v.strip()
+
+
 # Export all models
 __all__ = [
     "TextTranslationRequest",
@@ -299,6 +343,7 @@ __all__ = [
     "WebhookRequest",
     "UserPreferencesRequest",
     "ServiceConfigurationRequest",
+    "SubmitRequest",
     "TranslationServiceType",
     "SortOrder"
 ]

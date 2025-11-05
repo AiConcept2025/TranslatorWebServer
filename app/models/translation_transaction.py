@@ -45,6 +45,10 @@ class TranslationDocumentSchema(BaseModel):
         ge=0,
         description="Processing duration in seconds (None if not completed)"
     )
+    transaction_id: Optional[str] = Field(
+        None,
+        description="MongoDB _id of parent transaction (only populated for enterprise customers)"
+    )
 
     model_config = {
         'json_schema_extra': {

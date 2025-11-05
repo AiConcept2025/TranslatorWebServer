@@ -68,7 +68,7 @@ class Payment(BaseModel):
 
 class PaymentCreate(BaseModel):
     """Schema for creating a new payment."""
-    company_name: str
+    company_name: Optional[str] = None  # Optional: Individual users don't have companies
     user_email: EmailStr
     square_payment_id: str
     amount: int = Field(..., gt=0, description="Payment amount in cents")

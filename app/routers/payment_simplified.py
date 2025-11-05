@@ -86,34 +86,41 @@ async def process_payment_files_background(
         print(f"   Amount: ${amount} {currency}")
         print("=" * 80)
 
-        # Step 0: Persist payment data to payments collection
-        print(f"\n💾 Step 0: Persisting payment data to database...")
-        persist_start = time.time()
+        # Step 0: Check for duplicate payment (idempotency)
+        print(f"\n🔍 Step 0: Checking for duplicate payment...")
+        idempotency_start = time.time()
 
         from app.services.payment_repository import payment_repository
         from app.models.payment import PaymentCreate
 
+        # Check if payment already processed
+        existing_payment = await payment_repository.get_payment_by_square_id(payment_intent_id)
+        if existing_payment:
+            idempotency_time = (time.time() - idempotency_start) * 1000
+            print(f"⏱️  Idempotency check completed in {idempotency_time:.2f}ms")
+            print(f"⚠️  Payment {payment_intent_id} already processed (duplicate webhook)")
+            print(f"✅ Returning early - payment ID: {existing_payment.get('_id')}")
+            logging.info(f"Duplicate payment webhook ignored: {payment_intent_id}")
+            return  # Exit early, don't reprocess
+
+        print(f"✅ No duplicate found, proceeding with payment persistence...")
+
+        # Step 1: Persist payment data to payments collection
+        print(f"\n💾 Step 1: Persisting payment data to database...")
+        persist_start = time.time()
+
         try:
+            # Fix: Only use valid PaymentCreate fields (no company_name for individual users)
             payment_data = PaymentCreate(
+                company_name=None,  # Individual users don't have companies
                 user_email=customer_email,
                 square_payment_id=payment_intent_id,
                 amount=int((amount or 0) * 100) if amount else 0,  # Convert to cents
                 currency=currency or "USD",
-                payment_status="completed",
-                payment_method="card",
-                payment_source="web",
-                card_brand=payment_metadata.cardBrand if payment_metadata else None,
-                last_4_digits=payment_metadata.last4 if payment_metadata else None,
-                buyer_email_address=payment_metadata.customer_email if payment_metadata and payment_metadata.customer_email else customer_email,
-                square_receipt_url=payment_metadata.receiptNumber if payment_metadata else None,
-                webhook_event_id=None,
-                square_raw_response={
-                    "payment_intent_id": payment_intent_id,
-                    "amount": amount,
-                    "currency": currency,
-                    "metadata": payment_metadata.model_dump() if payment_metadata else {}
-                }
+                payment_status="COMPLETED",  # Use schema enum value
+                payment_date=None  # Will default to now() in repository
             )
+            # Note: card_brand, last4, receipt_url stored in metadata collection separately
 
             payment_id = await payment_repository.create_payment(payment_data)
             persist_time = (time.time() - persist_start) * 1000
@@ -126,7 +133,7 @@ async def process_payment_files_background(
             logging.warning(f"Failed to persist payment {payment_intent_id}: {e}")
 
         # Find files awaiting payment
-        print(f"\n🔍 Step 1: Finding files for customer...")
+        print(f"\n🔍 Step 2: Finding files for customer...")
         find_start = time.time()
         files_to_move = await google_drive_service.find_files_by_customer_email(
             customer_email=customer_email,
@@ -147,7 +154,7 @@ async def process_payment_files_background(
             print(f"   {i}. {file_info.get('filename')} (ID: {file_info.get('file_id')[:20]}...)")
 
         # Move files from Temp to Inbox
-        print(f"\n📁 Step 2: Moving files from Temp to Inbox...")
+        print(f"\n📁 Step 3: Moving files from Temp to Inbox...")
         move_start = time.time()
         file_ids = [f['file_id'] for f in files_to_move]
         result = await google_drive_service.move_files_to_inbox_on_payment_success(
@@ -160,7 +167,7 @@ async def process_payment_files_background(
         print(f"📂 Inbox folder ID: {result.get('inbox_folder_id', 'N/A')}")
 
         # Update file statuses - ONLY for successfully moved files
-        print(f"\n🔄 Step 3: Updating file statuses (only for successfully moved files)...")
+        print(f"\n🔄 Step 4: Updating file statuses (only for successfully moved files)...")
         update_start = time.time()
         success_count = 0
         error_count = 0
@@ -352,26 +359,17 @@ async def process_user_payment_files_background(
         from app.models.payment import PaymentCreate
 
         try:
+            # Fix: Only use valid PaymentCreate fields (no company_name for individual users)
             payment_data = PaymentCreate(
+                company_name=None,  # Individual users don't have companies
                 user_email=customer_email,
                 square_payment_id=square_transaction_id,
                 amount=int((amount or 0) * 100) if amount else 0,  # Convert to cents
                 currency=currency or "USD",
-                payment_status="completed",
-                payment_method="card",
-                payment_source="web",
-                card_brand=payment_metadata.cardBrand if payment_metadata else None,
-                last_4_digits=payment_metadata.last4 if payment_metadata else None,
-                buyer_email_address=payment_metadata.customer_email if payment_metadata and payment_metadata.customer_email else customer_email,
-                square_receipt_url=payment_metadata.receiptNumber if payment_metadata else None,
-                webhook_event_id=None,
-                square_raw_response={
-                    "square_transaction_id": square_transaction_id,
-                    "amount": amount,
-                    "currency": currency,
-                    "metadata": payment_metadata.model_dump() if payment_metadata else {}
-                }
+                payment_status="COMPLETED",  # Use schema enum value
+                payment_date=None  # Will default to now() in repository
             )
+            # Note: card_brand, last4, receipt_url stored in metadata collection separately
 
             payment_id = await payment_repository.create_payment(payment_data)
             persist_time = (time.time() - persist_start) * 1000

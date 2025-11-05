@@ -98,7 +98,12 @@ async def create_translation_transaction(
                 "transaction_id": transaction_id,
                 "user_id": user_id,
                 "documents_count": len(documents),
-                "company_name": company_name
+                "company_name": company_name,
+                "will_add_transaction_id_to_metadata": company_name is not None,
+                "documents": [
+                    {"file_name": d["file_name"], "file_size": d["file_size"]}
+                    for d in documents
+                ]
             }
         )
 
@@ -125,16 +130,39 @@ async def create_translation_transaction(
         # Insert into database
         result = await database.translation_transactions.insert_one(transaction_doc)
 
+        # Get MongoDB-generated _id
+        inserted_id = str(result.inserted_id)
+
+        # ONLY for enterprise customers: Add transaction_id to all document metadata
+        if company_name:
+            await database.translation_transactions.update_one(
+                {"_id": result.inserted_id},
+                {"$set": {
+                    "documents.$[].transaction_id": inserted_id
+                }}
+            )
+
+            logger.info(
+                f"Added transaction_id to {len(documents)} document(s) metadata for enterprise customer",
+                extra={
+                    "transaction_id": transaction_id,
+                    "mongodb_id": inserted_id,
+                    "company_name": company_name,
+                    "documents_count": len(documents),
+                    "document_names": [d["file_name"] for d in documents]
+                }
+            )
+
         logger.info(
             f"Successfully created translation transaction {transaction_id}",
             extra={
                 "transaction_id": transaction_id,
-                "inserted_id": str(result.inserted_id),
+                "inserted_id": inserted_id,
                 "documents_count": len(documents)
             }
         )
 
-        return str(result.inserted_id)
+        return inserted_id
 
     except Exception as e:
         logger.error(

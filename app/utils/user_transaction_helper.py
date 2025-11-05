@@ -159,10 +159,47 @@ async def create_user_transaction(
         try:
             result = await collection.insert_one(transaction_doc)
 
+            # Get MongoDB-generated _id
+            inserted_id = str(result.inserted_id)
+
+            # Add transaction_id to ALL document metadata
+            await collection.update_one(
+                {"_id": result.inserted_id},
+                {"$set": {
+                    "documents.$[].transaction_id": inserted_id
+                }}
+            )
+
             logger.info(
                 f"[UserTransaction] Created transaction {square_transaction_id} "
                 f"for user {user_email} with status {status}, payment_status {payment_status}, "
-                f"MongoDB ID: {result.inserted_id}"
+                f"MongoDB ID: {inserted_id}",
+                extra={
+                    "square_transaction_id": square_transaction_id,
+                    "mongodb_id": inserted_id,
+                    "user_email": user_email,
+                    "documents_count": len(documents),
+                    "document_names": [d["file_name"] for d in documents]
+                }
+            )
+
+            # Console output for visibility (matching translate_user.py logging style)
+            print(f"✅ Added transaction_id to {len(documents)} document(s) metadata")
+            print(f"   MongoDB _id: {inserted_id}")
+            print(f"   Square TX ID: {square_transaction_id}")
+            print(f"   User: {user_email}")
+            print(f"   Documents: {', '.join([d['file_name'] for d in documents])}")
+
+            # Structured logging for production
+            logger.info(
+                f"Added transaction_id to {len(documents)} document(s) metadata for user transaction",
+                extra={
+                    "square_transaction_id": square_transaction_id,
+                    "mongodb_id": inserted_id,
+                    "user_email": user_email,
+                    "documents_count": len(documents),
+                    "document_names": [d["file_name"] for d in documents]
+                }
             )
 
             # Debug: Verify insert by querying back

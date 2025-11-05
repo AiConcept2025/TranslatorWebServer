@@ -284,11 +284,21 @@ class ServiceConfigurationRequest(BaseModel):
 # Submit Request
 class SubmitRequest(BaseModel):
     """Request model for /submit endpoint."""
-    file_name: str = Field(..., description="Name of the file")
-    file_url: str = Field(..., description="Google Drive shareable URL")
+    file_name: str = Field(..., description="Name of the translated file")
+    file_url: str = Field(..., description="Google Drive URL of translated file")
     user_email: str = Field(..., description="User's email address")
-    company_name: str = Field(..., description="Company name")
-    transaction_id: Optional[str] = Field(None, description="Optional transaction ID")
+    company_name: str = Field(..., description="Company name ('Ind' for individuals)")
+    transaction_id: str = Field(..., description="Transaction ID to update (required)")
+
+    @validator('transaction_id')
+    def validate_transaction_id(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Transaction ID is required")
+        # Validate format
+        v = v.strip()
+        if len(v) < 5:
+            raise ValueError("Transaction ID must be at least 5 characters")
+        return v
 
     @validator('file_name')
     def validate_file_name(cls, v):

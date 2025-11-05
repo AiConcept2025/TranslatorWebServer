@@ -7,6 +7,64 @@ from typing import Optional, List
 from datetime import datetime
 
 
+class UserTransactionDocument(BaseModel):
+    """
+    Schema for individual documents in a user transaction.
+
+    Represents a single document within a user transaction,
+    including its original and translated URLs, processing status,
+    and timing information.
+    """
+    file_name: str = Field(..., description="Original filename (e.g., 'contract.pdf')")
+    file_size: int = Field(..., ge=0, description="File size in bytes")
+    original_url: str = Field(..., description="Google Drive URL of the original file")
+    translated_url: Optional[str] = Field(None, description="Google Drive URL of the translated file (None if not yet translated)")
+    translated_name: Optional[str] = Field(None, description="Translated filename (None if not yet translated)")
+    status: str = Field(
+        default="uploaded",
+        description="Document processing status: uploaded | translating | completed | failed"
+    )
+    uploaded_at: datetime = Field(
+        ...,
+        description="Timestamp when document was uploaded"
+    )
+    translated_at: Optional[datetime] = Field(
+        None,
+        description="Timestamp when translation completed (None if not yet translated)"
+    )
+    processing_started_at: Optional[datetime] = Field(
+        None,
+        description="Timestamp when translation processing started (None if not started)"
+    )
+    processing_duration: Optional[float] = Field(
+        None,
+        ge=0,
+        description="Processing duration in seconds (None if not completed)"
+    )
+    transaction_id: Optional[str] = Field(
+        None,
+        description="MongoDB _id of parent transaction (added after creation)"
+    )
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'file_name': 'Business_Contract_2024.pdf',
+                'file_size': 524288,
+                'original_url': 'https://drive.google.com/file/d/1ABC_contract_2024/view',
+                'translated_url': 'https://drive.google.com/file/d/1ABC_contract_2024_es/view',
+                'translated_name': 'Business_Contract_2024_es.pdf',
+                'status': 'completed',
+                'uploaded_at': '2025-10-20T10:00:00Z',
+                'translated_at': '2025-10-20T10:15:00Z',
+                'processing_started_at': '2025-10-20T10:00:05Z',
+                'processing_duration': 895.5,
+                'transaction_id': '68fac0c78d81a68274ac140b'
+            }
+        }
+    }
+
+
 class UserTransactionListItem(BaseModel):
     """Individual user transaction record in the response."""
 
@@ -25,10 +83,9 @@ class UserTransactionListItem(BaseModel):
         description="User's email address",
         examples=["john.doe@example.com"]
     )
-    document_url: str = Field(
-        ...,
-        description="URL to the translated document",
-        examples=["https://drive.google.com/file/d/1ABC_sample_document/view"]
+    documents: List[UserTransactionDocument] = Field(
+        default_factory=list,
+        description="List of documents in this transaction (at least one required)"
     )
     number_of_units: int = Field(
         ...,
@@ -93,7 +150,21 @@ class UserTransactionListItem(BaseModel):
                 "_id": "68fac0c78d81a68274ac140b",
                 "user_name": "John Doe",
                 "user_email": "john.doe@example.com",
-                "document_url": "https://drive.google.com/file/d/1ABC_sample_document/view",
+                "documents": [
+                    {
+                        "file_name": "Contract.pdf",
+                        "file_size": 524288,
+                        "original_url": "https://drive.google.com/file/d/1ABC_sample_document/view",
+                        "translated_url": "https://drive.google.com/file/d/1ABC_sample_document_es/view",
+                        "translated_name": "Contract_es.pdf",
+                        "status": "completed",
+                        "uploaded_at": "2025-10-23T23:56:55.438Z",
+                        "translated_at": "2025-10-23T23:57:30.123Z",
+                        "processing_started_at": "2025-10-23T23:56:56.000Z",
+                        "processing_duration": 34.5,
+                        "transaction_id": "68fac0c78d81a68274ac140b"
+                    }
+                ],
                 "number_of_units": 10,
                 "unit_type": "page",
                 "cost_per_unit": 0.15,
@@ -174,7 +245,21 @@ class UserTransactionListResponse(BaseModel):
                             "_id": "68fac0c78d81a68274ac140b",
                             "user_name": "John Doe",
                             "user_email": "john.doe@example.com",
-                            "document_url": "https://drive.google.com/file/d/1ABC_sample_document/view",
+                            "documents": [
+                                {
+                                    "file_name": "Contract.pdf",
+                                    "file_size": 524288,
+                                    "original_url": "https://drive.google.com/file/d/1ABC_sample_document/view",
+                                    "translated_url": "https://drive.google.com/file/d/1ABC_sample_document_es/view",
+                                    "translated_name": "Contract_es.pdf",
+                                    "status": "completed",
+                                    "uploaded_at": "2025-10-23T23:56:55.438Z",
+                                    "translated_at": "2025-10-23T23:57:30.123Z",
+                                    "processing_started_at": "2025-10-23T23:56:56.000Z",
+                                    "processing_duration": 34.5,
+                                    "transaction_id": "68fac0c78d81a68274ac140b"
+                                }
+                            ],
                             "number_of_units": 10,
                             "unit_type": "page",
                             "cost_per_unit": 0.15,

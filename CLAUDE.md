@@ -24,7 +24,195 @@ server/
 ./scripts/setup.sh           # Complete environment setup
 ./scripts/test.sh all        # Run all tests with coverage
 uvicorn app.main:app --reload --port 8000
+
+# Debugging
+# See ../.claude/DEBUGGING_SETUP.md for VS Code debugger configuration
+# TL;DR: Open app/main.py, press F5
 ```
+
+---
+
+## ⚠️ CRITICAL RULES - ALWAYS FOLLOW
+
+### **1. MongoDB → JSON Serialization (JSONResponse)**
+
+When returning MongoDB documents in `JSONResponse`, **ALWAYS** serialize:
+
+```python
+# ✅ ALWAYS use this helper or similar
+def serialize_transaction_for_json(txn: dict) -> dict:
+    # Convert ObjectId → string
+    if "_id" in txn:
+        txn["_id"] = str(txn["_id"])
+
+    # Convert Decimal128 → float
+    for key, value in list(txn.items()):
+        if isinstance(value, Decimal128):
+            txn[key] = float(value.to_decimal())
+
+    # Convert datetime → ISO 8601 string
+    datetime_fields = ["date", "created_at", "updated_at", "payment_date"]
+    for field in datetime_fields:
+        if field in txn and hasattr(txn[field], "isoformat"):
+            txn[field] = txn[field].isoformat()
+
+    # ⚠️ CRITICAL: Handle nested arrays with datetime fields
+    if "documents" in txn and isinstance(txn["documents"], list):
+        for doc in txn["documents"]:
+            doc_datetime_fields = ["uploaded_at", "translated_at"]
+            for field in doc_datetime_fields:
+                if field in doc and doc[field] is not None and hasattr(doc[field], "isoformat"):
+                    doc[field] = doc[field].isoformat()
+
+    return txn
+```
+
+**Why:** `JSONResponse` does NOT auto-serialize Python objects. Missing datetime serialization in nested arrays causes:
+```
+TypeError: Object of type datetime is not JSON serializable
+```
+
+**Prevention:**
+- ✅ Use Pydantic `response_model` when possible (auto-serializes)
+- ✅ Create reusable serialization helpers
+- ✅ Test datetime field types in integration tests (not just structure)
+
+---
+
+### **2. Variable Naming - Avoid Import Shadowing**
+
+**NEVER** name function parameters with these reserved/import names:
+
+```python
+# ❌ WRONG - Shadows FastAPI status module
+from fastapi import status
+
+async def my_endpoint(
+    status: Optional[str] = Query(None, ...)  # ❌ Shadows import!
+):
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)  # CRASH!
+```
+
+```python
+# ✅ CORRECT - Use descriptive name with alias
+from fastapi import status
+
+async def my_endpoint(
+    status_filter: Optional[str] = Query(None, alias="status", ...)  # ✅ No shadowing
+):
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)  # Works!
+```
+
+**Commonly Shadowed Names:**
+- `status` (FastAPI status codes)
+- `json` (json module)
+- `date` / `datetime` (datetime module)
+- `Path` / `Query` (FastAPI imports)
+- `dict` / `list` / `str` (built-ins)
+
+**Why:** Variable shadowing causes `AttributeError: 'str' object has no attribute 'HTTP_500_INTERNAL_SERVER_ERROR'`
+
+**Prevention:**
+- ✅ Use descriptive names: `status_filter`, `date_param`, `json_data`
+- ✅ Use `alias="status"` in Query/Path for backward compatibility
+- ✅ Enable linting to catch shadowing (pylint, ruff)
+
+---
+
+### **3. Test Coverage - Validate Field Types, Not Just Structure**
+
+```python
+# ❌ INSUFFICIENT - Only checks structure
+assert "documents" in transaction
+assert isinstance(transaction["documents"], list)
+
+# ✅ COMPREHENSIVE - Validates serialization
+assert "documents" in transaction
+assert isinstance(transaction["documents"], list)
+# Validate datetime fields are ISO strings, not datetime objects
+doc = transaction["documents"][0]
+assert isinstance(doc["uploaded_at"], str), "uploaded_at must be ISO string"
+if doc["translated_at"] is not None:
+    assert isinstance(doc["translated_at"], str), "translated_at must be ISO string"
+# Validate ISO 8601 format
+from datetime import datetime
+datetime.fromisoformat(doc["uploaded_at"].replace("Z", "+00:00"))
+```
+
+**Why:** Structural tests pass even when serialization is broken. Tests must validate:
+1. Field existence ✅
+2. Field type (str vs datetime) ✅
+3. Format validity (ISO 8601) ✅
+
+---
+
+### **4. Data Preservation - Test Scripts Must Be Safe**
+
+```python
+# ❌ DANGEROUS - Deletes ALL records
+async def clear_user_transactions():
+    collection = database.user_transactions
+    result = await collection.delete_many({})  # Deletes everything!
+
+# ✅ SAFE - Only deletes test records
+async def clear_user_transactions():
+    collection = database.user_transactions
+    # Only delete test records with specific prefix
+    result = await collection.delete_many({
+        "square_transaction_id": {"$regex": "^TEST-"}
+    })
+    print(f"Deleted {result.deleted_count} TEST records")
+```
+
+**MANDATORY RULE:** Test scripts must NEVER delete production data from these collections:
+- `user_transactions`
+- `translation_transactions`
+- `payments`
+- `invoices`
+- `subscriptions`
+- `companies`
+- `users`
+
+**Prevention:**
+- ✅ Always filter by test-specific identifiers (TEST- prefix, test email domains)
+- ✅ Add database name check (must contain "test")
+- ✅ Require confirmation flag: `--confirm-delete-production` (and never use it)
+- ✅ Document in script: "ONLY DELETES TEST RECORDS"
+
+---
+
+### **5. Pydantic vs JSONResponse - Know When to Use Each**
+
+| Scenario | Use | Auto-Serialization | Example |
+|----------|-----|-------------------|---------|
+| **Single model response** | `response_model=ModelClass` | ✅ Yes | POST /process returns UserTransactionResponse |
+| **List of models** | `response_model=List[ModelClass]` | ✅ Yes | GET /transactions returns List[Transaction] |
+| **Custom structure** | `JSONResponse(content={...})` | ❌ No - Manual required | Custom paginated responses |
+| **Raw dict from MongoDB** | `JSONResponse` + serialization helper | ❌ No - Manual required | Complex aggregations |
+
+**Best Practice:**
+1. **Prefer Pydantic `response_model`** for consistency and auto-serialization
+2. If using `JSONResponse`, always create/use serialization helper
+3. Test both structure AND field types
+
+---
+
+### **6. DateTime Handling - Use Timezone-Aware UTC**
+
+```python
+# ❌ DEPRECATED (Python 3.12+ will remove in 3.14)
+from datetime import datetime
+timestamp = datetime.utcnow()  # No timezone info
+
+# ✅ CORRECT - Timezone-aware UTC
+from datetime import datetime, timezone
+timestamp = datetime.now(timezone.utc)  # Has timezone info
+```
+
+**Why:**
+- `datetime.utcnow()` is deprecated since Python 3.12
+- Timezone-naive datetimes cause ambiguity
+- MongoDB stores UTC timestamps with timezone info
 
 ---
 

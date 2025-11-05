@@ -2,7 +2,7 @@
 Translation transaction models for transaction management and tracking.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from pydantic import BaseModel, Field
 
@@ -11,23 +11,81 @@ from pydantic import BaseModel, Field
 # Translation Transaction Models (for translation_transactions collection)
 # ============================================================================
 
+class TranslationDocumentSchema(BaseModel):
+    """
+    Schema for individual documents in a translation transaction.
+
+    Represents a single document within a translation transaction,
+    including its original and translated URLs, processing status,
+    and timing information.
+    """
+    file_name: str = Field(..., description="Original filename (e.g., 'contract.pdf')")
+    file_size: int = Field(..., ge=0, description="File size in bytes")
+    original_url: str = Field(..., description="Google Drive URL of the original file")
+    translated_url: Optional[str] = Field(None, description="Google Drive URL of the translated file (None if not yet translated)")
+    translated_name: Optional[str] = Field(None, description="Translated filename (None if not yet translated)")
+    status: str = Field(
+        default="uploaded",
+        description="Document processing status: uploaded | translating | completed | failed"
+    )
+    uploaded_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp when document was uploaded"
+    )
+    translated_at: Optional[datetime] = Field(
+        None,
+        description="Timestamp when translation completed (None if not yet translated)"
+    )
+    processing_started_at: Optional[datetime] = Field(
+        None,
+        description="Timestamp when translation processing started (None if not started)"
+    )
+    processing_duration: Optional[float] = Field(
+        None,
+        ge=0,
+        description="Processing duration in seconds (None if not completed)"
+    )
+    transaction_id: Optional[str] = Field(
+        None,
+        description="MongoDB _id of parent transaction (only populated for enterprise customers)"
+    )
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'file_name': 'Business_Contract_2024.pdf',
+                'file_size': 524288,
+                'original_url': 'https://drive.google.com/file/d/1ABC_contract_2024/view',
+                'translated_url': 'https://drive.google.com/file/d/1ABC_contract_2024_es/view',
+                'translated_name': 'Business_Contract_2024_es.pdf',
+                'status': 'completed',
+                'uploaded_at': '2025-10-20T10:00:00Z',
+                'translated_at': '2025-10-20T10:15:00Z',
+                'processing_started_at': '2025-10-20T10:00:05Z',
+                'processing_duration': 895.5
+            }
+        }
+    }
+
+
 class TranslationTransactionListItem(BaseModel):
     """
     Individual translation transaction item in the company transactions list.
 
     This schema represents a transaction record as returned in the list endpoint.
     All datetime fields are returned as ISO 8601 strings.
+    Supports multiple documents per transaction via the documents array.
     """
     id: str = Field(..., alias="_id", description="MongoDB ObjectId of the transaction record")
     transaction_id: str = Field(..., description="Unique transaction identifier (e.g., TXN-20FEF6D8FE)")
     user_id: str = Field(..., description="User email address")
-    original_file_url: str = Field(..., description="Google Drive URL of original file")
-    translated_file_url: str = Field(default="", description="Google Drive URL of translated file (empty if not yet translated)")
-    translated_file_name: str = Field(default="", description="Translated filename (empty if not yet translated)")
+    documents: List[TranslationDocumentSchema] = Field(
+        ...,
+        min_length=1,
+        description="List of documents in this transaction (at least one required)"
+    )
     source_language: str = Field(..., description="Source language code (e.g., en)")
     target_language: str = Field(..., description="Target language code (e.g., fr)")
-    file_name: str = Field(..., description="Original filename")
-    file_size: int = Field(..., ge=0, description="File size in bytes")
     units_count: int = Field(..., ge=0, description="Number of translation units (pages or words)")
     price_per_unit: float = Field(..., ge=0, description="Price per translation unit in dollars")
     total_price: float = Field(..., ge=0, description="Total transaction price in dollars")
@@ -46,13 +104,22 @@ class TranslationTransactionListItem(BaseModel):
                 '_id': '68fe1edeac2359ccbc6b05b2',
                 'transaction_id': 'TXN-20FEF6D8FE',
                 'user_id': 'danishevsky@yahoo.com',
-                'original_file_url': 'https://docs.google.com/document/d/1ABCdef123/edit',
-                'translated_file_url': '',
-                'translated_file_name': '',
+                'documents': [
+                    {
+                        'file_name': 'TCG.docx',
+                        'file_size': 838186,
+                        'original_url': 'https://docs.google.com/document/d/1ABCdef123/edit',
+                        'translated_url': 'https://docs.google.com/document/d/1ABCdef123_fr/edit',
+                        'translated_name': 'TCG_fr.docx',
+                        'status': 'completed',
+                        'uploaded_at': '2025-10-26T13:15:10+00:00',
+                        'translated_at': '2025-10-26T13:30:45+00:00',
+                        'processing_started_at': '2025-10-26T13:15:15+00:00',
+                        'processing_duration': 935.0
+                    }
+                ],
                 'source_language': 'en',
                 'target_language': 'fr',
-                'file_name': 'TCG.docx',
-                'file_size': 838186,
                 'units_count': 33,
                 'price_per_unit': 0.01,
                 'total_price': 0.33,
@@ -109,13 +176,22 @@ class TranslationTransactionListData(BaseModel):
                                 '_id': '68fe1edeac2359ccbc6b05b2',
                                 'transaction_id': 'TXN-20FEF6D8FE',
                                 'user_id': 'danishevsky@yahoo.com',
-                                'original_file_url': 'https://docs.google.com/document/d/1ABCdef123/edit',
-                                'translated_file_url': '',
-                                'translated_file_name': '',
+                                'documents': [
+                                    {
+                                        'file_name': 'TCG.docx',
+                                        'file_size': 838186,
+                                        'original_url': 'https://docs.google.com/document/d/1ABCdef123/edit',
+                                        'translated_url': None,
+                                        'translated_name': None,
+                                        'status': 'translating',
+                                        'uploaded_at': '2025-10-26T13:15:10+00:00',
+                                        'translated_at': None,
+                                        'processing_started_at': '2025-10-26T13:15:15+00:00',
+                                        'processing_duration': None
+                                    }
+                                ],
                                 'source_language': 'en',
                                 'target_language': 'fr',
-                                'file_name': 'TCG.docx',
-                                'file_size': 838186,
                                 'units_count': 33,
                                 'price_per_unit': 0.01,
                                 'total_price': 0.33,
@@ -131,13 +207,22 @@ class TranslationTransactionListData(BaseModel):
                                 '_id': '68fe1edeac2359ccbc6b05b3',
                                 'transaction_id': 'TXN-30FEF6D8FF',
                                 'user_id': 'user@company.com',
-                                'original_file_url': 'https://docs.google.com/document/d/2XYZabc456/edit',
-                                'translated_file_url': 'https://docs.google.com/document/d/3XYZabc789/edit',
-                                'translated_file_name': 'Document_de.pdf',
+                                'documents': [
+                                    {
+                                        'file_name': 'Document.pdf',
+                                        'file_size': 524288,
+                                        'original_url': 'https://docs.google.com/document/d/2XYZabc456/edit',
+                                        'translated_url': 'https://docs.google.com/document/d/3XYZabc789/edit',
+                                        'translated_name': 'Document_de.pdf',
+                                        'status': 'completed',
+                                        'uploaded_at': '2025-10-25T10:30:00+00:00',
+                                        'translated_at': '2025-10-25T11:00:00+00:00',
+                                        'processing_started_at': '2025-10-25T10:30:05+00:00',
+                                        'processing_duration': 1795.0
+                                    }
+                                ],
                                 'source_language': 'es',
                                 'target_language': 'de',
-                                'file_name': 'Document.pdf',
-                                'file_size': 524288,
                                 'units_count': 15,
                                 'price_per_unit': 0.01,
                                 'total_price': 0.15,
@@ -201,13 +286,22 @@ class TranslationTransactionListResponse(BaseModel):
                                     '_id': '68fe1edeac2359ccbc6b05b2',
                                     'transaction_id': 'TXN-20FEF6D8FE',
                                     'user_id': 'danishevsky@yahoo.com',
-                                    'original_file_url': 'https://docs.google.com/document/d/1ABCdef123/edit',
-                                    'translated_file_url': '',
-                                    'translated_file_name': '',
+                                    'documents': [
+                                        {
+                                            'file_name': 'TCG.docx',
+                                            'file_size': 838186,
+                                            'original_url': 'https://docs.google.com/document/d/1ABCdef123/edit',
+                                            'translated_url': None,
+                                            'translated_name': None,
+                                            'status': 'translating',
+                                            'uploaded_at': '2025-10-26T13:15:10+00:00',
+                                            'translated_at': None,
+                                            'processing_started_at': '2025-10-26T13:15:15+00:00',
+                                            'processing_duration': None
+                                        }
+                                    ],
                                     'source_language': 'en',
                                     'target_language': 'fr',
-                                    'file_name': 'TCG.docx',
-                                    'file_size': 838186,
                                     'units_count': 33,
                                     'price_per_unit': 0.01,
                                     'total_price': 0.33,
@@ -258,13 +352,22 @@ class TranslationTransactionListResponse(BaseModel):
                                     '_id': '68fe1edeac2359ccbc6b05b3',
                                     'transaction_id': 'TXN-30FEF6D8FF',
                                     'user_id': 'user@company.com',
-                                    'original_file_url': 'https://docs.google.com/document/d/2XYZabc456/edit',
-                                    'translated_file_url': 'https://docs.google.com/document/d/3XYZabc789/edit',
-                                    'translated_file_name': 'Document_de.pdf',
+                                    'documents': [
+                                        {
+                                            'file_name': 'Document.pdf',
+                                            'file_size': 524288,
+                                            'original_url': 'https://docs.google.com/document/d/2XYZabc456/edit',
+                                            'translated_url': 'https://docs.google.com/document/d/3XYZabc789/edit',
+                                            'translated_name': 'Document_de.pdf',
+                                            'status': 'completed',
+                                            'uploaded_at': '2025-10-25T10:30:00+00:00',
+                                            'translated_at': '2025-10-25T11:00:00+00:00',
+                                            'processing_started_at': '2025-10-25T10:30:05+00:00',
+                                            'processing_duration': 1795.0
+                                        }
+                                    ],
                                     'source_language': 'es',
                                     'target_language': 'de',
-                                    'file_name': 'Document.pdf',
-                                    'file_size': 524288,
                                     'units_count': 15,
                                     'price_per_unit': 0.01,
                                     'total_price': 0.15,

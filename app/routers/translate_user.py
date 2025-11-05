@@ -417,10 +417,24 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
                 f"FILE {i} TRANSACTION CREATE", f"Square ID: {square_tx_id}"
             )
 
+            # Build documents array (single file per transaction)
+            documents = [{
+                "file_name": file_info.name,
+                "file_size": file_info.size,
+                "original_url": file_result.get("google_drive_url", ""),
+                "translated_url": None,
+                "translated_name": None,
+                "status": "uploaded",
+                "uploaded_at": datetime.now(timezone.utc),
+                "translated_at": None,
+                "processing_started_at": None,
+                "processing_duration": None,
+            }]
+
             tx_id = await create_user_transaction(
                 user_name=request.userName,
                 user_email=request.email,
-                document_url=file_result.get("google_drive_url", ""),
+                documents=documents,
                 number_of_units=page_count,
                 unit_type=unit_type,
                 cost_per_unit=cost_per_unit,

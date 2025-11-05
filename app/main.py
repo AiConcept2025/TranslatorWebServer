@@ -17,7 +17,7 @@ import asyncio
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders
+from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities
@@ -116,6 +116,7 @@ app.include_router(user_transactions.router)  # User transaction payment API
 app.include_router(invoices.router)  # Invoice management API
 app.include_router(translation_transactions.router)  # Translation transaction management API
 app.include_router(company_users.router)  # Company user management API
+app.include_router(companies.router)  # Company management API
 app.include_router(orders.router)  # Orders management API
 app.include_router(auth.router)
 app.include_router(subscriptions.router)
@@ -874,6 +875,32 @@ async def process_transaction_confirmation_background(
                 print(f"   ❌ Failed to verify file {file_id[:20]}...: {e}")
 
         print(f"✅ Verified: {verified_count}/{len(move_result.get('moved_files', []))} files")
+
+        # Step 5: Update file properties with transaction_id
+        print(f"\n📝 Step 5: Adding transaction IDs to file metadata...")
+        metadata_start = time.time()
+        metadata_updates_successful = 0
+
+        for i, file_id in enumerate(file_ids):
+            try:
+                transaction_id = transaction_ids[i]
+                await google_drive_service.update_file_properties(
+                    file_id=file_id,
+                    properties={
+                        'transaction_id': transaction_id,
+                        'status': 'confirmed',
+                        'confirmation_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ')
+                    }
+                )
+                metadata_updates_successful += 1
+                print(f"   ✓ File {file_id[:20]}...: Added transaction_id={transaction_id}")
+            except Exception as e:
+                print(f"   ⚠️  Failed to update metadata for file {file_id[:20]}...: {e}")
+                # Continue processing other files even if one fails
+
+        metadata_elapsed = (time.time() - metadata_start) * 1000
+        print(f"⏱️  Metadata update completed in {metadata_elapsed:.2f}ms")
+        print(f"✅ Updated: {metadata_updates_successful}/{len(file_ids)} files")
 
         # Update transaction status
         print(f"\n🔄 Step 3: Updating transaction status...")

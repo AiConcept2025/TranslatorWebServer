@@ -1,0 +1,19 @@
+Hi {{ user_name }},
+
+Your translation is complete! You can download your translated documents using the links below:
+
+{% for document in documents %}
+{{ document.document_name }}:
+- Translated: {{ document.translated_url }}
+- Original: {{ document.original_url }}
+
+{% endfor %}
+
+Thank you for using our translation service.
+
+Best regards,
+The Translation Team
+{{ translation_service_company }}
+
+---
+This is an automated message. Please do not reply to this email.

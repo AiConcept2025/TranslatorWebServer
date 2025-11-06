@@ -89,12 +89,20 @@ class Settings(BaseSettings):
     health_check_interval: int = 30
     metrics_enabled: bool = True
     
-    # Email Configuration
-    smtp_host: Optional[str] = None
-    smtp_port: Optional[int] = None
-    smtp_username: Optional[str] = None
-    smtp_password: Optional[str] = None
-    email_from: Optional[str] = None
+    # Email Configuration (Yahoo SMTP defaults)
+    smtp_host: str = "smtp.mail.yahoo.com"
+    smtp_port: int = 587
+    smtp_username: Optional[str] = None  # Yahoo email address
+    smtp_password: Optional[str] = None  # Yahoo app-specific password
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_timeout: int = 30
+    email_from: Optional[str] = None  # Sender email
+    email_from_name: str = "Iris Solutions Translation Services"
+    email_reply_to: Optional[str] = None
+    email_enabled: bool = True
+    email_template_dir: str = "./app/templates/email"
+    translation_service_company: str = "Iris Solutions"
     
     @validator('secret_key')
     def validate_secret_key(cls, v):
@@ -173,9 +181,10 @@ class Settings(BaseSettings):
         directories = [
             self.upload_dir,
             self.temp_dir,
+            self.email_template_dir,
             os.path.dirname(self.log_file) if self.log_file else None
         ]
-        
+
         for directory in directories:
             if directory and not os.path.exists(directory):
                 os.makedirs(directory, exist_ok=True)

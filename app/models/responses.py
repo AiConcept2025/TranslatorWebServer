@@ -342,6 +342,18 @@ class RateLimitResponse(BaseResponse):
     rate_limit: RateLimitInfo
 
 
+# Submit Response Models
+class SubmitSuccessResponse(BaseModel):
+    """Success response model for /submit endpoint."""
+    status: str = Field(..., description="Status of the submission")
+    message: str = Field(..., description="Message describing the result")
+
+
+class SubmitErrorResponse(BaseModel):
+    """Error response model for /submit endpoint."""
+    error: str = Field(..., description="Error message")
+
+
 # Export all models
 __all__ = [
     "BaseResponse",
@@ -380,6 +392,8 @@ __all__ = [
     "ValidationErrorResponse",
     "RateLimitInfo",
     "RateLimitResponse",
+    "SubmitSuccessResponse",
+    "SubmitErrorResponse",
     "TranslationStatus",
     "FileType",
     "PaymentStatus"

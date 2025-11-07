@@ -153,7 +153,7 @@ class TranslateRequest(BaseModel):
 # Transaction Helper Function
 # ============================================================================
 async def create_transaction_record(
-    files_info: List[dict],
+    file_info: dict,
     user_data: dict,
     request_data: TranslateRequest,
     subscription: Optional[dict],
@@ -161,13 +161,13 @@ async def create_transaction_record(
     price_per_page: float
 ) -> Optional[str]:
     """
-    Create transaction record for multiple file uploads.
+    Create transaction record for a single file upload.
 
-    STRUCTURE: Uses nested documents[] array for ALL files.
+    STRUCTURE: Uses nested documents[] array instead of flat file fields.
     Each transaction represents one upload session with potentially multiple documents.
 
     Args:
-        files_info: List of dicts with file_id, filename, size, page_count, google_drive_url
+        file_info: Dict with file_id, filename, size, page_count, google_drive_url
         user_data: Current authenticated user data
         request_data: Original TranslateRequest
         subscription: Enterprise subscription (or None for individual)
@@ -186,26 +186,6 @@ async def create_transaction_record(
         # Generate unique transaction ID
         transaction_id = f"TXN-{uuid.uuid4().hex[:10].upper()}"
 
-        # Calculate total units and price for ALL files
-        total_units = sum(f.get("page_count", 1) for f in files_info)
-        total_price = total_units * price_per_page
-
-        # Build documents array with ALL files
-        documents = []
-        for file_info in files_info:
-            documents.append({
-                "file_name": file_info.get("filename", ""),
-                "file_size": file_info.get("size", 0),
-                "original_url": file_info.get("google_drive_url", ""),
-                "translated_url": None,
-                "translated_name": None,
-                "status": "uploaded",
-                "uploaded_at": datetime.now(timezone.utc),
-                "translated_at": None,
-                "processing_started_at": None,
-                "processing_duration": None
-            })
-
         # Build transaction document with NESTED structure
         # IMPORTANT: Store actual email, not generated user_id
         transaction_doc = {
@@ -214,20 +194,29 @@ async def create_transaction_record(
             "user_id": request_data.email,  # Use actual email for folder lookup
             "source_language": request_data.sourceLanguage,
             "target_language": request_data.targetLanguage,
-            "units_count": total_units,
+            "units_count": file_info.get("page_count", 1),
             "price_per_unit": price_per_page,
-            "total_price": total_price,
+            "total_price": file_info.get("page_count", 1) * price_per_page,
             "status": "started",
             "error_message": "",
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
 
-            # NESTED documents array - ALL files in this transaction
-            "documents": documents,
-
-            # Initialize counters for email batching
-            "total_documents": len(documents),
-            "completed_documents": 0
+            # NESTED documents array - one document per file
+            "documents": [
+                {
+                    "file_name": file_info.get("filename", ""),
+                    "file_size": file_info.get("size", 0),
+                    "original_url": file_info.get("google_drive_url", ""),
+                    "translated_url": None,
+                    "translated_name": None,
+                    "status": "uploaded",
+                    "uploaded_at": datetime.now(timezone.utc),
+                    "translated_at": None,
+                    "processing_started_at": None,
+                    "processing_duration": None
+                }
+            ]
         }
 
         # Add enterprise-specific fields if applicable
@@ -246,26 +235,13 @@ async def create_transaction_record(
         # Insert into database
         await database.translation_transactions.insert_one(transaction_doc)
 
-        file_names = ", ".join([f.get('filename', 'unknown') for f in files_info])
-        logging.info(
-            f"[TRANSACTION] Created {transaction_id} with {len(documents)} document(s): {file_names}",
-            extra={
-                "transaction_id": transaction_id,
-                "total_documents": len(documents),
-                "completed_documents": 0,
-                "files": file_names
-            }
-        )
-        print(f"[TRANSACTION] Created {transaction_id} with {len(documents)} document(s)")
-        print(f"   Files: {file_names}")
-        print(f"   Counters: 0/{len(documents)} complete")
+        logging.info(f"[TRANSACTION] Created {transaction_id} for file: {file_info.get('filename')}")
+        print(f"[TRANSACTION] Created {transaction_id} for file: {file_info.get('filename')}")
         return transaction_id
 
     except Exception as e:
-        file_names = ", ".join([f.get('filename', 'unknown') for f in files_info])
-        logging.error(f"[TRANSACTION] Failed to create transaction for files {file_names}: {e}")
-        print(f"[TRANSACTION] Failed to create transaction for files: {file_names}")
-        print(f"   Error: {e}")
+        logging.error(f"[TRANSACTION] Failed to create transaction for {file_info.get('filename')}: {e}")
+        print(f"[TRANSACTION] Failed to create transaction for {file_info.get('filename')}: {e}")
         return None
 
 
@@ -539,22 +515,7 @@ async def translate_files(
             log_step(f"FILE {i} GDRIVE UPLOADED", f"File ID: {file_result['file_id']}")
 
             # Update file with enhanced metadata for payment linking
-            # CRITICAL: Store transaction_id early so it's available in webhook even if payment confirmation fails
-            log_step(f"FILE {i} METADATA UPDATE", "Setting file properties with transaction_id")
-
-            # Get the transaction_id that will be created (or was already created)
-            # For first file, we'll create it below; for subsequent files, use the same one
-            current_transaction_id = None
-            if i == 0 and not transaction_ids:
-                # First file and transaction not yet created - will be created below
-                # For now, set placeholder (will be updated after transaction creation)
-                current_transaction_id = "pending"
-            elif transaction_ids:
-                # Transaction already created (i > 0)
-                current_transaction_id = transaction_ids[0]
-            else:
-                current_transaction_id = "pending"
-
+            log_step(f"FILE {i} METADATA UPDATE", "Setting file properties")
             await google_drive_service.update_file_properties(
                 file_id=file_result['file_id'],
                 properties={
@@ -564,8 +525,7 @@ async def translate_files(
                     'page_count': str(page_count),
                     'status': 'awaiting_payment',
                     'upload_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                    'original_filename': file_info.name,
-                    'transaction_id': current_transaction_id  # Store transaction_id early
+                    'original_filename': file_info.name
                 }
             )
             log_step(f"FILE {i} COMPLETE", f"URL: {file_result.get('google_drive_url', 'N/A')}")
@@ -729,41 +689,26 @@ async def translate_files(
         logging.info(f"[PAYMENT] Payment required for {'individual customer' if not is_enterprise else 'enterprise without subscription'}")
         print(f"\n💳 Payment required: {'Individual customer' if not is_enterprise else 'Enterprise without subscription'}")
 
-    # Create ONE transaction record with ALL uploaded files (enterprise + individual)
+    # Create transaction records for ALL uploaded files (enterprise + individual)
     successful_stored_files = [f for f in stored_files if f["status"] == "stored"]
-    log_step("TRANSACTION CREATE START", f"Creating ONE transaction for {len(successful_stored_files)} successful uploads")
+    log_step("TRANSACTION CREATE START", f"Creating records for {len(successful_stored_files)} successful uploads")
 
-    if successful_stored_files:
-        # Create a single transaction with all files
-        transaction_id = await create_transaction_record(
-            files_info=successful_stored_files,  # Pass ALL files
-            user_data=current_user,
-            request_data=request,
-            subscription=subscription if is_enterprise else None,
-            company_name=company_name if is_enterprise else None,
-            price_per_page=price_per_page
-        )
+    for stored_file in stored_files:
+        if stored_file["status"] == "stored":
+            transaction_id = await create_transaction_record(
+                file_info=stored_file,
+                user_data=current_user,
+                request_data=request,
+                subscription=subscription if is_enterprise else None,
+                company_name=company_name if is_enterprise else None,
+                price_per_page=price_per_page
+            )
 
-        if transaction_id:
-            transaction_ids.append(transaction_id)
-            log_step("TRANSACTION CREATED", f"ID: {transaction_id} for {len(successful_stored_files)} files")
+            if transaction_id:
+                transaction_ids.append(transaction_id)
+                log_step("TRANSACTION CREATED", f"ID: {transaction_id} for {stored_file['filename']}")
 
-            # CRITICAL: Update file metadata with actual transaction_id now that it's been created
-            # This ensures GoogleTranslator webhook can read the transaction_id from file metadata
-            log_step("FILE METADATA UPDATE WITH TRANSACTION_ID", f"Updating {len(successful_stored_files)} files with transaction_id={transaction_id}")
-            for file_info in successful_stored_files:
-                try:
-                    await google_drive_service.update_file_properties(
-                        file_id=file_info['file_id'],
-                        properties={
-                            'transaction_id': transaction_id
-                        }
-                    )
-                    log_step("FILE METADATA UPDATED", f"{file_info['filename']} -> transaction_id={transaction_id}")
-                except Exception as e:
-                    log_step("FILE METADATA UPDATE FAILED", f"{file_info['filename']}: {str(e)}")
-
-    log_step("TRANSACTION CREATE COMPLETE", f"Created 1 transaction with {len(successful_stored_files)} document(s)")
+    log_step("TRANSACTION CREATE COMPLETE", f"Created {len(transaction_ids)} transaction(s)")
 
     # Extract user information from JWT token (if authenticated)
     user_info = None
@@ -957,30 +902,22 @@ async def process_transaction_confirmation_background(
         metadata_start = time.time()
         metadata_updates_successful = 0
 
-        # CRITICAL FIX: With new 1-transaction-per-upload model, ALL files belong to transaction_ids[0]
-        # (Previously: 1 transaction per file, now: 1 transaction with all files)
-        if transaction_ids and len(transaction_ids) > 0:
-            transaction_id = transaction_ids[0]  # Get the single transaction ID
-            print(f"   Using transaction_id={transaction_id} for ALL {len(file_ids)} files")
-
-            for i, file_id in enumerate(file_ids):
-                try:
-                    await google_drive_service.update_file_properties(
-                        file_id=file_id,
-                        properties={
-                            'transaction_id': transaction_id,  # Same transaction for all files
-                            'status': 'confirmed',
-                            'confirmation_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ')
-                        }
-                    )
-                    metadata_updates_successful += 1
-                    print(f"   ✓ File {file_id[:20]}...: Added transaction_id={transaction_id}")
-                except Exception as e:
-                    print(f"   ⚠️  Failed to update metadata for file {file_id[:20]}...: {e}")
-                    # Continue processing other files even if one fails
-        else:
-            print(f"   ⚠️  WARNING: No transaction_ids available to store in file metadata")
-            print(f"   {len(file_ids)} files will not have transaction_id set")
+        for i, file_id in enumerate(file_ids):
+            try:
+                transaction_id = transaction_ids[i]
+                await google_drive_service.update_file_properties(
+                    file_id=file_id,
+                    properties={
+                        'transaction_id': transaction_id,
+                        'status': 'confirmed',
+                        'confirmation_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ')
+                    }
+                )
+                metadata_updates_successful += 1
+                print(f"   ✓ File {file_id[:20]}...: Added transaction_id={transaction_id}")
+            except Exception as e:
+                print(f"   ⚠️  Failed to update metadata for file {file_id[:20]}...: {e}")
+                # Continue processing other files even if one fails
 
         metadata_elapsed = (time.time() - metadata_start) * 1000
         print(f"⏱️  Metadata update completed in {metadata_elapsed:.2f}ms")

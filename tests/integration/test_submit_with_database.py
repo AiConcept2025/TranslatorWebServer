@@ -466,16 +466,14 @@ class TestSubmitEmailIntegration:
         self, http_client, test_enterprise_transaction
     ):
         """
-        Test email batching: send ONE email only when ALL documents are complete.
+        Test that email includes ALL translated documents, not just the current one.
 
         Verifies:
-        - First submit: NO email (incomplete), counter shows 1/2
-        - Second submit: EMAIL SENT (complete), counter shows 2/2
-        - Email includes ALL translated documents
+        - documents_count in response shows all translated documents
         """
         transaction_id = test_enterprise_transaction["transaction_id"]
 
-        # Submit first document - NO EMAIL (incomplete)
+        # Submit first document
         payload1 = {
             "file_name": "report.pdf",
             "file_url": "https://drive.google.com/file/d/trans1/view",
@@ -486,15 +484,9 @@ class TestSubmitEmailIntegration:
         response1 = await http_client.post("/submit", json=payload1)
         assert response1.status_code == 200
         data1 = response1.json()
-
-        # Verify email NOT sent (incomplete)
-        assert data1.get("email_sent") == False, "Email should not be sent when documents incomplete"
-        assert data1.get("all_documents_complete") == False
-        assert data1.get("completed_documents") == 1
-        assert data1.get("total_documents") == 2
         assert data1.get("documents_count") == 1  # Only 1 translated so far
 
-        # Submit second document - EMAIL SENT (all complete)
+        # Submit second document
         payload2 = {
             "file_name": "summary.docx",
             "file_url": "https://drive.google.com/file/d/trans2/view",
@@ -505,13 +497,7 @@ class TestSubmitEmailIntegration:
         response2 = await http_client.post("/submit", json=payload2)
         assert response2.status_code == 200
         data2 = response2.json()
-
-        # Verify email SENT (all complete)
-        assert data2.get("email_sent") == True, "Email should be sent when all documents complete"
-        assert data2.get("all_documents_complete") == True
-        assert data2.get("completed_documents") == 2
-        assert data2.get("total_documents") == 2
-        assert data2.get("documents_count") == 2  # Email includes both documents
+        assert data2.get("documents_count") == 2  # Both translated now
 
 
 # ============================================================================

@@ -119,10 +119,6 @@ async def submit_file(request: SubmitRequest):
             response_data["documents_count"] = result["documents_count"]
         if "email_error" in result:
             response_data["email_error"] = result["email_error"]
-        if "completed_documents" in result:
-            response_data["completed_documents"] = result["completed_documents"]
-        if "total_documents" in result:
-            response_data["total_documents"] = result["total_documents"]
 
         logger.info(
             f"Submit request successful for {request.file_name} "

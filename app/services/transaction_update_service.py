@@ -224,23 +224,96 @@ class TransactionUpdateService:
             # Generate translated_name (remove language suffix if present)
             translated_name = self._generate_translated_name(file_name)
 
+            # Check if document was already translated (for idempotency)
+            already_translated = bool(documents[document_index].get("translated_url"))
+
+            # Log current counter values BEFORE update
+            logger.info(
+                f"COUNTER STATE BEFORE UPDATE - Transaction {transaction_id}",
+                extra={
+                    "transaction_id": transaction_id,
+                    "file_name": file_name,
+                    "current_total_documents": transaction.get("total_documents"),
+                    "current_completed_documents": transaction.get("completed_documents"),
+                    "total_documents_in_db": len(documents),
+                    "already_translated": already_translated
+                }
+            )
+
+            # Build update operations
+            update_operations = {
+                "$set": {
+                    f"documents.{document_index}.translated_url": file_url,
+                    f"documents.{document_index}.translated_name": translated_name,
+                    f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
+
+            # Initialize counters for backward compatibility (if field missing or None)
+            if transaction.get("total_documents") is None:
+                update_operations["$set"]["total_documents"] = len(documents)
+                logger.info(
+                    f"INITIALIZING total_documents counter",
+                    extra={
+                        "transaction_id": transaction_id,
+                        "total_documents_initialized_to": len(documents)
+                    }
+                )
+
+            # Handle completed_documents counter
+            if not already_translated:
+                # If field doesn't exist, initialize to 1 (this is the first completion)
+                if transaction.get("completed_documents") is None:
+                    update_operations["$set"]["completed_documents"] = 1
+                    logger.info(
+                        f"INITIALIZING completed_documents counter to 1 (first document completion)",
+                        extra={
+                            "transaction_id": transaction_id,
+                            "file_name": file_name,
+                            "document_index": document_index
+                        }
+                    )
+                else:
+                    # Field exists, increment it
+                    if "$inc" not in update_operations:
+                        update_operations["$inc"] = {}
+                    update_operations["$inc"]["completed_documents"] = 1
+                    logger.info(
+                        f"INCREMENTING completed_documents counter",
+                        extra={
+                            "transaction_id": transaction_id,
+                            "file_name": file_name,
+                            "document_index": document_index,
+                            "current_value": transaction.get("completed_documents"),
+                            "will_increment_by": 1
+                        }
+                    )
+            else:
+                logger.info(
+                    f"SKIPPING counter increment - document already translated",
+                    extra={
+                        "transaction_id": transaction_id,
+                        "file_name": file_name,
+                        "document_index": document_index
+                    }
+                )
+
             # Update the specific document in the array
             # NOTE: We already found the correct document_index above by matching lookup_name,
             # so we only need transaction_id in the filter. Adding file_name here would cause
             # a mismatch because file_name contains "_translated" suffix but database stores
             # the original filename without this suffix.
-            update_result = await collection.update_one(
-                {
-                    "transaction_id": transaction_id
-                },
-                {
-                    "$set": {
-                        f"documents.{document_index}.translated_url": file_url,
-                        f"documents.{document_index}.translated_name": translated_name,
-                        f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
-                        "updated_at": datetime.now(timezone.utc)
-                    }
+            logger.info(
+                f"EXECUTING MongoDB update_one operation",
+                extra={
+                    "transaction_id": transaction_id,
+                    "update_operations": str(update_operations)
                 }
+            )
+            update_result = await collection.update_one(
+                {"transaction_id": transaction_id},
+                update_operations
             )
 
             if update_result.modified_count > 0:
@@ -259,6 +332,18 @@ class TransactionUpdateService:
 
                 # Get updated transaction for email
                 updated_transaction = await collection.find_one({"transaction_id": transaction_id})
+
+                # Log counter state AFTER update
+                logger.info(
+                    f"COUNTER STATE AFTER UPDATE - Transaction {transaction_id}",
+                    extra={
+                        "transaction_id": transaction_id,
+                        "file_name": file_name,
+                        "updated_total_documents": updated_transaction.get("total_documents"),
+                        "updated_completed_documents": updated_transaction.get("completed_documents"),
+                        "all_documents_count": len(updated_transaction.get("documents", []))
+                    }
+                )
 
                 return {
                     "success": True,
@@ -430,23 +515,96 @@ class TransactionUpdateService:
             # Generate translated_name
             translated_name = self._generate_translated_name(file_name)
 
+            # Check if document was already translated (for idempotency)
+            already_translated = bool(documents[document_index].get("translated_url"))
+
+            # Log current counter values BEFORE update
+            logger.info(
+                f"COUNTER STATE BEFORE UPDATE - Transaction {transaction_id}",
+                extra={
+                    "transaction_id": transaction_id,
+                    "file_name": file_name,
+                    "current_total_documents": transaction.get("total_documents"),
+                    "current_completed_documents": transaction.get("completed_documents"),
+                    "total_documents_in_db": len(documents),
+                    "already_translated": already_translated
+                }
+            )
+
+            # Build update operations
+            update_operations = {
+                "$set": {
+                    f"documents.{document_index}.translated_url": file_url,
+                    f"documents.{document_index}.translated_name": translated_name,
+                    f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
+
+            # Initialize counters for backward compatibility (if field missing or None)
+            if transaction.get("total_documents") is None:
+                update_operations["$set"]["total_documents"] = len(documents)
+                logger.info(
+                    f"INITIALIZING total_documents counter",
+                    extra={
+                        "transaction_id": transaction_id,
+                        "total_documents_initialized_to": len(documents)
+                    }
+                )
+
+            # Handle completed_documents counter
+            if not already_translated:
+                # If field doesn't exist, initialize to 1 (this is the first completion)
+                if transaction.get("completed_documents") is None:
+                    update_operations["$set"]["completed_documents"] = 1
+                    logger.info(
+                        f"INITIALIZING completed_documents counter to 1 (first document completion)",
+                        extra={
+                            "transaction_id": transaction_id,
+                            "file_name": file_name,
+                            "document_index": document_index
+                        }
+                    )
+                else:
+                    # Field exists, increment it
+                    if "$inc" not in update_operations:
+                        update_operations["$inc"] = {}
+                    update_operations["$inc"]["completed_documents"] = 1
+                    logger.info(
+                        f"INCREMENTING completed_documents counter",
+                        extra={
+                            "transaction_id": transaction_id,
+                            "file_name": file_name,
+                            "document_index": document_index,
+                            "current_value": transaction.get("completed_documents"),
+                            "will_increment_by": 1
+                        }
+                    )
+            else:
+                logger.info(
+                    f"SKIPPING counter increment - document already translated",
+                    extra={
+                        "transaction_id": transaction_id,
+                        "file_name": file_name,
+                        "document_index": document_index
+                    }
+                )
+
             # Update the specific document in the array
             # NOTE: We already found the correct document_index above by matching lookup_name,
             # so we only need transaction_id in the filter. Adding file_name here would cause
             # a mismatch because file_name contains "_translated" suffix but database stores
             # the original filename without this suffix.
-            update_result = await collection.update_one(
-                {
-                    "transaction_id": transaction_id
-                },
-                {
-                    "$set": {
-                        f"documents.{document_index}.translated_url": file_url,
-                        f"documents.{document_index}.translated_name": translated_name,
-                        f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
-                        "updated_at": datetime.now(timezone.utc)
-                    }
+            logger.info(
+                f"EXECUTING MongoDB update_one operation",
+                extra={
+                    "transaction_id": transaction_id,
+                    "update_operations": str(update_operations)
                 }
+            )
+            update_result = await collection.update_one(
+                {"transaction_id": transaction_id},
+                update_operations
             )
 
             if update_result.modified_count > 0:
@@ -465,6 +623,18 @@ class TransactionUpdateService:
 
                 # Get updated transaction for email
                 updated_transaction = await collection.find_one({"transaction_id": transaction_id})
+
+                # Log counter state AFTER update
+                logger.info(
+                    f"COUNTER STATE AFTER UPDATE - Transaction {transaction_id}",
+                    extra={
+                        "transaction_id": transaction_id,
+                        "file_name": file_name,
+                        "updated_total_documents": updated_transaction.get("total_documents"),
+                        "updated_completed_documents": updated_transaction.get("completed_documents"),
+                        "all_documents_count": len(updated_transaction.get("documents", []))
+                    }
+                )
 
                 return {
                     "success": True,

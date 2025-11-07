@@ -347,6 +347,16 @@ class SubmitSuccessResponse(BaseModel):
     """Success response model for /submit endpoint."""
     status: str = Field(..., description="Status of the submission")
     message: str = Field(..., description="Message describing the result")
+    transaction_id: Optional[str] = Field(None, description="Transaction ID")
+    document_name: Optional[str] = Field(None, description="Document file name")
+    translated_url: Optional[str] = Field(None, description="URL of translated document")
+    translated_name: Optional[str] = Field(None, description="Name of translated document")
+    all_documents_complete: Optional[bool] = Field(None, description="Whether all documents are complete")
+    completed_documents: Optional[int] = Field(None, description="Number of completed documents")
+    total_documents: Optional[int] = Field(None, description="Total number of documents")
+    documents_count: Optional[int] = Field(None, description="Number of translated documents")
+    email_sent: Optional[bool] = Field(None, description="Whether email was sent")
+    email_error: Optional[str] = Field(None, description="Email error message if failed")
 
 
 class SubmitErrorResponse(BaseModel):

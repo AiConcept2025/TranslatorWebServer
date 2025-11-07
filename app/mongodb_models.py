@@ -317,6 +317,10 @@ class TranslationTransaction(BaseModel):
     status: TransactionStatus = TransactionStatus.COMPLETED
     error_message: Optional[str] = None
 
+    # Document completion tracking (for email batching)
+    total_documents: Optional[int] = 0  # Total documents in transaction
+    completed_documents: Optional[int] = 0  # Completed translations count
+
     # Timestamps
     transaction_date: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

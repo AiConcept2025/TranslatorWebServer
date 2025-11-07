@@ -109,7 +109,7 @@ class SubmitService:
                 if doc.get("translated_url"):
                     documents.append(
                         DocumentInfo(
-                            document_name=doc.get("document_name", ""),
+                            document_name=doc.get("file_name", ""),
                             original_url=doc.get("original_url", ""),
                             translated_url=doc.get("translated_url", "")
                         )
@@ -160,6 +160,9 @@ class SubmitService:
                     "transaction_id": transaction_id,
                     "document_name": file_name,
                     "translated_url": update_result.get("translated_url"),
+                    "translated_name": update_result.get("translated_name"),
+                    "all_documents_complete": all_complete,
+                    "documents_count": len(documents),
                     "email_sent": False,
                     "email_error": email_result.error
                 }
@@ -187,8 +190,9 @@ class SubmitService:
         # Try to get from transaction
         user_name = transaction.get("user_name")
 
-        if user_name:
-            return user_name
+        # Check for non-empty string (handle empty strings and whitespace)
+        if user_name and user_name.strip():
+            return user_name.strip()
 
         # Extract from user_id or email
         user_id = transaction.get("user_id", user_email)

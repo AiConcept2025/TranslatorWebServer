@@ -54,18 +54,22 @@ async def test_enterprise_transaction():
         "status": "processing",
         "documents": [
             {
-                "document_name": "report.pdf",
+                "file_name": "report.pdf",
+                "file_size": 524288,
                 "original_url": "https://drive.google.com/file/d/original123/view",
                 "translated_url": None,
                 "translated_name": None,
+                "status": "uploaded",
                 "uploaded_at": datetime.now(timezone.utc),
                 "translated_at": None
             },
             {
-                "document_name": "summary.docx",
+                "file_name": "summary.docx",
+                "file_size": 262144,
                 "original_url": "https://drive.google.com/file/d/original456/view",
                 "translated_url": None,
                 "translated_name": None,
+                "status": "uploaded",
                 "uploaded_at": datetime.now(timezone.utc),
                 "translated_at": None
             }
@@ -99,10 +103,12 @@ async def test_individual_transaction():
         "status": "processing",
         "documents": [
             {
-                "document_name": "passport.pdf",
+                "file_name": "passport.pdf",
+                "file_size": 131072,
                 "original_url": "https://drive.google.com/file/d/passport123/view",
                 "translated_url": None,
                 "translated_name": None,
+                "status": "uploaded",
                 "uploaded_at": datetime.now(timezone.utc),
                 "translated_at": None
             }

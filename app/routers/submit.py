@@ -51,6 +51,19 @@ async def submit_file(request: SubmitRequest):
         f"Transaction ID: {request.transaction_id or 'None'}"
     )
 
+    # Enhanced debug logging
+    logger.debug(
+        "Submit request details",
+        extra={
+            "file_name": request.file_name,
+            "file_url": request.file_url,
+            "transaction_id": request.transaction_id,
+            "company_name": request.company_name,
+            "user_email": request.user_email,
+            "is_enterprise": request.company_name != "Ind"
+        }
+    )
+
     try:
         # Process the submission using the service
         result = await submit_service.process_submission(

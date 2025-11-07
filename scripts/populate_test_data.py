@@ -189,18 +189,15 @@ async def populate_test_data():
         print("Step 5: Create Translation Transactions (MIGRATED SCHEMA: uses company_name)")
         print("=" * 80)
 
-        # Create 2-3 transactions per company
+        # Create 2-3 transactions per company with NESTED structure
         transactions_data = [
-            # Acme Translation Corp - Transaction 1
+            # Acme Translation Corp - Transaction 1 (NESTED STRUCTURE)
             {
                 "transaction_id": generate_transaction_id(),
                 "user_id": "admin@acme.com",
-                "original_file_url": "https://docs.google.com/document/d/1ACMEtest001/edit",
-                "translated_file_url": "",
+                "user_name": "Admin User",
                 "source_language": "en",
                 "target_language": "es",
-                "file_name": "Contract_Draft.docx",
-                "file_size": 524288,
                 "units_count": 25,
                 "price_per_unit": 0.10,
                 "total_price": 2.50,
@@ -210,18 +207,30 @@ async def populate_test_data():
                 "updated_at": datetime.now(timezone.utc),
                 "company_name": "Acme Translation Corp",  # ✅ MIGRATED: String company_name
                 "subscription_id": subscription_ids["Acme Translation Corp"],
-                "unit_type": "page"
+                "unit_type": "page",
+                # NESTED documents array
+                "documents": [
+                    {
+                        "file_name": "Contract_Draft.docx",
+                        "file_size": 524288,
+                        "original_url": "https://docs.google.com/document/d/1ACMEtest001/edit",
+                        "translated_url": None,
+                        "translated_name": None,
+                        "status": "uploaded",
+                        "uploaded_at": datetime.now(timezone.utc),
+                        "translated_at": None,
+                        "processing_started_at": None,
+                        "processing_duration": None
+                    }
+                ]
             },
-            # Acme Translation Corp - Transaction 2
+            # Acme Translation Corp - Transaction 2 (NESTED STRUCTURE)
             {
                 "transaction_id": generate_transaction_id(),
                 "user_id": "admin@acme.com",
-                "original_file_url": "https://docs.google.com/document/d/1ACMEtest002/edit",
-                "translated_file_url": "https://docs.google.com/document/d/1ACMEtest002_trans/edit",
+                "user_name": "Admin User",
                 "source_language": "en",
                 "target_language": "fr",
-                "file_name": "Marketing_Materials.pdf",
-                "file_size": 1048576,
                 "units_count": 50,
                 "price_per_unit": 0.10,
                 "total_price": 5.00,
@@ -231,18 +240,30 @@ async def populate_test_data():
                 "updated_at": datetime.now(timezone.utc),
                 "company_name": "Acme Translation Corp",  # ✅ MIGRATED: String company_name
                 "subscription_id": subscription_ids["Acme Translation Corp"],
-                "unit_type": "page"
+                "unit_type": "page",
+                # NESTED documents array
+                "documents": [
+                    {
+                        "file_name": "Marketing_Materials.pdf",
+                        "file_size": 1048576,
+                        "original_url": "https://docs.google.com/document/d/1ACMEtest002/edit",
+                        "translated_url": "https://docs.google.com/document/d/1ACMEtest002_trans/edit",
+                        "translated_name": "Marketing_Materials_fr.pdf",
+                        "status": "translated",
+                        "uploaded_at": datetime.now(timezone.utc),
+                        "translated_at": datetime.now(timezone.utc),
+                        "processing_started_at": datetime.now(timezone.utc),
+                        "processing_duration": 120.5
+                    }
+                ]
             },
-            # Iris Trading - Transaction 1
+            # Iris Trading - Transaction 1 (NESTED STRUCTURE)
             {
                 "transaction_id": generate_transaction_id(),
                 "user_id": "manager@iris.com",
-                "original_file_url": "https://docs.google.com/document/d/1IRIStest001/edit",
-                "translated_file_url": "",
+                "user_name": "Manager User",
                 "source_language": "de",
                 "target_language": "en",
-                "file_name": "Invoice_2025_Q1.pdf",
-                "file_size": 262144,
                 "units_count": 15,
                 "price_per_unit": 0.10,
                 "total_price": 1.50,
@@ -252,18 +273,30 @@ async def populate_test_data():
                 "updated_at": datetime.now(timezone.utc),
                 "company_name": "Iris Trading",  # ✅ MIGRATED: String company_name
                 "subscription_id": subscription_ids["Iris Trading"],
-                "unit_type": "page"
+                "unit_type": "page",
+                # NESTED documents array
+                "documents": [
+                    {
+                        "file_name": "Invoice_2025_Q1.pdf",
+                        "file_size": 262144,
+                        "original_url": "https://docs.google.com/document/d/1IRIStest001/edit",
+                        "translated_url": None,
+                        "translated_name": None,
+                        "status": "uploaded",
+                        "uploaded_at": datetime.now(timezone.utc),
+                        "translated_at": None,
+                        "processing_started_at": None,
+                        "processing_duration": None
+                    }
+                ]
             },
-            # Iris Trading - Transaction 2
+            # Iris Trading - Transaction 2 (NESTED STRUCTURE)
             {
                 "transaction_id": generate_transaction_id(),
                 "user_id": "manager@iris.com",
-                "original_file_url": "https://docs.google.com/document/d/1IRIStest002/edit",
-                "translated_file_url": "https://docs.google.com/document/d/1IRIStest002_trans/edit",
+                "user_name": "Manager User",
                 "source_language": "en",
                 "target_language": "de",
-                "file_name": "Product_Catalog.docx",
-                "file_size": 786432,
                 "units_count": 35,
                 "price_per_unit": 0.10,
                 "total_price": 3.50,
@@ -273,18 +306,30 @@ async def populate_test_data():
                 "updated_at": datetime.now(timezone.utc),
                 "company_name": "Iris Trading",  # ✅ MIGRATED: String company_name
                 "subscription_id": subscription_ids["Iris Trading"],
-                "unit_type": "page"
+                "unit_type": "page",
+                # NESTED documents array
+                "documents": [
+                    {
+                        "file_name": "Product_Catalog.docx",
+                        "file_size": 786432,
+                        "original_url": "https://docs.google.com/document/d/1IRIStest002/edit",
+                        "translated_url": "https://docs.google.com/document/d/1IRIStest002_trans/edit",
+                        "translated_name": "Product_Catalog_de.docx",
+                        "status": "translated",
+                        "uploaded_at": datetime.now(timezone.utc),
+                        "translated_at": datetime.now(timezone.utc),
+                        "processing_started_at": datetime.now(timezone.utc),
+                        "processing_duration": 95.3
+                    }
+                ]
             },
-            # Iris Trading - Transaction 3
+            # Iris Trading - Transaction 3 (NESTED STRUCTURE)
             {
                 "transaction_id": generate_transaction_id(),
                 "user_id": "manager@iris.com",
-                "original_file_url": "https://docs.google.com/document/d/1IRIStest003/edit",
-                "translated_file_url": "",
+                "user_name": "Manager User",
                 "source_language": "en",
                 "target_language": "es",
-                "file_name": "Shipping_Documents.pdf",
-                "file_size": 409600,
                 "units_count": 20,
                 "price_per_unit": 0.10,
                 "total_price": 2.00,
@@ -294,7 +339,22 @@ async def populate_test_data():
                 "updated_at": datetime.now(timezone.utc),
                 "company_name": "Iris Trading",  # ✅ MIGRATED: String company_name
                 "subscription_id": subscription_ids["Iris Trading"],
-                "unit_type": "page"
+                "unit_type": "page",
+                # NESTED documents array
+                "documents": [
+                    {
+                        "file_name": "Shipping_Documents.pdf",
+                        "file_size": 409600,
+                        "original_url": "https://docs.google.com/document/d/1IRIStest003/edit",
+                        "translated_url": None,
+                        "translated_name": None,
+                        "status": "uploaded",
+                        "uploaded_at": datetime.now(timezone.utc),
+                        "translated_at": None,
+                        "processing_started_at": None,
+                        "processing_duration": None
+                    }
+                ]
             }
         ]
 

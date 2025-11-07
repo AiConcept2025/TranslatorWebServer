@@ -9,7 +9,9 @@ from datetime import datetime, timezone
 
 from app.services.transaction_update_service import (
     TransactionUpdateService,
-    transaction_update_service
+    transaction_update_service,
+    normalize_filename_for_comparison,
+    normalize_filename_for_lookup
 )
 
 
@@ -69,7 +71,7 @@ class TestTransactionUpdateService:
             "company_name": "Acme Corp",
             "documents": [
                 {
-                    "document_name": "report.pdf",
+                    "file_name": "report.pdf",
                     "original_url": "https://drive.google.com/original",
                     "translated_url": None,
                     "translated_name": None
@@ -138,7 +140,7 @@ class TestTransactionUpdateService:
             "transaction_id": "TXN-ABC123",
             "documents": [
                 {
-                    "document_name": "other_file.pdf",
+                    "file_name": "other_file.pdf",
                     "original_url": "https://drive.google.com/other"
                 }
             ]
@@ -168,7 +170,7 @@ class TestTransactionUpdateService:
         mock_transaction = {
             "transaction_id": "TXN-ABC123",
             "documents": [
-                {"document_name": "report.pdf", "original_url": "https://example.com"}
+                {"file_name": "report.pdf", "original_url": "https://example.com"}
             ]
         }
         mock_collection.find_one.return_value = mock_transaction
@@ -222,7 +224,7 @@ class TestTransactionUpdateService:
             "user_id": "user@example.com",
             "documents": [
                 {
-                    "document_name": "document.docx",
+                    "file_name": "document.docx",
                     "original_url": "https://drive.google.com/original"
                 }
             ]
@@ -283,11 +285,11 @@ class TestTransactionUpdateService:
             "transaction_id": "TXN-ABC123",
             "documents": [
                 {
-                    "document_name": "file1.pdf",
+                    "file_name": "file1.pdf",
                     "translated_url": "https://drive.google.com/file1"
                 },
                 {
-                    "document_name": "file2.docx",
+                    "file_name": "file2.docx",
                     "translated_url": "https://drive.google.com/file2"
                 }
             ]
@@ -319,11 +321,11 @@ class TestTransactionUpdateService:
             "transaction_id": "TXN-ABC123",
             "documents": [
                 {
-                    "document_name": "file1.pdf",
+                    "file_name": "file1.pdf",
                     "translated_url": "https://drive.google.com/file1"
                 },
                 {
-                    "document_name": "file2.docx",
+                    "file_name": "file2.docx",
                     "translated_url": None  # Not yet translated
                 }
             ]
@@ -353,7 +355,7 @@ class TestTransactionUpdateService:
             "transaction_id": "TXN-XYZ789",
             "documents": [
                 {
-                    "document_name": "file.pdf",
+                    "file_name": "file.pdf",
                     "translated_url": "https://drive.google.com/file"
                 }
             ]
@@ -424,17 +426,17 @@ class TestTransactionUpdateService:
             "transaction_id": "TXN-ABC123",
             "documents": [
                 {
-                    "document_name": "file1.pdf",
+                    "file_name": "file1.pdf",
                     "original_url": "https://drive.google.com/file1",
                     "translated_url": "https://drive.google.com/file1_trans"  # Already translated
                 },
                 {
-                    "document_name": "file2.docx",
+                    "file_name": "file2.docx",
                     "original_url": "https://drive.google.com/file2",
                     "translated_url": None  # Being updated now
                 },
                 {
-                    "document_name": "file3.xlsx",
+                    "file_name": "file3.xlsx",
                     "original_url": "https://drive.google.com/file3",
                     "translated_url": None  # Not yet translated
                 }
@@ -485,3 +487,217 @@ class TestTransactionUpdateService:
         """Test that transaction_update_service is a singleton instance."""
         assert transaction_update_service is not None
         assert isinstance(transaction_update_service, TransactionUpdateService)
+
+
+class TestFilenameNormalization:
+    """Test filename normalization functions for extension-agnostic comparison."""
+
+    def test_normalize_for_comparison_basic(self):
+        """Test basic filename normalization."""
+        assert normalize_filename_for_comparison("report.pdf") == "report"
+        assert normalize_filename_for_comparison("report.docx") == "report"
+        assert normalize_filename_for_comparison("document.txt") == "document"
+
+    def test_normalize_for_comparison_with_translated_suffix(self):
+        """Test normalization with _translated suffix."""
+        assert normalize_filename_for_comparison("report_translated.pdf") == "report"
+        assert normalize_filename_for_comparison("report_translated.docx") == "report"
+        assert normalize_filename_for_comparison("document_translated.txt") == "document"
+
+    def test_normalize_for_comparison_case_insensitive(self):
+        """Test case-insensitive normalization."""
+        assert normalize_filename_for_comparison("Report.PDF") == "report"
+        assert normalize_filename_for_comparison("DOCUMENT_TRANSLATED.DOCX") == "document"
+        assert normalize_filename_for_comparison("MyFile.TxT") == "myfile"
+
+    def test_normalize_for_comparison_multiple_dots(self):
+        """Test filenames with multiple dots."""
+        assert normalize_filename_for_comparison("file.backup.pdf") == "file.backup"
+        assert normalize_filename_for_comparison("my.document.v2.docx") == "my.document.v2"
+        assert normalize_filename_for_comparison("report.2024.03.15.pdf") == "report.2024.03.15"
+
+    def test_normalize_for_comparison_special_characters(self):
+        """Test filenames with special characters."""
+        assert normalize_filename_for_comparison("Kevin questions[81].docx") == "kevin questions[81]"
+        assert normalize_filename_for_comparison("file (copy).pdf") == "file (copy)"
+        assert normalize_filename_for_comparison("report_v1.0.pdf") == "report_v1.0"
+
+    def test_normalize_for_comparison_real_world_bug(self):
+        """Test the actual scenario from the bug report - PDF to DOCX conversion."""
+        # Original file in DB (PDF)
+        original = "NuVIZ_Cable_Management_Market_Comparison_Report.pdf"
+        # Translated file from webhook (DOCX)
+        translated = "NuVIZ_Cable_Management_Market_Comparison_Report_translated.docx"
+
+        # Both should normalize to the same value
+        assert normalize_filename_for_comparison(original) == \
+               normalize_filename_for_comparison(translated)
+
+        # Expected normalized value
+        expected = "nuviz_cable_management_market_comparison_report"
+        assert normalize_filename_for_comparison(original) == expected
+        assert normalize_filename_for_comparison(translated) == expected
+
+    def test_normalize_for_comparison_edge_cases(self):
+        """Test edge cases."""
+        # No extension
+        assert normalize_filename_for_comparison("file") == "file"
+
+        # Only extension (os.path.splitext treats this as name, not extension)
+        assert normalize_filename_for_comparison(".pdf") == ".pdf"
+
+        # Empty string
+        assert normalize_filename_for_comparison("") == ""
+
+        # Just _translated (becomes empty after removing suffix)
+        assert normalize_filename_for_comparison("_translated.txt") == ""
+
+    def test_normalize_for_lookup_backward_compatibility(self):
+        """Test the deprecated normalize_filename_for_lookup function."""
+        # This function is kept for backward compatibility
+        assert normalize_filename_for_lookup("report_translated.pdf") == "report.pdf"
+        assert normalize_filename_for_lookup("document_translated.docx") == "document.docx"
+        assert normalize_filename_for_lookup("file.pdf") == "file.pdf"
+
+    def test_extension_agnostic_matching(self):
+        """Test that files with different extensions match after normalization."""
+        test_cases = [
+            ("report.pdf", "report_translated.docx"),
+            ("document.txt", "document_translated.pdf"),
+            ("presentation.pptx", "presentation_translated.pdf"),
+            ("spreadsheet.xlsx", "spreadsheet_translated.docx"),
+        ]
+
+        for original, translated in test_cases:
+            orig_normalized = normalize_filename_for_comparison(original)
+            trans_normalized = normalize_filename_for_comparison(translated)
+            assert orig_normalized == trans_normalized, \
+                f"Failed to match: {original} vs {translated}"
+
+    def test_case_insensitive_matching(self):
+        """Test that filename matching is case-insensitive."""
+        test_cases = [
+            ("Report.PDF", "report_translated.docx"),
+            ("DOCUMENT.txt", "document_translated.pdf"),
+            ("MyFile.DOCX", "myfile_translated.pdf"),
+        ]
+
+        for original, translated in test_cases:
+            orig_normalized = normalize_filename_for_comparison(original)
+            trans_normalized = normalize_filename_for_comparison(translated)
+            assert orig_normalized == trans_normalized, \
+                f"Failed case-insensitive match: {original} vs {translated}"
+
+    def test_preserved_dots_in_filename(self):
+        """Test that dots in the filename (not extension) are preserved."""
+        original = "my.document.v2.pdf"
+        translated = "my.document.v2_translated.docx"
+
+        orig_normalized = normalize_filename_for_comparison(original)
+        trans_normalized = normalize_filename_for_comparison(translated)
+
+        assert orig_normalized == trans_normalized
+        assert orig_normalized == "my.document.v2"
+
+    def test_complex_real_world_examples(self):
+        """Test complex real-world filename scenarios."""
+        test_cases = [
+            # (DB filename, webhook filename, expected normalized)
+            (
+                "NuVIZ_Cable_Management_Market_Comparison_Report.pdf",
+                "NuVIZ_Cable_Management_Market_Comparison_Report_translated.docx",
+                "nuviz_cable_management_market_comparison_report"
+            ),
+            (
+                "Contract_2024.Q1.Final.pdf",
+                "Contract_2024.Q1.Final_translated.docx",
+                "contract_2024.q1.final"
+            ),
+            (
+                "Invoice #12345.pdf",
+                "Invoice #12345_translated.docx",
+                "invoice #12345"
+            ),
+            (
+                "Proposal (Draft v2).docx",
+                "Proposal (Draft v2)_translated.pdf",
+                "proposal (draft v2)"
+            ),
+        ]
+
+        for db_name, webhook_name, expected_normalized in test_cases:
+            db_normalized = normalize_filename_for_comparison(db_name)
+            webhook_normalized = normalize_filename_for_comparison(webhook_name)
+
+            assert db_normalized == expected_normalized, \
+                f"DB filename '{db_name}' normalized incorrectly"
+            assert webhook_normalized == expected_normalized, \
+                f"Webhook filename '{webhook_name}' normalized incorrectly"
+            assert db_normalized == webhook_normalized, \
+                f"Mismatch: '{db_name}' vs '{webhook_name}'"
+
+    def test_matching_logic_simulation(self):
+        """Simulate the matching logic used in TransactionUpdateService."""
+        # Simulate database documents
+        db_documents = [
+            {"file_name": "report1.pdf", "index": 0},
+            {"file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.pdf", "index": 1},
+            {"file_name": "contract.docx", "index": 2},
+        ]
+
+        # Simulate webhook filename
+        webhook_filename = "NuVIZ_Cable_Management_Market_Comparison_Report_translated.docx"
+
+        # Normalize webhook filename
+        search_normalized = normalize_filename_for_comparison(webhook_filename)
+
+        # Find matching document
+        matched_index = None
+        for doc in db_documents:
+            db_normalized = normalize_filename_for_comparison(doc["file_name"])
+            if db_normalized == search_normalized:
+                matched_index = doc["index"]
+                break
+
+        # Should match document at index 1
+        assert matched_index == 1
+
+    def test_no_match_scenario(self):
+        """Test when no document matches."""
+        db_documents = [
+            {"file_name": "report1.pdf", "index": 0},
+            {"file_name": "contract.docx", "index": 1},
+        ]
+
+        webhook_filename = "nonexistent_file_translated.pdf"
+        search_normalized = normalize_filename_for_comparison(webhook_filename)
+
+        matched_index = None
+        for doc in db_documents:
+            db_normalized = normalize_filename_for_comparison(doc["file_name"])
+            if db_normalized == search_normalized:
+                matched_index = doc["index"]
+                break
+
+        assert matched_index is None
+
+    def test_multiple_documents_same_basename_different_extension(self):
+        """Test edge case: multiple documents with same basename but different extensions."""
+        # This shouldn't happen in practice, but test the behavior
+        db_documents = [
+            {"file_name": "report.pdf", "index": 0},
+            {"file_name": "report.docx", "index": 1},
+        ]
+
+        webhook_filename = "report_translated.txt"
+        search_normalized = normalize_filename_for_comparison(webhook_filename)
+
+        # Should match the first one it finds (index 0)
+        matched_index = None
+        for doc in db_documents:
+            db_normalized = normalize_filename_for_comparison(doc["file_name"])
+            if db_normalized == search_normalized:
+                matched_index = doc["index"]
+                break
+
+        assert matched_index == 0

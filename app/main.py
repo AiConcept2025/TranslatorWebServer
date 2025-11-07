@@ -17,7 +17,7 @@ import asyncio
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit
+from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit, email_test
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities
@@ -126,7 +126,9 @@ app.include_router(translate_user.router)
 # Include test helper endpoints only in test/dev mode
 if settings.environment.lower() in ["test", "development"]:
     app.include_router(test_helpers.router)
+    app.include_router(email_test.router)
     print("⚠️  Test helper endpoints enabled (test/dev mode only)")
+    print("⚠️  Email diagnostic endpoints enabled (test/dev mode only)")
 
 # Import models for /translate endpoint
 from pydantic import BaseModel, EmailStr
@@ -161,6 +163,9 @@ async def create_transaction_record(
     """
     Create transaction record for a single file upload.
 
+    STRUCTURE: Uses nested documents[] array instead of flat file fields.
+    Each transaction represents one upload session with potentially multiple documents.
+
     Args:
         file_info: Dict with file_id, filename, size, page_count, google_drive_url
         user_data: Current authenticated user data
@@ -181,34 +186,49 @@ async def create_transaction_record(
         # Generate unique transaction ID
         transaction_id = f"TXN-{uuid.uuid4().hex[:10].upper()}"
 
-        # Build transaction document
+        # Build transaction document with NESTED structure
         # IMPORTANT: Store actual email, not generated user_id
         transaction_doc = {
+            # Transaction-level fields
             "transaction_id": transaction_id,
             "user_id": request_data.email,  # Use actual email for folder lookup
-            "original_file_url": file_info.get("google_drive_url", ""),
-            "translated_file_url": "",  # Empty initially
             "source_language": request_data.sourceLanguage,
             "target_language": request_data.targetLanguage,
-            "file_name": file_info.get("filename", ""),
-            "file_size": file_info.get("size", 0),
             "units_count": file_info.get("page_count", 1),
             "price_per_unit": price_per_page,
             "total_price": file_info.get("page_count", 1) * price_per_page,
             "status": "started",
             "error_message": "",
             "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc)
+            "updated_at": datetime.now(timezone.utc),
+
+            # NESTED documents array - one document per file
+            "documents": [
+                {
+                    "file_name": file_info.get("filename", ""),
+                    "file_size": file_info.get("size", 0),
+                    "original_url": file_info.get("google_drive_url", ""),
+                    "translated_url": None,
+                    "translated_name": None,
+                    "status": "uploaded",
+                    "uploaded_at": datetime.now(timezone.utc),
+                    "translated_at": None,
+                    "processing_started_at": None,
+                    "processing_duration": None
+                }
+            ]
         }
 
         # Add enterprise-specific fields if applicable
         if company_name and subscription:
             transaction_doc["company_name"] = company_name  # Store company name for folder lookup
+            transaction_doc["user_name"] = user_data.get("user_name", "Unknown") if user_data else "Unknown"
             transaction_doc["subscription_id"] = ObjectId(str(subscription["_id"]))
             transaction_doc["unit_type"] = subscription.get("subscription_unit", "page")
         else:
             # Individual customer (no company or subscription)
             transaction_doc["company_name"] = None
+            transaction_doc["user_name"] = None
             transaction_doc["subscription_id"] = None
             transaction_doc["unit_type"] = "page"
 
@@ -1010,10 +1030,19 @@ async def confirm_transactions(
             txn = await database.translation_transactions.find_one({"transaction_id": txn_id})
             if txn:
                 transactions.append(txn)
+                # Access nested documents array (post-migration structure)
+                documents = txn.get('documents', [])
                 print(f"[CONFIRM DEBUG] Found transaction {txn_id}")
                 print(f"[CONFIRM DEBUG]   - user_id: {txn.get('user_id', 'MISSING')}")
-                print(f"[CONFIRM DEBUG]   - original_file_url: {txn.get('original_file_url', 'MISSING')}")
-                print(f"[CONFIRM DEBUG]   - file_name: {txn.get('file_name', 'MISSING')}")
+                print(f"[CONFIRM DEBUG]   - documents: {len(documents)} document(s)")
+                if documents:
+                    first_doc = documents[0]
+                    print(f"[CONFIRM DEBUG]   - original_url: {first_doc.get('original_url', 'MISSING')}")
+                    print(f"[CONFIRM DEBUG]   - file_name: {first_doc.get('file_name', 'MISSING')}")
+                else:
+                    # Fallback for backward compatibility (shouldn't happen after migration)
+                    print(f"[CONFIRM DEBUG]   - original_file_url (legacy): {txn.get('original_file_url', 'MISSING')}")
+                    print(f"[CONFIRM DEBUG]   - file_name (legacy): {txn.get('file_name', 'MISSING')}")
                 print(f"[CONFIRM DEBUG]   - status: {txn.get('status', 'MISSING')}")
             else:
                 logging.warning(f"[CONFIRM] Transaction {txn_id} not found")
@@ -1029,32 +1058,58 @@ async def confirm_transactions(
         print(f"[CONFIRM DEBUG] Customer email extracted: {customer_email}")
         print(f"[CONFIRM DEBUG] Company name extracted: {company_name or 'None (individual customer)'}")
 
-        # Get file IDs from original_file_url (Google Drive URLs contain file ID)
+        # Get file IDs from documents array (post-migration) or original_file_url (pre-migration fallback)
         file_ids = []
         print(f"[CONFIRM DEBUG] Extracting file IDs from {len(transactions)} transaction(s)...")
         for i, txn in enumerate(transactions, 1):
-            url = txn.get("original_file_url", "")
-            print(f"[CONFIRM DEBUG] Transaction {i}/{len(transactions)}: URL = '{url}'")
+            # Try nested structure first (post-migration)
+            documents = txn.get("documents", [])
 
-            # Extract file ID from Google Drive URL - handles multiple formats:
-            # - Google Docs: https://docs.google.com/document/d/{file_id}/edit
-            # - Google Sheets: https://docs.google.com/spreadsheets/d/{file_id}/edit
-            # - Google Drive: https://drive.google.com/file/d/{file_id}/view
-            file_id = None
-            if "/document/d/" in url:
-                file_id = url.split("/document/d/")[1].split("/")[0]
-                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /document/d/ pattern: {file_id}")
-            elif "/spreadsheets/d/" in url:
-                file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
-                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /spreadsheets/d/ pattern: {file_id}")
-            elif "/file/d/" in url:
-                file_id = url.split("/file/d/")[1].split("/")[0]
-                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /file/d/ pattern: {file_id}")
+            if documents:
+                # Process all documents in the transaction
+                for doc_idx, doc in enumerate(documents):
+                    url = doc.get("original_url", "")
+                    print(f"[CONFIRM DEBUG] Transaction {i}/{len(transactions)}, Document {doc_idx+1}/{len(documents)}: URL = '{url}'")
+
+                    # Extract file ID from Google Drive URL - handles multiple formats:
+                    # - Google Docs: https://docs.google.com/document/d/{file_id}/edit
+                    # - Google Sheets: https://docs.google.com/spreadsheets/d/{file_id}/edit
+                    # - Google Drive: https://drive.google.com/file/d/{file_id}/view
+                    file_id = None
+                    if "/document/d/" in url:
+                        file_id = url.split("/document/d/")[1].split("/")[0]
+                        print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /document/d/ pattern: {file_id}")
+                    elif "/spreadsheets/d/" in url:
+                        file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
+                        print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /spreadsheets/d/ pattern: {file_id}")
+                    elif "/file/d/" in url:
+                        file_id = url.split("/file/d/")[1].split("/")[0]
+                        print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /file/d/ pattern: {file_id}")
+                    else:
+                        print(f"[CONFIRM DEBUG]   ❌ URL does not match any known Google Drive pattern - SKIPPED")
+
+                    if file_id:
+                        file_ids.append(file_id)
             else:
-                print(f"[CONFIRM DEBUG]   ❌ URL does not match any known Google Drive pattern - SKIPPED")
+                # Fallback to flat structure (pre-migration - should not happen but defensive coding)
+                url = txn.get("original_file_url", "")
+                print(f"[CONFIRM DEBUG] Transaction {i}/{len(transactions)} (LEGACY): URL = '{url}'")
 
-            if file_id:
-                file_ids.append(file_id)
+                file_id = None
+                if "/document/d/" in url:
+                    file_id = url.split("/document/d/")[1].split("/")[0]
+                    print(f"[CONFIRM DEBUG]   ✅ Extracted file_id (legacy) from /document/d/ pattern: {file_id}")
+                elif "/spreadsheets/d/" in url:
+                    file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
+                    print(f"[CONFIRM DEBUG]   ✅ Extracted file_id (legacy) from /spreadsheets/d/ pattern: {file_id}")
+                elif "/file/d/" in url:
+                    file_id = url.split("/file/d/")[1].split("/")[0]
+                    print(f"[CONFIRM DEBUG]   ✅ Extracted file_id (legacy) from /file/d/ pattern: {file_id}")
+                else:
+                    print(f"[CONFIRM DEBUG]   ❌ URL does not match any known Google Drive pattern - SKIPPED")
+
+                if file_id:
+                    file_ids.append(file_id)
 
         print(f"[CONFIRM DEBUG] Total file IDs extracted: {len(file_ids)}")
         print(f"[CONFIRM DEBUG] File IDs: {file_ids}")
@@ -1151,24 +1206,43 @@ async def decline_transactions(
         first_txn = transactions[0]
         customer_email = first_txn.get("user_id", "")  # user_id contains email
 
-        # Get file IDs from original_file_url (Google Drive URLs contain file ID)
+        # Get file IDs from documents array (post-migration) or original_file_url (pre-migration fallback)
         file_ids = []
         for txn in transactions:
-            url = txn.get("original_file_url", "")
-            # Extract file ID from Google Drive URL - handles multiple formats:
-            # - Google Docs: https://docs.google.com/document/d/{file_id}/edit
-            # - Google Sheets: https://docs.google.com/spreadsheets/d/{file_id}/edit
-            # - Google Drive: https://drive.google.com/file/d/{file_id}/view
-            file_id = None
-            if "/document/d/" in url:
-                file_id = url.split("/document/d/")[1].split("/")[0]
-            elif "/spreadsheets/d/" in url:
-                file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
-            elif "/file/d/" in url:
-                file_id = url.split("/file/d/")[1].split("/")[0]
+            # Try nested structure first (post-migration)
+            documents = txn.get("documents", [])
 
-            if file_id:
-                file_ids.append(file_id)
+            if documents:
+                # Process all documents in the transaction
+                for doc in documents:
+                    url = doc.get("original_url", "")
+                    # Extract file ID from Google Drive URL - handles multiple formats:
+                    # - Google Docs: https://docs.google.com/document/d/{file_id}/edit
+                    # - Google Sheets: https://docs.google.com/spreadsheets/d/{file_id}/edit
+                    # - Google Drive: https://drive.google.com/file/d/{file_id}/view
+                    file_id = None
+                    if "/document/d/" in url:
+                        file_id = url.split("/document/d/")[1].split("/")[0]
+                    elif "/spreadsheets/d/" in url:
+                        file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
+                    elif "/file/d/" in url:
+                        file_id = url.split("/file/d/")[1].split("/")[0]
+
+                    if file_id:
+                        file_ids.append(file_id)
+            else:
+                # Fallback to flat structure (pre-migration - should not happen but defensive coding)
+                url = txn.get("original_file_url", "")
+                file_id = None
+                if "/document/d/" in url:
+                    file_id = url.split("/document/d/")[1].split("/")[0]
+                elif "/spreadsheets/d/" in url:
+                    file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
+                elif "/file/d/" in url:
+                    file_id = url.split("/file/d/")[1].split("/")[0]
+
+                if file_id:
+                    file_ids.append(file_id)
 
         logging.info(f"[DECLINE] Deleting {len(file_ids)} files from Temp/ for {customer_email}")
         print(f"[DECLINE] Deleting {len(file_ids)} files from Temp/")

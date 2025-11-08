@@ -74,6 +74,10 @@ async def test_enterprise_transaction():
                 "translated_at": None
             }
         ],
+        # Email batching counters
+        "total_documents": 2,
+        "completed_documents": 0,
+        "batch_email_sent": False,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
@@ -113,6 +117,10 @@ async def test_individual_transaction():
                 "translated_at": None
             }
         ],
+        # Email batching counters
+        "total_documents": 1,
+        "completed_documents": 0,
+        "batch_email_sent": False,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
@@ -498,6 +506,69 @@ class TestSubmitEmailIntegration:
         assert response2.status_code == 200
         data2 = response2.json()
         assert data2.get("documents_count") == 2  # Both translated now
+
+    @pytest.mark.asyncio
+    async def test_email_batching_gate_blocks_until_all_complete(
+        self, http_client, test_enterprise_transaction
+    ):
+        """
+        Test email batching: email sent ONLY when ALL documents complete.
+
+        Verifies:
+        - First /submit: NO email (1/3 complete), email_sent=False
+        - Second /submit: NO email (2/3 complete), email_sent=False
+        - Third /submit: EMAIL SENT (3/3 complete), email_sent=True
+        - Counter tracking: completed_documents increments correctly
+        - Email gate logic: blocks email until all complete
+        """
+        transaction_id = test_enterprise_transaction["transaction_id"]
+
+        # Submit first document - EMAIL GATE SHOULD BLOCK (1/3)
+        payload1 = {
+            "file_name": "report.pdf",
+            "file_url": "https://drive.google.com/file/d/trans1/view",
+            "user_email": "testuser@testcorp.com",
+            "company_name": "Test Corp",
+            "transaction_id": transaction_id
+        }
+        response1 = await http_client.post("/submit", json=payload1)
+        assert response1.status_code == 200
+        data1 = response1.json()
+
+        # Verify email NOT sent (incomplete)
+        assert data1.get("email_sent") == False, "Email should not be sent when only 1/3 documents complete"
+        assert data1.get("all_documents_complete") == False
+        assert data1.get("completed_documents") == 1
+        assert data1.get("total_documents") == 2  # test_enterprise_transaction has 2 documents
+        assert data1.get("documents_count") == 1  # Only 1 translated so far
+        assert "pending" in data1.get("message", "").lower(), "Message should indicate email is pending"
+
+        # Submit second document - EMAIL GATE SHOULD PASS (2/2)
+        payload2 = {
+            "file_name": "summary.docx",
+            "file_url": "https://drive.google.com/file/d/trans2/view",
+            "user_email": "testuser@testcorp.com",
+            "company_name": "Test Corp",
+            "transaction_id": transaction_id
+        }
+        response2 = await http_client.post("/submit", json=payload2)
+        assert response2.status_code == 200
+        data2 = response2.json()
+
+        # Verify email SENT (all complete)
+        assert data2.get("email_sent") == True, "Email should be sent when all 2/2 documents complete"
+        assert data2.get("all_documents_complete") == True
+        assert data2.get("completed_documents") == 2
+        assert data2.get("total_documents") == 2
+        assert data2.get("documents_count") == 2  # Email includes both documents
+        assert "complete" in data2.get("message", "").lower(), "Message should indicate completion"
+
+        # Verify database state
+        collection = database.translation_transactions
+        final_transaction = await collection.find_one({"transaction_id": transaction_id})
+        assert final_transaction["completed_documents"] == 2
+        assert final_transaction["total_documents"] == 2
+        assert all(doc.get("translated_url") for doc in final_transaction["documents"])
 
 
 # ============================================================================

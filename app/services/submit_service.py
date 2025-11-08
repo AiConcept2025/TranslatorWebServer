@@ -125,10 +125,66 @@ class SubmitService:
                     "email_sent": False
                 }
 
+            # Get completion counters
+            completed_docs = transaction.get("completed_documents", 0)
+            total_docs = transaction.get("total_documents", len(transaction.get("documents", [])))
+
+            # Log email gate evaluation
+            logger.info(
+                f"EMAIL GATE EVALUATION - Transaction {transaction_id}",
+                extra={
+                    "transaction_id": transaction_id,
+                    "file_name": file_name,
+                    "completed_documents": completed_docs,
+                    "total_documents": total_docs,
+                    "will_send_email": completed_docs >= total_docs,
+                    "documents_in_transaction": len(transaction.get("documents", [])),
+                    "translated_documents_in_email": len(documents)
+                }
+            )
+
+            # EMAIL GATE: Only send email if ALL documents are complete
+            if completed_docs < total_docs:
+                logger.info(
+                    f"BLOCKING EMAIL - Transaction {transaction_id} incomplete: {completed_docs}/{total_docs} documents ready. "
+                    f"Email will be sent when all are complete.",
+                    extra={
+                        "transaction_id": transaction_id,
+                        "file_name": file_name,
+                        "completed_documents": completed_docs,
+                        "total_documents": total_docs,
+                        "reason": f"completed_docs({completed_docs}) < total_docs({total_docs})"
+                    }
+                )
+                return {
+                    "status": "success",
+                    "message": f"Document updated ({completed_docs}/{total_docs} complete). Email pending.",
+                    "transaction_id": transaction_id,
+                    "document_name": file_name,
+                    "translated_url": update_result.get("translated_url"),
+                    "translated_name": update_result.get("translated_name"),
+                    "all_documents_complete": False,
+                    "completed_documents": completed_docs,
+                    "total_documents": total_docs,
+                    "documents_count": len(documents),
+                    "email_sent": False
+                }
+
             # Extract user name from transaction or email
             user_name = self._extract_user_name(transaction, user_email)
 
-            # Step 5: Send email notification
+            # Step 5: Send email notification (ONLY when ALL documents complete)
+            logger.info(
+                f"EMAIL GATE PASSED - All {total_docs} documents complete for transaction {transaction_id}. "
+                f"Sending email notification to {user_email} with {len(documents)} document(s)",
+                extra={
+                    "transaction_id": transaction_id,
+                    "completed_documents": completed_docs,
+                    "total_documents": total_docs,
+                    "documents_in_email": len(documents),
+                    "user_email": user_email
+                }
+            )
             logger.info(f"Sending email notification to {user_email} with {len(documents)} document(s)")
 
             email_result = email_service.send_translation_notification(
@@ -142,12 +198,14 @@ class SubmitService:
                 logger.info(f"Email notification sent successfully to {user_email}")
                 return {
                     "status": "success",
-                    "message": f"Document updated and notification sent to {user_email}",
+                    "message": f"All {total_docs} documents complete. Notification sent to {user_email}",
                     "transaction_id": transaction_id,
                     "document_name": file_name,
                     "translated_url": update_result.get("translated_url"),
                     "translated_name": update_result.get("translated_name"),
-                    "all_documents_complete": all_complete,
+                    "all_documents_complete": True,
+                    "completed_documents": completed_docs,
+                    "total_documents": total_docs,
                     "documents_count": len(documents),
                     "email_sent": True
                 }
@@ -156,12 +214,14 @@ class SubmitService:
                 logger.warning(f"Email notification failed: {email_result.error}")
                 return {
                     "status": "success",
-                    "message": f"Document updated but email notification failed: {email_result.error}",
+                    "message": f"All documents complete but email notification failed: {email_result.error}",
                     "transaction_id": transaction_id,
                     "document_name": file_name,
                     "translated_url": update_result.get("translated_url"),
                     "translated_name": update_result.get("translated_name"),
-                    "all_documents_complete": all_complete,
+                    "all_documents_complete": True,
+                    "completed_documents": completed_docs,
+                    "total_documents": total_docs,
                     "documents_count": len(documents),
                     "email_sent": False,
                     "email_error": email_result.error

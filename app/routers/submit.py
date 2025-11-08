@@ -115,6 +115,10 @@ async def submit_file(request: SubmitRequest):
             response_data["translated_name"] = result["translated_name"]
         if "all_documents_complete" in result:
             response_data["all_documents_complete"] = result["all_documents_complete"]
+        if "completed_documents" in result:
+            response_data["completed_documents"] = result["completed_documents"]
+        if "total_documents" in result:
+            response_data["total_documents"] = result["total_documents"]
         if "documents_count" in result:
             response_data["documents_count"] = result["documents_count"]
         if "email_error" in result:

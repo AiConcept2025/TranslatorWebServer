@@ -216,7 +216,13 @@ async def create_transaction_record(
                     "processing_started_at": None,
                     "processing_duration": None
                 }
-            ]
+            ],
+
+            # Email batching counters - initialized on transaction creation
+            # Note: This function creates 1 transaction per file, so total is always 1
+            "total_documents": 1,  # Single file per transaction
+            "completed_documents": 0,  # No documents translated yet
+            "batch_email_sent": False  # Email not sent yet
         }
 
         # Add enterprise-specific fields if applicable

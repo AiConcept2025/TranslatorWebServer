@@ -224,14 +224,17 @@ class TransactionUpdateService:
             # Generate translated_name (remove language suffix if present)
             translated_name = self._generate_translated_name(file_name)
 
-            # Update the specific document in the array
+            # Update the specific document in the array with IDEMPOTENCY guard
             # NOTE: We already found the correct document_index above by matching lookup_name,
             # so we only need transaction_id in the filter. Adding file_name here would cause
             # a mismatch because file_name contains "_translated" suffix but database stores
             # the original filename without this suffix.
+            #
+            # IDEMPOTENCY: Only update if translated_url is null (prevents duplicate webhook processing)
             update_result = await collection.update_one(
                 {
-                    "transaction_id": transaction_id
+                    "transaction_id": transaction_id,
+                    f"documents.{document_index}.translated_url": None  # Only if not already translated
                 },
                 {
                     "$set": {
@@ -239,6 +242,10 @@ class TransactionUpdateService:
                         f"documents.{document_index}.translated_name": translated_name,
                         f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
                         "updated_at": datetime.now(timezone.utc)
+                    },
+                    # Increment completed_documents counter ONLY after successful match
+                    "$inc": {
+                        "completed_documents": 1
                     }
                 }
             )
@@ -259,6 +266,21 @@ class TransactionUpdateService:
 
                 # Get updated transaction for email
                 updated_transaction = await collection.find_one({"transaction_id": transaction_id})
+
+                # Log counter state after update (for email batching tracking)
+                completed_docs = updated_transaction.get("completed_documents", 0)
+                total_docs = updated_transaction.get("total_documents", 0)
+                logger.info(
+                    f"COUNTER STATE AFTER UPDATE - Transaction {transaction_id}",
+                    extra={
+                        "transaction_id": transaction_id,
+                        "file_name": file_name,
+                        "completed_documents": completed_docs,
+                        "total_documents": total_docs,
+                        "all_complete": completed_docs >= total_docs,
+                        "progress": f"{completed_docs}/{total_docs}"
+                    }
+                )
 
                 return {
                     "success": True,
@@ -430,14 +452,17 @@ class TransactionUpdateService:
             # Generate translated_name
             translated_name = self._generate_translated_name(file_name)
 
-            # Update the specific document in the array
+            # Update the specific document in the array with IDEMPOTENCY guard
             # NOTE: We already found the correct document_index above by matching lookup_name,
             # so we only need transaction_id in the filter. Adding file_name here would cause
             # a mismatch because file_name contains "_translated" suffix but database stores
             # the original filename without this suffix.
+            #
+            # IDEMPOTENCY: Only update if translated_url is null (prevents duplicate webhook processing)
             update_result = await collection.update_one(
                 {
-                    "transaction_id": transaction_id
+                    "transaction_id": transaction_id,
+                    f"documents.{document_index}.translated_url": None  # Only if not already translated
                 },
                 {
                     "$set": {
@@ -445,6 +470,10 @@ class TransactionUpdateService:
                         f"documents.{document_index}.translated_name": translated_name,
                         f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
                         "updated_at": datetime.now(timezone.utc)
+                    },
+                    # Increment completed_documents counter ONLY after successful match
+                    "$inc": {
+                        "completed_documents": 1
                     }
                 }
             )
@@ -465,6 +494,21 @@ class TransactionUpdateService:
 
                 # Get updated transaction for email
                 updated_transaction = await collection.find_one({"transaction_id": transaction_id})
+
+                # Log counter state after update (for email batching tracking)
+                completed_docs = updated_transaction.get("completed_documents", 0)
+                total_docs = updated_transaction.get("total_documents", 0)
+                logger.info(
+                    f"COUNTER STATE AFTER UPDATE - Transaction {transaction_id}",
+                    extra={
+                        "transaction_id": transaction_id,
+                        "file_name": file_name,
+                        "completed_documents": completed_docs,
+                        "total_documents": total_docs,
+                        "all_complete": completed_docs >= total_docs,
+                        "progress": f"{completed_docs}/{total_docs}"
+                    }
+                )
 
                 return {
                     "success": True,

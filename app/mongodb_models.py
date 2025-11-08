@@ -325,6 +325,11 @@ class TranslationTransaction(BaseModel):
     # NESTED documents array - NEW STRUCTURE
     documents: Optional[List[TranslationDocumentEmbedded]] = Field(default_factory=list)
 
+    # Email batching counters - Track document completion for batch email sending
+    total_documents: Optional[int] = 0  # Total documents in transaction (set from len(documents))
+    completed_documents: Optional[int] = 0  # How many documents have translated_url set
+    batch_email_sent: Optional[bool] = False  # Flag to prevent duplicate batch emails
+
     # LEGACY flat structure fields - keep for backward compatibility
     requester_id: Optional[str] = None
     units_consumed: Optional[int] = None

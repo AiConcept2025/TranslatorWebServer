@@ -227,8 +227,27 @@ class EmailService:
         Returns:
             EmailSendResult with send status
         """
+        logger.info("=" * 80)
+        logger.info("EMAIL SERVICE - Sending Email")
+        logger.info("=" * 80)
+        logger.info(f"Preparing to send email to: {email_request.to_email}")
+        logger.debug(
+            "Email request parameters",
+            extra={
+                "to_email": email_request.to_email,
+                "to_name": email_request.to_name,
+                "subject": email_request.subject,
+                "from_email": email_request.from_email or self.email_from,
+                "from_name": email_request.from_name or self.email_from_name,
+                "reply_to": email_request.reply_to or self.email_reply_to,
+                "body_html_length": len(email_request.body_html),
+                "body_text_length": len(email_request.body_text)
+            }
+        )
+
         # Validate configuration
         if not self._validate_smtp_config():
+            logger.error("SMTP configuration validation failed")
             return EmailSendResult(
                 success=False,
                 message="Email service not configured properly",
@@ -238,6 +257,7 @@ class EmailService:
 
         try:
             # Build email message
+            logger.debug("Building email MIME message")
             msg = self._build_email_message(
                 to_email=email_request.to_email,
                 to_name=email_request.to_name,
@@ -248,6 +268,17 @@ class EmailService:
                 from_name=email_request.from_name,
                 reply_to=email_request.reply_to
             )
+
+            # Log complete email content for debugging
+            logger.debug("=" * 80)
+            logger.debug("EMAIL CONTENT - Plain Text Body")
+            logger.debug("=" * 80)
+            logger.debug(f"\n{email_request.body_text}")
+            logger.debug("=" * 80)
+            logger.debug("EMAIL CONTENT - HTML Body")
+            logger.debug("=" * 80)
+            logger.debug(f"\n{email_request.body_html}")
+            logger.debug("=" * 80)
 
             # DIAGNOSTIC LOGGING
             if debug:
@@ -273,10 +304,27 @@ class EmailService:
 
             # Create SMTP connection and send
             debug_level = 2 if debug else 0
+            logger.info(f"Creating SMTP connection (debug_level={debug_level})")
             smtp = self._create_smtp_connection(debug_level=debug_level)
             try:
+                logger.info(f"Sending email message to {email_request.to_email}")
+                logger.debug(
+                    "SMTP send_message parameters",
+                    extra={
+                        "from": msg.get('From'),
+                        "to": msg.get('To'),
+                        "subject": msg.get('Subject'),
+                        "message_id": msg.get('Message-ID'),
+                        "date": msg.get('Date')
+                    }
+                )
+
                 smtp.send_message(msg)
-                logger.info(f"Email sent successfully to: {email_request.to_email}")
+
+                logger.info(f"✅ Email sent successfully to: {email_request.to_email}")
+                logger.info("=" * 80)
+                logger.info("EMAIL SERVICE - Email Sent Successfully")
+                logger.info("=" * 80)
 
                 return EmailSendResult(
                     success=True,
@@ -290,7 +338,16 @@ class EmailService:
                 logger.debug("SMTP connection closed")
 
         except EmailServiceError as e:
-            logger.error(f"Email service error: {e}")
+            logger.error(
+                f"❌ Email service error: {e}",
+                extra={
+                    "error_type": "EmailServiceError",
+                    "error": str(e),
+                    "recipient": email_request.to_email,
+                    "subject": email_request.subject
+                },
+                exc_info=True
+            )
             return EmailSendResult(
                 success=False,
                 message=f"Failed to send email to {email_request.to_email}",
@@ -299,7 +356,16 @@ class EmailService:
             )
 
         except Exception as e:
-            logger.error(f"Unexpected error sending email: {e}", exc_info=True)
+            logger.error(
+                f"❌ Unexpected error sending email: {e}",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error": str(e),
+                    "recipient": email_request.to_email,
+                    "subject": email_request.subject
+                },
+                exc_info=True
+            )
             return EmailSendResult(
                 success=False,
                 message=f"Unexpected error sending email to {email_request.to_email}",
@@ -312,7 +378,10 @@ class EmailService:
         documents: List[DocumentInfo],
         user_name: str,
         user_email: str,
-        company_name: str
+        company_name: str,
+        transaction_id: Optional[str] = None,
+        completed_at: Optional[datetime] = None,
+        total_documents: Optional[int] = None
     ) -> EmailSendResult:
         """
         Send translation notification email to user.
@@ -326,6 +395,9 @@ class EmailService:
             user_name: Recipient name
             user_email: Recipient email address
             company_name: Company name ("Ind" for individuals)
+            transaction_id: Transaction ID string (optional)
+            completed_at: Timestamp when translation completed (optional)
+            total_documents: Total number of documents in batch (optional)
 
         Returns:
             EmailSendResult with send status
@@ -344,6 +416,26 @@ class EmailService:
             template_type = context.template_type
             is_individual = context.is_individual
 
+            # COMPREHENSIVE LOGGING: Email preparation details
+            logger.info("=" * 80)
+            logger.info("EMAIL NOTIFICATION - Preparing to Send")
+            logger.info("=" * 80)
+            logger.info(f"Recipient: {user_name} <{user_email}>")
+            logger.info(f"Email Type: {'Individual' if is_individual else 'Corporate'}")
+            logger.info(f"Company: {company_name}")
+            logger.info(f"Number of documents: {len(documents)}")
+            if transaction_id:
+                logger.info(f"Transaction ID: {transaction_id}")
+            if completed_at:
+                logger.info(f"Completed At: {completed_at.strftime('%B %d, %Y at %I:%M %p UTC')}")
+            logger.info("-" * 80)
+            logger.info("Documents:")
+            for i, doc in enumerate(documents, 1):
+                logger.info(f"  {i}. {doc.document_name}")
+                logger.info(f"     Original:   {doc.original_url}")
+                logger.info(f"     Translated: {doc.translated_url}")
+            logger.info("=" * 80)
+
             logger.info(
                 f"Preparing translation notification email for {user_email} "
                 f"(customer type: {'individual' if is_individual else 'corporate'})"
@@ -353,12 +445,31 @@ class EmailService:
             template_html = f"{template_type.value}.html"
             template_txt = f"{template_type.value}.txt"
 
+            # Format completed_at as human-readable string if provided
+            completed_at_formatted = None
+            if completed_at:
+                # Format as "January 8, 2025 at 3:45 PM UTC"
+                completed_at_formatted = completed_at.strftime("%B %d, %Y at %I:%M %p UTC")
+
             template_context = {
                 "user_name": user_name,
                 "company_name": company_name,
                 "documents": [doc.dict() for doc in documents],
-                "translation_service_company": context.translation_service_company
+                "translation_service_company": context.translation_service_company,
+                "transaction_id": transaction_id,
+                "completed_at": completed_at_formatted,
+                "total_documents": total_documents or len(documents)
             }
+
+            # Log new metadata fields for debugging
+            logger.debug(
+                "Email template context includes transaction metadata",
+                extra={
+                    "transaction_id": transaction_id,
+                    "completed_at_formatted": completed_at_formatted,
+                    "total_documents": total_documents or len(documents)
+                }
+            )
 
             body_html = template_service.render_template(template_html, template_context)
             body_text = template_service.render_template(template_txt, template_context)
@@ -369,6 +480,14 @@ class EmailService:
             else:
                 subject = "Translated documents are now available for download"
 
+            # Log email content preview
+            logger.info("-" * 80)
+            logger.info("Email Content Preview:")
+            logger.info(f"Subject: {subject}")
+            logger.info(f"Body (first 500 chars):")
+            logger.info(f"{body_text[:500]}...")
+            logger.info("=" * 80)
+
             # Create email request
             email_request = EmailRequest(
                 to_email=user_email,
@@ -378,13 +497,25 @@ class EmailService:
                 body_text=body_text
             )
 
-            # Send email with debug mode enabled to troubleshoot 550 errors
-            result = self.send_email(email_request, debug=True)
+            # Send email (debug disabled to prevent base64 MIME dumps in logs)
+            # Human-readable preview is logged above instead
+            result = self.send_email(email_request, debug=False)
 
+            # Post-send logging with detailed summary
+            logger.info("=" * 80)
+            logger.info("EMAIL NOTIFICATION - Send Complete")
+            logger.info("=" * 80)
             if result.success:
-                logger.info(f"Translation notification sent successfully to {user_email}")
+                logger.info(f"Status: SUCCESS")
+                logger.info(f"Recipient: {user_email}")
+                logger.info(f"Total emails sent in this batch: 1")
+                logger.info(f"Documents included: {len(documents)}")
+                logger.info(f"Email type: {'Individual' if is_individual else 'Corporate'}")
             else:
-                logger.error(f"Failed to send translation notification to {user_email}: {result.error}")
+                logger.error(f"Status: FAILED")
+                logger.error(f"Recipient: {user_email}")
+                logger.error(f"Error: {result.error}")
+            logger.info("=" * 80)
 
             return result
 

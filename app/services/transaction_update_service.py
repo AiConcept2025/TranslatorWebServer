@@ -95,13 +95,31 @@ class TransactionUpdateService:
         Returns:
             dict: Update result with transaction details
         """
+        logger.info("=" * 80)
+        logger.info("TRANSACTION UPDATE SERVICE - Enterprise Transaction")
+        logger.info("=" * 80)
         logger.info(f"Updating enterprise transaction {transaction_id} for file {file_name}")
+        logger.debug(
+            "Enterprise transaction update parameters",
+            extra={
+                "transaction_id": transaction_id,
+                "file_name": file_name,
+                "file_url": file_url,
+                "collection": "translation_transactions"
+            }
+        )
 
         try:
             collection = database.translation_transactions
 
             if collection is None:
-                logger.error("Database collection not available")
+                logger.error(
+                    "Database collection not available",
+                    extra={
+                        "collection": "translation_transactions",
+                        "transaction_id": transaction_id
+                    }
+                )
                 return {
                     "success": False,
                     "error": "Database connection error",
@@ -109,7 +127,26 @@ class TransactionUpdateService:
                 }
 
             # Find the transaction
+            logger.debug(
+                "DB QUERY - find_one",
+                extra={
+                    "collection": "translation_transactions",
+                    "operation": "find_one",
+                    "filter": {"transaction_id": transaction_id}
+                }
+            )
+            logger.debug(f"Executing: db.translation_transactions.find_one({{'transaction_id': '{transaction_id}'}})")
+
             transaction = await collection.find_one({"transaction_id": transaction_id})
+
+            logger.debug(
+                f"DB QUERY RESULT - Transaction {'found' if transaction else 'not found'}",
+                extra={
+                    "transaction_id": transaction_id,
+                    "found": bool(transaction),
+                    "transaction_keys": list(transaction.keys()) if transaction else None
+                }
+            )
 
             if not transaction:
                 logger.error(f"Transaction not found: {transaction_id}")
@@ -223,6 +260,7 @@ class TransactionUpdateService:
 
             # Generate translated_name (remove language suffix if present)
             translated_name = self._generate_translated_name(file_name)
+            logger.debug(f"Generated translated_name: {translated_name}")
 
             # Update the specific document in the array with IDEMPOTENCY guard
             # NOTE: We already found the correct document_index above by matching lookup_name,
@@ -231,22 +269,49 @@ class TransactionUpdateService:
             # the original filename without this suffix.
             #
             # IDEMPOTENCY: Only update if translated_url is null (prevents duplicate webhook processing)
-            update_result = await collection.update_one(
-                {
-                    "transaction_id": transaction_id,
-                    f"documents.{document_index}.translated_url": None  # Only if not already translated
+            update_filter = {
+                "transaction_id": transaction_id,
+                f"documents.{document_index}.translated_url": None  # Only if not already translated
+            }
+            update_operations = {
+                "$set": {
+                    f"documents.{document_index}.translated_url": file_url,
+                    f"documents.{document_index}.translated_name": translated_name,
+                    f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
                 },
-                {
-                    "$set": {
-                        f"documents.{document_index}.translated_url": file_url,
-                        f"documents.{document_index}.translated_name": translated_name,
-                        f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
-                        "updated_at": datetime.now(timezone.utc)
-                    },
-                    # Increment completed_documents counter ONLY after successful match
-                    "$inc": {
-                        "completed_documents": 1
-                    }
+                # Increment completed_documents counter ONLY after successful match
+                "$inc": {
+                    "completed_documents": 1
+                }
+            }
+
+            logger.info(
+                f"DB UPDATE - update_one (Enterprise)",
+                extra={
+                    "collection": "translation_transactions",
+                    "operation": "update_one",
+                    "filter": update_filter,
+                    "update_operations": update_operations,
+                    "document_index": document_index
+                }
+            )
+            logger.debug(
+                f"Executing: db.translation_transactions.update_one("
+                f"\n  filter={update_filter},"
+                f"\n  update={update_operations}"
+                f"\n)"
+            )
+
+            update_result = await collection.update_one(update_filter, update_operations)
+
+            logger.debug(
+                f"DB UPDATE RESULT (Enterprise)",
+                extra={
+                    "matched_count": update_result.matched_count,
+                    "modified_count": update_result.modified_count,
+                    "upserted_id": update_result.upserted_id,
+                    "acknowledged": update_result.acknowledged
                 }
             )
 
@@ -323,13 +388,31 @@ class TransactionUpdateService:
         Returns:
             dict: Update result with transaction details
         """
+        logger.info("=" * 80)
+        logger.info("TRANSACTION UPDATE SERVICE - Individual Transaction")
+        logger.info("=" * 80)
         logger.info(f"Updating individual transaction {transaction_id} for file {file_name}")
+        logger.debug(
+            "Individual transaction update parameters",
+            extra={
+                "transaction_id": transaction_id,
+                "file_name": file_name,
+                "file_url": file_url,
+                "collection": "user_transactions"
+            }
+        )
 
         try:
             collection = database.user_transactions
 
             if collection is None:
-                logger.error("Database collection not available")
+                logger.error(
+                    "Database collection not available",
+                    extra={
+                        "collection": "user_transactions",
+                        "transaction_id": transaction_id
+                    }
+                )
                 return {
                     "success": False,
                     "error": "Database connection error",
@@ -337,7 +420,26 @@ class TransactionUpdateService:
                 }
 
             # Find the transaction
+            logger.debug(
+                "DB QUERY - find_one",
+                extra={
+                    "collection": "user_transactions",
+                    "operation": "find_one",
+                    "filter": {"transaction_id": transaction_id}
+                }
+            )
+            logger.debug(f"Executing: db.user_transactions.find_one({{'transaction_id': '{transaction_id}'}})")
+
             transaction = await collection.find_one({"transaction_id": transaction_id})
+
+            logger.debug(
+                f"DB QUERY RESULT - Transaction {'found' if transaction else 'not found'}",
+                extra={
+                    "transaction_id": transaction_id,
+                    "found": bool(transaction),
+                    "transaction_keys": list(transaction.keys()) if transaction else None
+                }
+            )
 
             if not transaction:
                 logger.error(f"Transaction not found: {transaction_id}")
@@ -451,6 +553,7 @@ class TransactionUpdateService:
 
             # Generate translated_name
             translated_name = self._generate_translated_name(file_name)
+            logger.debug(f"Generated translated_name: {translated_name}")
 
             # Update the specific document in the array with IDEMPOTENCY guard
             # NOTE: We already found the correct document_index above by matching lookup_name,
@@ -459,22 +562,49 @@ class TransactionUpdateService:
             # the original filename without this suffix.
             #
             # IDEMPOTENCY: Only update if translated_url is null (prevents duplicate webhook processing)
-            update_result = await collection.update_one(
-                {
-                    "transaction_id": transaction_id,
-                    f"documents.{document_index}.translated_url": None  # Only if not already translated
+            update_filter = {
+                "transaction_id": transaction_id,
+                f"documents.{document_index}.translated_url": None  # Only if not already translated
+            }
+            update_operations = {
+                "$set": {
+                    f"documents.{document_index}.translated_url": file_url,
+                    f"documents.{document_index}.translated_name": translated_name,
+                    f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
                 },
-                {
-                    "$set": {
-                        f"documents.{document_index}.translated_url": file_url,
-                        f"documents.{document_index}.translated_name": translated_name,
-                        f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
-                        "updated_at": datetime.now(timezone.utc)
-                    },
-                    # Increment completed_documents counter ONLY after successful match
-                    "$inc": {
-                        "completed_documents": 1
-                    }
+                # Increment completed_documents counter ONLY after successful match
+                "$inc": {
+                    "completed_documents": 1
+                }
+            }
+
+            logger.info(
+                f"DB UPDATE - update_one (Individual)",
+                extra={
+                    "collection": "user_transactions",
+                    "operation": "update_one",
+                    "filter": update_filter,
+                    "update_operations": update_operations,
+                    "document_index": document_index
+                }
+            )
+            logger.debug(
+                f"Executing: db.user_transactions.update_one("
+                f"\n  filter={update_filter},"
+                f"\n  update={update_operations}"
+                f"\n)"
+            )
+
+            update_result = await collection.update_one(update_filter, update_operations)
+
+            logger.debug(
+                f"DB UPDATE RESULT (Individual)",
+                extra={
+                    "matched_count": update_result.matched_count,
+                    "modified_count": update_result.modified_count,
+                    "upserted_id": update_result.upserted_id,
+                    "acknowledged": update_result.acknowledged
                 }
             )
 

@@ -251,6 +251,124 @@ async def create_transaction_record(
         return None
 
 
+async def create_batch_transaction_record(
+    files_info: list[dict],
+    user_data: dict,
+    request_data: TranslateRequest,
+    subscription: Optional[dict],
+    company_name: Optional[str],
+    price_per_page: float
+) -> Optional[str]:
+    """
+    Create a SINGLE transaction record for MULTIPLE file uploads (batch).
+
+    This is the ROOT CAUSE FIX for the "7 emails for 3 documents" problem.
+    Instead of creating separate transactions per file (which triggers separate emails),
+    this creates ONE transaction with ALL files in the documents[] array.
+
+    STRUCTURE: Uses nested documents[] array with all files.
+    One transaction represents one batch upload session with multiple documents.
+
+    Args:
+        files_info: List of file dicts with file_id, filename, size, page_count, google_drive_url
+        user_data: Current authenticated user data
+        request_data: Original TranslateRequest
+        subscription: Enterprise subscription (or None for individual)
+        company_name: Enterprise company name (or None for individual)
+        price_per_page: Calculated pricing (subscription or default)
+
+    Returns:
+        transaction_id if successful, None if failed
+    """
+    from app.database import database
+    from bson import ObjectId
+    from datetime import datetime, timezone
+    import uuid
+
+    try:
+        # Generate unique transaction ID for the entire batch
+        transaction_id = f"TXN-{uuid.uuid4().hex[:10].upper()}"
+
+        # Calculate total units and price across ALL files
+        total_units = sum(file.get("page_count", 1) for file in files_info)
+        total_price = total_units * price_per_page
+
+        # Build documents array with ALL files
+        documents = []
+        for file_info in files_info:
+            documents.append({
+                "file_name": file_info.get("filename", ""),
+                "file_size": file_info.get("size", 0),
+                "original_url": file_info.get("google_drive_url", ""),
+                "translated_url": None,
+                "translated_name": None,
+                "status": "uploaded",
+                "uploaded_at": datetime.now(timezone.utc),
+                "translated_at": None,
+                "processing_started_at": None,
+                "processing_duration": None
+            })
+
+        # Build batch transaction document
+        transaction_doc = {
+            # Transaction-level fields
+            "transaction_id": transaction_id,
+            "user_id": request_data.email,  # Use actual email for folder lookup
+            "source_language": request_data.sourceLanguage,
+            "target_language": request_data.targetLanguage,
+            "units_count": total_units,
+            "price_per_unit": price_per_page,
+            "total_price": total_price,
+            "status": "started",
+            "error_message": "",
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+
+            # NESTED documents array - ALL files in this batch
+            "documents": documents,
+
+            # Email batching counters - CRITICAL FIX
+            # total_documents = number of files in batch (prevents multiple transactions)
+            "total_documents": len(files_info),  # Total files in batch
+            "completed_documents": 0,  # No documents translated yet
+            "batch_email_sent": False  # Email not sent yet
+        }
+
+        # Add enterprise-specific fields if applicable
+        if company_name and subscription:
+            transaction_doc["company_name"] = company_name
+            transaction_doc["user_name"] = user_data.get("user_name", "Unknown") if user_data else "Unknown"
+            transaction_doc["subscription_id"] = ObjectId(str(subscription["_id"]))
+            transaction_doc["unit_type"] = subscription.get("subscription_unit", "page")
+        else:
+            # Individual customer (no company or subscription)
+            transaction_doc["company_name"] = None
+            transaction_doc["user_name"] = None
+            transaction_doc["subscription_id"] = None
+            transaction_doc["unit_type"] = "page"
+
+        # Insert into database
+        await database.translation_transactions.insert_one(transaction_doc)
+
+        logging.info(
+            f"[BATCH TRANSACTION] Created {transaction_id} for {len(files_info)} files: "
+            f"{', '.join(f.get('filename', '') for f in files_info)}"
+        )
+        print(
+            f"✅ [BATCH TRANSACTION] Created {transaction_id}\n"
+            f"   Files: {len(files_info)}\n"
+            f"   Total pages: {total_units}\n"
+            f"   Total price: ${total_price:.2f}\n"
+            f"   Documents: {', '.join(f.get('filename', '') for f in files_info)}"
+        )
+        return transaction_id
+
+    except Exception as e:
+        logging.error(f"[BATCH TRANSACTION] Failed to create batch transaction: {e}")
+        print(f"❌ [BATCH TRANSACTION] Failed to create batch transaction: {e}")
+        return None
+
+
 # Direct translate endpoint (Google Drive upload)
 @app.post("/translate", tags=["Translation"])
 async def translate_files(
@@ -695,26 +813,44 @@ async def translate_files(
         logging.info(f"[PAYMENT] Payment required for {'individual customer' if not is_enterprise else 'enterprise without subscription'}")
         print(f"\n💳 Payment required: {'Individual customer' if not is_enterprise else 'Enterprise without subscription'}")
 
-    # Create transaction records for ALL uploaded files (enterprise + individual)
+    # Create SINGLE BATCH transaction record for ALL uploaded files
+    # ROOT CAUSE FIX: Instead of creating separate transactions per file (which caused 7 emails),
+    # create ONE transaction with all files in documents[] array
     successful_stored_files = [f for f in stored_files if f["status"] == "stored"]
-    log_step("TRANSACTION CREATE START", f"Creating records for {len(successful_stored_files)} successful uploads")
 
-    for stored_file in stored_files:
-        if stored_file["status"] == "stored":
-            transaction_id = await create_transaction_record(
-                file_info=stored_file,
-                user_data=current_user,
-                request_data=request,
-                subscription=subscription if is_enterprise else None,
-                company_name=company_name if is_enterprise else None,
-                price_per_page=price_per_page
+    if successful_stored_files:
+        log_step(
+            "BATCH TRANSACTION CREATE START",
+            f"Creating SINGLE batch transaction for {len(successful_stored_files)} file(s)"
+        )
+
+        # Call batch function with ALL files at once
+        batch_transaction_id = await create_batch_transaction_record(
+            files_info=successful_stored_files,
+            user_data=current_user,
+            request_data=request,
+            subscription=subscription if is_enterprise else None,
+            company_name=company_name if is_enterprise else None,
+            price_per_page=price_per_page
+        )
+
+        if batch_transaction_id:
+            transaction_ids.append(batch_transaction_id)
+            log_step(
+                "BATCH TRANSACTION CREATED",
+                f"ID: {batch_transaction_id} with {len(successful_stored_files)} document(s)"
             )
+        else:
+            log_step("BATCH TRANSACTION FAILED", "Failed to create batch transaction")
 
-            if transaction_id:
-                transaction_ids.append(transaction_id)
-                log_step("TRANSACTION CREATED", f"ID: {transaction_id} for {stored_file['filename']}")
+    log_step("TRANSACTION CREATE COMPLETE", f"Created {len(transaction_ids)} batch transaction(s)")
 
-    log_step("TRANSACTION CREATE COMPLETE", f"Created {len(transaction_ids)} transaction(s)")
+    # CRITICAL ASSERTION: Batch architecture creates exactly 1 transaction for N files
+    # This ensures all files in the batch share the same transaction_id
+    assert len(transaction_ids) == 1, (
+        f"Batch transaction creation failed: Expected 1 transaction for {len(successful_stored_files)} files, "
+        f"but got {len(transaction_ids)} transaction(s). This indicates a critical bug in create_batch_transaction_record()."
+    )
 
     # Extract user information from JWT token (if authenticated)
     user_info = None
@@ -841,6 +977,12 @@ async def process_transaction_confirmation_background(
     """
     Background task to move files from Temp to Inbox and update transaction status.
     Runs asynchronously without blocking HTTP response.
+
+    CRITICAL RACE CONDITION FIX:
+    - Step 1 MUST add transaction_id metadata BEFORE moving files
+    - GoogleTranslator watches Inbox and sends webhooks when files appear
+    - If transaction_id is missing when files are moved, webhooks fail Pydantic validation
+    - Solution: Add metadata first, then move files
     """
     import time
     task_start = time.time()
@@ -863,8 +1005,42 @@ async def process_transaction_confirmation_background(
         print(f"   Files to move: {len(file_ids)}")
         print("=" * 80)
 
-        # Move files from Temp to Inbox
-        print(f"\n📁 Step 1: Moving files from Temp to Inbox...")
+        # CRITICAL FIX: Add transaction_id metadata BEFORE moving files to Inbox
+        # This prevents race condition where GoogleTranslator sends webhooks with missing transaction_id
+        print(f"\n📝 Step 1: Adding transaction IDs to file metadata (BEFORE moving to Inbox)...")
+        metadata_start = time.time()
+        metadata_updates_successful = 0
+
+        if transaction_ids:
+            # Use the single batch transaction for all files
+            batch_transaction_id = transaction_ids[0]
+            print(f"   Using batch transaction ID: {batch_transaction_id}")
+
+            for i, file_id in enumerate(file_ids):
+                try:
+                    # All files get the SAME batch transaction_id (not transaction_ids[i])
+                    await google_drive_service.update_file_properties(
+                        file_id=file_id,
+                        properties={
+                            'transaction_id': batch_transaction_id,
+                            'status': 'confirmed',
+                            'confirmation_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ')
+                        }
+                    )
+                    metadata_updates_successful += 1
+                    print(f"   ✓ File {file_id[:20]}...: Added transaction_id={batch_transaction_id}")
+                except Exception as e:
+                    print(f"   ⚠️  Failed to update metadata for file {file_id[:20]}...: {e}")
+                    # Continue processing other files even if one fails
+        else:
+            print(f"   ⚠️  No batch transaction IDs found - skipping metadata update")
+
+        metadata_elapsed = (time.time() - metadata_start) * 1000
+        print(f"⏱️  Metadata update completed in {metadata_elapsed:.2f}ms")
+        print(f"✅ Updated: {metadata_updates_successful}/{len(file_ids)} files")
+
+        # NOW move files from Temp to Inbox (files now have transaction_id metadata)
+        print(f"\n📁 Step 2: Moving files from Temp to Inbox (files now have transaction_id)...")
         move_start = time.time()
         move_result = await google_drive_service.move_files_to_inbox_on_payment_success(
             customer_email=customer_email,
@@ -876,7 +1052,7 @@ async def process_transaction_confirmation_background(
         print(f"✅ Moved: {move_result['moved_successfully']}/{move_result['total_files']} files")
 
         # Verify files in Inbox
-        print(f"\n🔍 Step 2: Verifying files in Inbox...")
+        print(f"\n🔍 Step 3: Verifying files in Inbox...")
         inbox_folder_id = move_result['inbox_folder_id']
         verified_count = 0
 
@@ -903,34 +1079,8 @@ async def process_transaction_confirmation_background(
 
         print(f"✅ Verified: {verified_count}/{len(move_result.get('moved_files', []))} files")
 
-        # Step 5: Update file properties with transaction_id
-        print(f"\n📝 Step 5: Adding transaction IDs to file metadata...")
-        metadata_start = time.time()
-        metadata_updates_successful = 0
-
-        for i, file_id in enumerate(file_ids):
-            try:
-                transaction_id = transaction_ids[i]
-                await google_drive_service.update_file_properties(
-                    file_id=file_id,
-                    properties={
-                        'transaction_id': transaction_id,
-                        'status': 'confirmed',
-                        'confirmation_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ')
-                    }
-                )
-                metadata_updates_successful += 1
-                print(f"   ✓ File {file_id[:20]}...: Added transaction_id={transaction_id}")
-            except Exception as e:
-                print(f"   ⚠️  Failed to update metadata for file {file_id[:20]}...: {e}")
-                # Continue processing other files even if one fails
-
-        metadata_elapsed = (time.time() - metadata_start) * 1000
-        print(f"⏱️  Metadata update completed in {metadata_elapsed:.2f}ms")
-        print(f"✅ Updated: {metadata_updates_successful}/{len(file_ids)} files")
-
         # Update transaction status
-        print(f"\n🔄 Step 3: Updating transaction status...")
+        print(f"\n🔄 Step 4: Updating transaction status...")
         for txn_id in transaction_ids:
             await database.translation_transactions.update_one(
                 {"transaction_id": txn_id},
@@ -944,7 +1094,7 @@ async def process_transaction_confirmation_background(
             print(f"   ✓ Transaction {txn_id} confirmed")
 
         # Update subscription usage
-        print(f"\n💳 Step 4: Updating subscription usage...")
+        print(f"\n💳 Step 5: Updating subscription usage...")
         transactions = []
         for txn_id in transaction_ids:
             txn = await database.translation_transactions.find_one({"transaction_id": txn_id})

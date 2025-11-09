@@ -4,10 +4,18 @@ Dear {{ user_name }},
 
 The translation process for your documents has been completed. You can download the translated files from the links below:
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Transaction ID: {{ transaction_id }}
+Completed: {{ completed_at }}
+Total Documents: {{ total_documents }}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+YOUR DOCUMENTS:
+
 {% for document in documents %}
 {{ loop.index }}. {{ document.document_name }}
-   - Download Translated: {{ document.translated_url }}
-   - View Original: {{ document.original_url }}
+   • View Original: {{ document.original_url }}
+   • Download Translated: {{ document.translated_url }}
 
 {% endfor %}
 

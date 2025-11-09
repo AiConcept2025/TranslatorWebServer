@@ -57,6 +57,9 @@ python-multipart==0.0.6
 # Environment configuration
 python-dotenv==1.0.0
 
+# Template rendering
+jinja2==3.1.6
+
 # Logging and monitoring
 structlog==23.2.0
 

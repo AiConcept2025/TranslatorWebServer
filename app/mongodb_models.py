@@ -119,6 +119,24 @@ class FileMetadata(BaseModel):
     character_count: Optional[int] = None
 
 
+class TranslationDocumentEmbedded(BaseModel):
+    """
+    Embedded document in translation transactions (nested structure).
+    Represents a single document in a transaction's documents[] array.
+    """
+    file_name: str
+    file_size: int
+    original_url: str
+    translated_url: Optional[str] = None
+    translated_name: Optional[str] = None
+    status: str = "uploaded"
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    translated_at: Optional[datetime] = None
+    processing_started_at: Optional[datetime] = None
+    processing_duration: Optional[float] = None
+    transaction_id: Optional[str] = None  # MongoDB _id for enterprise
+
+
 class Address(BaseModel):
     """Embedded address information for companies."""
     address0: Optional[str] = Field(None, description="Primary address line")
@@ -270,26 +288,56 @@ class Payment(BaseModel):
 # ==============================================================================
 
 class TranslationTransaction(BaseModel):
-    """Translation job transactions with file metadata."""
+    """
+    Translation job transactions with nested documents[] array.
+
+    STRUCTURE: Uses nested documents[] array for multiple files per transaction.
+    This model supports both legacy flat structure and new nested structure for backward compatibility.
+    """
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
-    company_name: str = Field(..., max_length=255)
+
+    # Core transaction fields
+    transaction_id: Optional[str] = None
+    user_id: Optional[str] = None  # User email for folder lookup
+    company_name: Optional[str] = Field(None, max_length=255)
     subscription_id: Optional[PyObjectId] = None
-    requester_id: str
-    user_name: str
-    transaction_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    units_consumed: int
-    original_file_url: str
-    translated_file_url: Optional[str] = None
+    user_name: Optional[str] = None
+
+    # Translation details
     source_language: str = Field(..., max_length=10)
     target_language: str = Field(..., max_length=10)
+
+    # Pricing
+    units_count: Optional[int] = None
+    price_per_unit: Optional[float] = None
+    total_price: Optional[float] = None
+    unit_type: Optional[str] = None
+
+    # Status tracking
     status: TransactionStatus = TransactionStatus.COMPLETED
     error_message: Optional[str] = None
 
-    # Embedded file metadata
-    file_metadata: Optional[FileMetadata] = None
-
+    # Timestamps
+    transaction_date: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # NESTED documents array - NEW STRUCTURE
+    documents: Optional[List[TranslationDocumentEmbedded]] = Field(default_factory=list)
+
+    # Email batching counters - Track document completion for batch email sending
+    total_documents: Optional[int] = 0  # Total documents in transaction (set from len(documents))
+    completed_documents: Optional[int] = 0  # How many documents have translated_url set
+    batch_email_sent: Optional[bool] = False  # Flag to prevent duplicate batch emails
+
+    # LEGACY flat structure fields - keep for backward compatibility
+    requester_id: Optional[str] = None
+    units_consumed: Optional[int] = None
+    original_file_url: Optional[str] = None
+    translated_file_url: Optional[str] = None
+    file_metadata: Optional[FileMetadata] = None
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
 
     class Config:
         populate_by_name = True
@@ -315,6 +363,7 @@ __all__ = [
     "UsagePeriod",
     "PaymentApplication",
     "FileMetadata",
+    "TranslationDocumentEmbedded",
     "Address",
     "ContactPerson",
 

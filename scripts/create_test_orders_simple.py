@@ -48,20 +48,16 @@ async def main():
     # November 2025 date
     nov_2025 = datetime(2025, 11, 1, tzinfo=timezone.utc)
 
-    # Create test transactions
+    # Create test transactions with NESTED structure
     transactions = [
-        # Iris Trading
+        # Iris Trading - Transaction 1 (NESTED)
         {
             "transaction_id": f"TXN-{uuid.uuid4().hex[:10].upper()}",
             "company_name": "Iris Trading",
             "user_id": "john.doe@iristrading.com",
-            "original_file_url": "https://drive.google.com/file/d/1ABC123/view",
-            "translated_file_url": "https://drive.google.com/file/d/1ABC124/view",
-            "translated_file_name": "contract_fr.pdf",
+            "user_name": "John Doe",
             "source_language": "en",
             "target_language": "fr",
-            "file_name": "contract.pdf",
-            "file_size": 524288,
             "units_count": 15,
             "price_per_unit": 0.10,
             "total_price": 1.50,
@@ -70,19 +66,30 @@ async def main():
             "created_at": nov_2025 + timedelta(days=5, hours=10),
             "updated_at": nov_2025 + timedelta(days=5, hours=11),
             "subscription_id": None,
-            "unit_type": "page"
+            "unit_type": "page",
+            "documents": [
+                {
+                    "file_name": "contract.pdf",
+                    "file_size": 524288,
+                    "original_url": "https://drive.google.com/file/d/1ABC123/view",
+                    "translated_url": "https://drive.google.com/file/d/1ABC124/view",
+                    "translated_name": "contract_fr.pdf",
+                    "status": "translated",
+                    "uploaded_at": nov_2025 + timedelta(days=5, hours=10),
+                    "translated_at": nov_2025 + timedelta(days=5, hours=11),
+                    "processing_started_at": nov_2025 + timedelta(days=5, hours=10, minutes=5),
+                    "processing_duration": 55.2
+                }
+            ]
         },
+        # Iris Trading - Transaction 2 (NESTED)
         {
             "transaction_id": f"TXN-{uuid.uuid4().hex[:10].upper()}",
             "company_name": "Iris Trading",
             "user_id": "sarah.chen@iristrading.com",
-            "original_file_url": "https://drive.google.com/file/d/2DEF456/view",
-            "translated_file_url": "https://drive.google.com/file/d/2DEF457/view",
-            "translated_file_name": "proposal_es.pdf",
+            "user_name": "Sarah Chen",
             "source_language": "en",
             "target_language": "es",
-            "file_name": "proposal.pdf",
-            "file_size": 1048576,
             "units_count": 25,
             "price_per_unit": 0.10,
             "total_price": 2.50,
@@ -91,19 +98,30 @@ async def main():
             "created_at": nov_2025 + timedelta(days=10, hours=14),
             "updated_at": nov_2025 + timedelta(days=10, hours=15),
             "subscription_id": None,
-            "unit_type": "page"
+            "unit_type": "page",
+            "documents": [
+                {
+                    "file_name": "proposal.pdf",
+                    "file_size": 1048576,
+                    "original_url": "https://drive.google.com/file/d/2DEF456/view",
+                    "translated_url": "https://drive.google.com/file/d/2DEF457/view",
+                    "translated_name": "proposal_es.pdf",
+                    "status": "translated",
+                    "uploaded_at": nov_2025 + timedelta(days=10, hours=14),
+                    "translated_at": nov_2025 + timedelta(days=10, hours=15),
+                    "processing_started_at": nov_2025 + timedelta(days=10, hours=14, minutes=10),
+                    "processing_duration": 48.7
+                }
+            ]
         },
+        # Iris Trading - Transaction 3 (NESTED)
         {
             "transaction_id": f"TXN-{uuid.uuid4().hex[:10].upper()}",
             "company_name": "Iris Trading",
             "user_id": "mike.wilson@iristrading.com",
-            "original_file_url": "https://drive.google.com/file/d/3GHI789/view",
-            "translated_file_url": "",
-            "translated_file_name": "",
+            "user_name": "Mike Wilson",
             "source_language": "en",
             "target_language": "de",
-            "file_name": "report.docx",
-            "file_size": 2097152,
             "units_count": 40,
             "price_per_unit": 0.10,
             "total_price": 4.00,
@@ -112,20 +130,30 @@ async def main():
             "created_at": nov_2025 + timedelta(days=15, hours=9),
             "updated_at": nov_2025 + timedelta(days=15, hours=9),
             "subscription_id": None,
-            "unit_type": "page"
+            "unit_type": "page",
+            "documents": [
+                {
+                    "file_name": "report.docx",
+                    "file_size": 2097152,
+                    "original_url": "https://drive.google.com/file/d/3GHI789/view",
+                    "translated_url": None,
+                    "translated_name": None,
+                    "status": "uploaded",
+                    "uploaded_at": nov_2025 + timedelta(days=15, hours=9),
+                    "translated_at": None,
+                    "processing_started_at": None,
+                    "processing_duration": None
+                }
+            ]
         },
-        # Acme Company
+        # Acme Company - Transaction 1 (NESTED)
         {
             "transaction_id": f"TXN-{uuid.uuid4().hex[:10].upper()}",
             "company_name": "Acme Company",
             "user_id": "alice.brown@acme.com",
-            "original_file_url": "https://drive.google.com/file/d/4JKL012/view",
-            "translated_file_url": "https://drive.google.com/file/d/4JKL013/view",
-            "translated_file_name": "manual_ja.pdf",
+            "user_name": "Alice Brown",
             "source_language": "en",
             "target_language": "ja",
-            "file_name": "manual.pdf",
-            "file_size": 3145728,
             "units_count": 50,
             "price_per_unit": 0.12,
             "total_price": 6.00,
@@ -134,19 +162,30 @@ async def main():
             "created_at": nov_2025 + timedelta(days=8, hours=11),
             "updated_at": nov_2025 + timedelta(days=8, hours=13),
             "subscription_id": None,
-            "unit_type": "page"
+            "unit_type": "page",
+            "documents": [
+                {
+                    "file_name": "manual.pdf",
+                    "file_size": 3145728,
+                    "original_url": "https://drive.google.com/file/d/4JKL012/view",
+                    "translated_url": "https://drive.google.com/file/d/4JKL013/view",
+                    "translated_name": "manual_ja.pdf",
+                    "status": "translated",
+                    "uploaded_at": nov_2025 + timedelta(days=8, hours=11),
+                    "translated_at": nov_2025 + timedelta(days=8, hours=13),
+                    "processing_started_at": nov_2025 + timedelta(days=8, hours=11, minutes=15),
+                    "processing_duration": 112.3
+                }
+            ]
         },
+        # Acme Company - Transaction 2 (NESTED)
         {
             "transaction_id": f"TXN-{uuid.uuid4().hex[:10].upper()}",
             "company_name": "Acme Company",
             "user_id": "bob.smith@acme.com",
-            "original_file_url": "https://drive.google.com/file/d/5MNO345/view",
-            "translated_file_url": "https://drive.google.com/file/d/5MNO346/view",
-            "translated_file_name": "agreement_zh.pdf",
+            "user_name": "Bob Smith",
             "source_language": "en",
             "target_language": "zh",
-            "file_name": "agreement.pdf",
-            "file_size": 786432,
             "units_count": 20,
             "price_per_unit": 0.12,
             "total_price": 2.40,
@@ -155,19 +194,30 @@ async def main():
             "created_at": nov_2025 + timedelta(days=12, hours=16),
             "updated_at": nov_2025 + timedelta(days=12, hours=17),
             "subscription_id": None,
-            "unit_type": "page"
+            "unit_type": "page",
+            "documents": [
+                {
+                    "file_name": "agreement.pdf",
+                    "file_size": 786432,
+                    "original_url": "https://drive.google.com/file/d/5MNO345/view",
+                    "translated_url": "https://drive.google.com/file/d/5MNO346/view",
+                    "translated_name": "agreement_zh.pdf",
+                    "status": "translated",
+                    "uploaded_at": nov_2025 + timedelta(days=12, hours=16),
+                    "translated_at": nov_2025 + timedelta(days=12, hours=17),
+                    "processing_started_at": nov_2025 + timedelta(days=12, hours=16, minutes=8),
+                    "processing_duration": 52.1
+                }
+            ]
         },
+        # Acme Company - Transaction 3 (NESTED)
         {
             "transaction_id": f"TXN-{uuid.uuid4().hex[:10].upper()}",
             "company_name": "Acme Company",
             "user_id": "carol.davis@acme.com",
-            "original_file_url": "https://drive.google.com/file/d/6PQR678/view",
-            "translated_file_url": "",
-            "translated_file_name": "",
+            "user_name": "Carol Davis",
             "source_language": "en",
             "target_language": "ko",
-            "file_name": "presentation.pptx",
-            "file_size": 4194304,
             "units_count": 60,
             "price_per_unit": 0.12,
             "total_price": 7.20,
@@ -176,7 +226,21 @@ async def main():
             "created_at": nov_2025 + timedelta(days=18, hours=10),
             "updated_at": nov_2025 + timedelta(days=18, hours=10),
             "subscription_id": None,
-            "unit_type": "page"
+            "unit_type": "page",
+            "documents": [
+                {
+                    "file_name": "presentation.pptx",
+                    "file_size": 4194304,
+                    "original_url": "https://drive.google.com/file/d/6PQR678/view",
+                    "translated_url": None,
+                    "translated_name": None,
+                    "status": "uploaded",
+                    "uploaded_at": nov_2025 + timedelta(days=18, hours=10),
+                    "translated_at": None,
+                    "processing_started_at": None,
+                    "processing_duration": None
+                }
+            ]
         },
     ]
 

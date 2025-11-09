@@ -1,0 +1,8 @@
+{
+  "session_id": "a39755a8-82f2-4b12-b268-8180a24afebc",
+  "transcript_path": "/Users/vladimirdanishevsky/.claude/projects/-Users-vladimirdanishevsky-projects-Translator-server/a39755a8-82f2-4b12-b268-8180a24afebc.jsonl",
+  "cwd": "/Users/vladimirdanishevsky/projects/Translator/server",
+  "hook_event_name": "PreCompact",
+  "trigger": "auto",
+  "custom_instructions": null
+}

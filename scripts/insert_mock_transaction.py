@@ -36,20 +36,15 @@ async def insert_mock_transaction():
         # Generate unique transaction ID
         transaction_id = f"TXN-MOCK-{uuid.uuid4().hex[:12].upper()}"
 
-        # Create mock transaction document
+        # Create mock transaction document with NESTED structure
         # Based on schema from test_transaction_insert.py and actual usage
         mock_transaction = {
             # Core identifiers
             "transaction_id": transaction_id,
-            "company_id": "test-company-123",
-            "user_id": "test-user-456",
+            "company_name": "test-company-123",
+            "user_id": "test@example.com",
+            "user_name": "Test User",
             "subscription_id": None,  # Individual transaction, not subscription
-
-            # File information
-            "file_name": "business_proposal_2024.pdf",
-            "file_size": 2457600,  # ~2.4 MB
-            "original_file_url": "https://drive.google.com/file/d/1ABC_mock_original_file/view",
-            "translated_file_url": "",  # Empty until translation complete
 
             # Translation details
             "source_language": "en",
@@ -61,25 +56,29 @@ async def insert_mock_transaction():
             "units_count": 12,  # 12 pages
             "price_per_unit": 0.10,  # $0.10 per page
             "total_price": 1.20,  # 12 pages * $0.10
-            "estimated_cost": 1.20,
-            "actual_cost": None,  # Set when completed
 
             # Error handling
             "error_message": "",
 
-            # Metadata
-            "metadata": {
-                "customer_email": "test@example.com",
-                "translation_service": "google",
-                "preserve_formatting": True,
-                "original_file_type": "pdf",
-                "target_file_type": "pdf"
-            },
-
             # Timestamps
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
-            "completed_at": None,  # Set when status changes to completed
+
+            # NESTED documents array - NEW STRUCTURE
+            "documents": [
+                {
+                    "file_name": "business_proposal_2024.pdf",
+                    "file_size": 2457600,  # ~2.4 MB
+                    "original_url": "https://drive.google.com/file/d/1ABC_mock_original_file/view",
+                    "translated_url": None,  # None until translation complete
+                    "translated_name": None,
+                    "status": "uploaded",
+                    "uploaded_at": datetime.now(timezone.utc),
+                    "translated_at": None,
+                    "processing_started_at": None,
+                    "processing_duration": None
+                }
+            ]
         }
 
         print(f"\n✓ Generated transaction ID: {transaction_id}")
@@ -110,8 +109,13 @@ async def insert_mock_transaction():
         if found_doc:
             print("✓ Transaction verified in database")
             print(f"  Transaction ID: {found_doc['transaction_id']}")
-            print(f"  Company ID: {found_doc['company_id']}")
-            print(f"  File: {found_doc['file_name']}")
+            print(f"  Company Name: {found_doc.get('company_name', 'N/A')}")
+            print(f"  User ID: {found_doc.get('user_id', 'N/A')}")
+            print(f"  Documents: {len(found_doc.get('documents', []))} file(s)")
+            if found_doc.get('documents'):
+                doc = found_doc['documents'][0]
+                print(f"  First Document: {doc.get('file_name', 'N/A')}")
+                print(f"  Document Status: {doc.get('status', 'N/A')}")
             print(f"  Status: {found_doc['status']}")
             print(f"  Language: {found_doc['source_language']} → {found_doc['target_language']}")
             print(f"  Cost: ${found_doc['total_price']:.2f}")

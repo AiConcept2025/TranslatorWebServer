@@ -1,12 +1,15 @@
 """
-Integration tests for user transaction metadata feature.
+Integration tests for user transaction metadata feature - DEPRECATED
 
-This test module validates that the MongoDB `_id` field is correctly added to
-document metadata (transaction_id field) for ALL user transactions.
+⚠️  WARNING: These tests are based on INCORRECT behavior and are skipped.
 
-Feature: When a user transaction is created, the MongoDB-generated _id should be
-added to all documents[].transaction_id field, regardless of whether the transaction
-is for an enterprise or individual customer.
+OLD (INCORRECT) BEHAVIOR:
+- MongoDB `_id` was added to documents[].transaction_id field
+
+NEW (CORRECT) BEHAVIOR:
+- transaction_id (USER format) exists at parent level ONLY
+- documents array does NOT contain transaction_id field
+- See test_user_transaction_structure.py for correct tests
 
 Test Database: translation_test (separate from production)
 Uses: Real MongoDB connection via Motor (Motor is async driver for MongoDB)
@@ -19,6 +22,9 @@ import uuid
 
 from app.database.mongodb import database
 from app.utils.user_transaction_helper import create_user_transaction
+
+# Skip all tests in this module - they test deprecated incorrect behavior
+pytestmark = pytest.mark.skip(reason="Tests deprecated behavior - transaction_id should NOT be in documents array. See test_user_transaction_structure.py for correct tests.")
 
 
 # ============================================================================

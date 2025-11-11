@@ -171,6 +171,7 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
         "cost_per_unit": 0.15,
         "source_language": "en",
         "target_language": "es",
+        "transaction_id": "USER123456",
         "square_transaction_id": "SQR-1EC28E70F10B4D9E",
         "date": "2025-10-23T23:56:55.438Z",
         "status": "processing",

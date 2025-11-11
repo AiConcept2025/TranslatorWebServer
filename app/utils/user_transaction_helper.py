@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.database import database
+from app.utils.transaction_id_generator import generate_unique_transaction_id
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ async def create_user_transaction(
         refunds: List of refund dictionaries (default: empty list)
 
     Returns:
-        str: square_transaction_id if successful, None if failed
+        str: transaction_id if successful, None if failed
 
     Raises:
         None: Errors are logged and None is returned
@@ -128,6 +129,14 @@ async def create_user_transaction(
             logger.error("[UserTransaction] documents array cannot be empty")
             return None
 
+        # Generate unique transaction ID (USER + 6-digit number)
+        try:
+            transaction_id = await generate_unique_transaction_id(collection)
+            logger.info(f"[UserTransaction] Generated transaction_id: {transaction_id}")
+        except Exception as e:
+            logger.error(f"[UserTransaction] Failed to generate transaction_id: {e}")
+            return None
+
         # Build transaction document with Square payment fields
         transaction_doc = {
             # Core transaction fields
@@ -139,6 +148,7 @@ async def create_user_transaction(
             "cost_per_unit": cost_per_unit,
             "source_language": source_language,
             "target_language": target_language,
+            "transaction_id": transaction_id,
             "square_transaction_id": square_transaction_id,
             "date": date,
             "status": status,
@@ -162,43 +172,44 @@ async def create_user_transaction(
             # Get MongoDB-generated _id
             inserted_id = str(result.inserted_id)
 
-            # Add transaction_id to ALL document metadata
-            await collection.update_one(
-                {"_id": result.inserted_id},
-                {"$set": {
-                    "documents.$[].transaction_id": inserted_id
-                }}
-            )
-
             logger.info(
-                f"[UserTransaction] Created transaction {square_transaction_id} "
+                f"[UserTransaction] Created transaction {transaction_id} (Square: {square_transaction_id}) "
                 f"for user {user_email} with status {status}, payment_status {payment_status}, "
                 f"MongoDB ID: {inserted_id}",
                 extra={
+                    "transaction_id": transaction_id,
                     "square_transaction_id": square_transaction_id,
                     "mongodb_id": inserted_id,
                     "user_email": user_email,
                     "documents_count": len(documents),
-                    "document_names": [d["file_name"] for d in documents]
+                    "document_names": [d.get("file_name") or d.get("document_name", "unknown") for d in documents]
                 }
             )
 
             # Console output for visibility (matching translate_user.py logging style)
-            print(f"✅ Added transaction_id to {len(documents)} document(s) metadata")
-            print(f"   MongoDB _id: {inserted_id}")
-            print(f"   Square TX ID: {square_transaction_id}")
-            print(f"   User: {user_email}")
-            print(f"   Documents: {', '.join([d['file_name'] for d in documents])}")
+            print(f"✅ Created user transaction with {len(documents)} document(s)")
+            print(f"   📋 Transaction Details:")
+            print(f"      • transaction_id: {transaction_id} (USER format)")
+            print(f"      • square_transaction_id: {square_transaction_id}")
+            print(f"      • user_email: {user_email}")
+            print(f"      • total_cost: ${total_cost}")
+            print(f"      • status: {status}")
+            print(f"   📄 Documents: {', '.join([d.get('file_name') or d.get('document_name', 'unknown') for d in documents])}")
 
             # Structured logging for production
             logger.info(
-                f"Added transaction_id to {len(documents)} document(s) metadata for user transaction",
+                f"Created user transaction {transaction_id} with {len(documents)} document(s)",
                 extra={
+                    "transaction_id": transaction_id,
+                    "transaction_id_format": "USER######",
                     "square_transaction_id": square_transaction_id,
                     "mongodb_id": inserted_id,
                     "user_email": user_email,
+                    "total_cost": total_cost,
+                    "status": status,
+                    "payment_status": payment_status,
                     "documents_count": len(documents),
-                    "document_names": [d["file_name"] for d in documents]
+                    "document_names": [d.get("file_name") or d.get("document_name", "unknown") for d in documents]
                 }
             )
 
@@ -221,11 +232,11 @@ async def create_user_transaction(
             )
             raise
 
-        return square_transaction_id
+        return transaction_id
 
     except DuplicateKeyError:
         logger.error(
-            f"[UserTransaction] Duplicate square_transaction_id: {square_transaction_id}"
+            f"[UserTransaction] Duplicate transaction_id or square_transaction_id: {transaction_id} / {square_transaction_id}"
         )
         return None
     except PyMongoError as e:

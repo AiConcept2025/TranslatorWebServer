@@ -449,7 +449,8 @@ class UserTransactionSchema(BaseModel):
     cost_per_unit: float = Field(..., gt=0, description="Cost per single unit")
     source_language: str = Field(..., description="Source language code")
     target_language: str = Field(..., description="Target language code")
-    square_transaction_id: str = Field(..., description="Unique Square transaction ID")
+    transaction_id: str = Field(..., description="Primary unique transaction identifier (USER + 6-digit number)")
+    square_transaction_id: str = Field(..., description="Square transaction ID (reference only)")
     date: datetime = Field(..., description="Transaction date")
     status: str = Field(default="processing", description="Transaction status: processing, completed, failed")
     total_cost: float = Field(..., ge=0, description="Total cost (auto-calculated)")
@@ -498,6 +499,7 @@ class UserTransactionSchema(BaseModel):
                 'cost_per_unit': 0.15,
                 'source_language': 'en',
                 'target_language': 'es',
+                'transaction_id': 'USER123456',
                 'square_transaction_id': 'SQR-1EC28E70F10B4D9E',
                 'date': '2025-10-23T23:56:55.438Z',
                 'status': 'completed',
@@ -586,6 +588,7 @@ class UserTransactionResponse(BaseModel):
     cost_per_unit: float
     source_language: str
     target_language: str
+    transaction_id: str
     square_transaction_id: str
     date: datetime
     status: str

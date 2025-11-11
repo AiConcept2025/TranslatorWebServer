@@ -4,13 +4,14 @@ Submit endpoint for handling file submission requests from clients.
 
 import logging
 import time
-from typing import Dict, Tuple
-from fastapi import APIRouter, HTTPException, status as http_status
+from typing import Dict, Tuple, Optional
+from fastapi import APIRouter, HTTPException, status as http_status, Depends
 from fastapi.responses import JSONResponse
 
 from app.models.requests import SubmitRequest
 from app.models.responses import SubmitSuccessResponse, SubmitErrorResponse
 from app.services.submit_service import submit_service
+from app.middleware.auth_middleware import get_current_user, get_optional_user
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,10 @@ def _cache_webhook_result(transaction_id: str, file_name: str, file_url: str, re
         500: {"model": SubmitErrorResponse, "description": "Database or server error"}
     }
 )
-async def submit_file(request: SubmitRequest):
+async def submit_file(
+    request: SubmitRequest,
+    current_user: Optional[dict] = Depends(get_optional_user)
+):
     """
     Submit a translated file and update transaction database.
 
@@ -118,6 +122,16 @@ async def submit_file(request: SubmitRequest):
     logger.info("=" * 80)
     logger.info("SUBMIT ENDPOINT - Incoming Request")
     logger.info("=" * 80)
+
+    # Log authentication status
+    if current_user:
+        logger.info(
+            f"🔐 Authenticated user: {current_user['email']} "
+            f"(permission: {current_user.get('permission_level', 'user')})"
+        )
+    else:
+        logger.info("🌐 External webhook call (no user authentication)")
+
     logger.info(
         f"Submit request received - File: {request.file_name}, "
         f"User: {request.user_email}, Company: {request.company_name}, "
@@ -136,7 +150,9 @@ async def submit_file(request: SubmitRequest):
             "is_enterprise": request.company_name != "Ind",
             "customer_type": "enterprise" if request.company_name != "Ind" else "individual",
             "file_url_length": len(request.file_url),
-            "request_timestamp": time.time()
+            "request_timestamp": time.time(),
+            "authenticated_user": current_user.get('email') if current_user else None,
+            "authentication_method": "session_token" if current_user else "webhook_callback"
         }
     )
 

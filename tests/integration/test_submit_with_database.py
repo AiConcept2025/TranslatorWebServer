@@ -132,6 +132,55 @@ async def test_individual_transaction():
     await collection.delete_one({"transaction_id": transaction_id})
 
 
+@pytest.fixture(scope="function")
+async def individual_auth_token(http_client):
+    """
+    Get JWT token for individual test user.
+    Creates/authenticates via /login/individual endpoint.
+    """
+    login_payload = {
+        "userFullName": "Jane Doe",
+        "userEmail": "individual@example.com",
+        "loginDateTime": datetime.now(timezone.utc).isoformat()
+    }
+
+    response = await http_client.post("/login/individual", json=login_payload)
+    assert response.status_code == 200, f"Individual login failed: {response.text}"
+
+    data = response.json()
+    assert data["success"] is True
+    assert "data" in data
+    assert "authToken" in data["data"]
+
+    return data["data"]["authToken"]
+
+
+@pytest.fixture(scope="function")
+async def enterprise_auth_token(http_client):
+    """
+    Get JWT token for enterprise test user.
+    Creates test company/user and authenticates via /login/corporate endpoint.
+
+    Note: This requires test company and user to exist in database.
+    For now, we'll use individual tokens for enterprise tests too.
+    """
+    # For enterprise tests, we'll create an individual user token
+    # In production, you would create a proper enterprise user
+    login_payload = {
+        "userFullName": "Test User",
+        "userEmail": "testuser@testcorp.com",
+        "loginDateTime": datetime.now(timezone.utc).isoformat()
+    }
+
+    response = await http_client.post("/login/individual", json=login_payload)
+    assert response.status_code == 200, f"Enterprise login failed: {response.text}"
+
+    data = response.json()
+    assert data["success"] is True
+
+    return data["data"]["authToken"]
+
+
 # ============================================================================
 # Test Cases - Enterprise Transactions
 # ============================================================================
@@ -141,7 +190,7 @@ class TestSubmitEnterpriseTransactions:
 
     @pytest.mark.asyncio
     async def test_submit_enterprise_document_success(
-        self, http_client, test_enterprise_transaction
+        self, http_client, test_enterprise_transaction, enterprise_auth_token
     ):
         """
         Test successful submission for enterprise transaction.
@@ -162,7 +211,11 @@ class TestSubmitEnterpriseTransactions:
             "transaction_id": transaction_id
         }
 
-        response = await http_client.post("/submit", json=payload)
+        response = await http_client.post(
+            "/submit",
+            json=payload,
+            headers={"Authorization": f"Bearer {enterprise_auth_token}"}
+        )
 
         # Verify HTTP response
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
@@ -186,7 +239,7 @@ class TestSubmitEnterpriseTransactions:
 
     @pytest.mark.asyncio
     async def test_submit_enterprise_document_not_found(
-        self, http_client, test_enterprise_transaction
+        self, http_client, test_enterprise_transaction, enterprise_auth_token
     ):
         """
         Test submission when document name doesn't exist in transaction.
@@ -205,7 +258,11 @@ class TestSubmitEnterpriseTransactions:
             "transaction_id": transaction_id
         }
 
-        response = await http_client.post("/submit", json=payload)
+        response = await http_client.post(
+            "/submit",
+            json=payload,
+            headers={"Authorization": f"Bearer {enterprise_auth_token}"}
+        )
 
         assert response.status_code == 404
         data = response.json()
@@ -214,7 +271,7 @@ class TestSubmitEnterpriseTransactions:
         assert "nonexistent.pdf" in data["error"]
 
     @pytest.mark.asyncio
-    async def test_submit_enterprise_transaction_not_found(self, http_client):
+    async def test_submit_enterprise_transaction_not_found(self, http_client, enterprise_auth_token):
         """
         Test submission when transaction ID doesn't exist.
 
@@ -230,7 +287,11 @@ class TestSubmitEnterpriseTransactions:
             "transaction_id": "TXN-NOTFOUND-999"
         }
 
-        response = await http_client.post("/submit", json=payload)
+        response = await http_client.post(
+            "/submit",
+            json=payload,
+            headers={"Authorization": f"Bearer {enterprise_auth_token}"}
+        )
 
         assert response.status_code == 404
         data = response.json()
@@ -239,7 +300,7 @@ class TestSubmitEnterpriseTransactions:
 
     @pytest.mark.asyncio
     async def test_submit_enterprise_multiple_documents(
-        self, http_client, test_enterprise_transaction
+        self, http_client, test_enterprise_transaction, enterprise_auth_token
     ):
         """
         Test submitting multiple documents from same transaction.
@@ -260,7 +321,11 @@ class TestSubmitEnterpriseTransactions:
             "transaction_id": transaction_id
         }
 
-        response1 = await http_client.post("/submit", json=payload1)
+        response1 = await http_client.post(
+            "/submit",
+            json=payload1,
+            headers={"Authorization": f"Bearer {enterprise_auth_token}"}
+        )
         assert response1.status_code == 200
         data1 = response1.json()
         assert data1["all_documents_complete"] is False
@@ -274,7 +339,11 @@ class TestSubmitEnterpriseTransactions:
             "transaction_id": transaction_id
         }
 
-        response2 = await http_client.post("/submit", json=payload2)
+        response2 = await http_client.post(
+            "/submit",
+            json=payload2,
+            headers={"Authorization": f"Bearer {enterprise_auth_token}"}
+        )
         assert response2.status_code == 200
         data2 = response2.json()
         assert data2["all_documents_complete"] is True
@@ -295,7 +364,7 @@ class TestSubmitIndividualTransactions:
 
     @pytest.mark.asyncio
     async def test_submit_individual_document_success(
-        self, http_client, test_individual_transaction
+        self, http_client, test_individual_transaction, individual_auth_token
     ):
         """
         Test successful submission for individual transaction.
@@ -315,7 +384,11 @@ class TestSubmitIndividualTransactions:
             "transaction_id": transaction_id
         }
 
-        response = await http_client.post("/submit", json=payload)
+        response = await http_client.post(
+            "/submit",
+            json=payload,
+            headers={"Authorization": f"Bearer {individual_auth_token}"}
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -333,7 +406,7 @@ class TestSubmitIndividualTransactions:
         assert doc["translated_name"] == "passport_translated.pdf"
 
     @pytest.mark.asyncio
-    async def test_submit_individual_transaction_not_found(self, http_client):
+    async def test_submit_individual_transaction_not_found(self, http_client, individual_auth_token):
         """
         Test submission when individual transaction doesn't exist.
 
@@ -349,7 +422,11 @@ class TestSubmitIndividualTransactions:
             "transaction_id": "TXN-IND-NOTFOUND"
         }
 
-        response = await http_client.post("/submit", json=payload)
+        response = await http_client.post(
+            "/submit",
+            json=payload,
+            headers={"Authorization": f"Bearer {individual_auth_token}"}
+        )
 
         assert response.status_code == 404
         data = response.json()
@@ -364,7 +441,27 @@ class TestSubmitValidation:
     """Test validation and error handling."""
 
     @pytest.mark.asyncio
-    async def test_submit_missing_transaction_id(self, http_client):
+    async def test_submit_missing_auth_token(self, http_client):
+        """
+        Test submission without authentication token.
+
+        Verifies:
+        - 401 status code (unauthorized)
+        """
+        payload = {
+            "file_name": "test.pdf",
+            "file_url": "https://drive.google.com/file/d/test/view",
+            "user_email": "test@example.com",
+            "company_name": "Test Corp",
+            "transaction_id": "TXN-TEST-123"
+        }
+
+        response = await http_client.post("/submit", json=payload)
+
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_submit_missing_transaction_id(self, http_client, individual_auth_token):
         """
         Test submission with missing required transaction_id.
 
@@ -379,12 +476,16 @@ class TestSubmitValidation:
             # Missing transaction_id (now required)
         }
 
-        response = await http_client.post("/submit", json=payload)
+        response = await http_client.post(
+            "/submit",
+            json=payload,
+            headers={"Authorization": f"Bearer {individual_auth_token}"}
+        )
 
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_submit_empty_transaction_id(self, http_client):
+    async def test_submit_empty_transaction_id(self, http_client, individual_auth_token):
         """
         Test submission with empty transaction_id.
 
@@ -400,12 +501,16 @@ class TestSubmitValidation:
             "transaction_id": ""  # Empty string
         }
 
-        response = await http_client.post("/submit", json=payload)
+        response = await http_client.post(
+            "/submit",
+            json=payload,
+            headers={"Authorization": f"Bearer {individual_auth_token}"}
+        )
 
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_submit_short_transaction_id(self, http_client):
+    async def test_submit_short_transaction_id(self, http_client, individual_auth_token):
         """
         Test submission with transaction_id < 5 characters.
 
@@ -421,7 +526,11 @@ class TestSubmitValidation:
             "transaction_id": "TXN"  # Too short
         }
 
-        response = await http_client.post("/submit", json=payload)
+        response = await http_client.post(
+            "/submit",
+            json=payload,
+            headers={"Authorization": f"Bearer {individual_auth_token}"}
+        )
 
         assert response.status_code == 422
 
@@ -435,7 +544,7 @@ class TestSubmitEmailIntegration:
 
     @pytest.mark.asyncio
     async def test_submit_success_even_if_email_fails(
-        self, http_client, test_enterprise_transaction
+        self, http_client, test_enterprise_transaction, enterprise_auth_token
     ):
         """
         Test that submission succeeds even if email fails.
@@ -456,7 +565,11 @@ class TestSubmitEmailIntegration:
             "transaction_id": transaction_id
         }
 
-        response = await http_client.post("/submit", json=payload)
+        response = await http_client.post(
+            "/submit",
+            json=payload,
+            headers={"Authorization": f"Bearer {enterprise_auth_token}"}
+        )
 
         # Submission should succeed regardless of email status
         assert response.status_code == 200
@@ -471,7 +584,7 @@ class TestSubmitEmailIntegration:
 
     @pytest.mark.asyncio
     async def test_submit_includes_all_translated_documents_in_email(
-        self, http_client, test_enterprise_transaction
+        self, http_client, test_enterprise_transaction, enterprise_auth_token
     ):
         """
         Test that email includes ALL translated documents, not just the current one.
@@ -489,7 +602,11 @@ class TestSubmitEmailIntegration:
             "company_name": "Test Corp",
             "transaction_id": transaction_id
         }
-        response1 = await http_client.post("/submit", json=payload1)
+        response1 = await http_client.post(
+            "/submit",
+            json=payload1,
+            headers={"Authorization": f"Bearer {enterprise_auth_token}"}
+        )
         assert response1.status_code == 200
         data1 = response1.json()
         assert data1.get("documents_count") == 1  # Only 1 translated so far
@@ -502,14 +619,18 @@ class TestSubmitEmailIntegration:
             "company_name": "Test Corp",
             "transaction_id": transaction_id
         }
-        response2 = await http_client.post("/submit", json=payload2)
+        response2 = await http_client.post(
+            "/submit",
+            json=payload2,
+            headers={"Authorization": f"Bearer {enterprise_auth_token}"}
+        )
         assert response2.status_code == 200
         data2 = response2.json()
         assert data2.get("documents_count") == 2  # Both translated now
 
     @pytest.mark.asyncio
     async def test_email_batching_gate_blocks_until_all_complete(
-        self, http_client, test_enterprise_transaction
+        self, http_client, test_enterprise_transaction, enterprise_auth_token
     ):
         """
         Test email batching: email sent ONLY when ALL documents complete.
@@ -531,7 +652,11 @@ class TestSubmitEmailIntegration:
             "company_name": "Test Corp",
             "transaction_id": transaction_id
         }
-        response1 = await http_client.post("/submit", json=payload1)
+        response1 = await http_client.post(
+            "/submit",
+            json=payload1,
+            headers={"Authorization": f"Bearer {enterprise_auth_token}"}
+        )
         assert response1.status_code == 200
         data1 = response1.json()
 
@@ -551,7 +676,11 @@ class TestSubmitEmailIntegration:
             "company_name": "Test Corp",
             "transaction_id": transaction_id
         }
-        response2 = await http_client.post("/submit", json=payload2)
+        response2 = await http_client.post(
+            "/submit",
+            json=payload2,
+            headers={"Authorization": f"Bearer {enterprise_auth_token}"}
+        )
         assert response2.status_code == 200
         data2 = response2.json()
 
@@ -580,7 +709,7 @@ class TestSubmitFilenameGeneration:
 
     @pytest.mark.asyncio
     async def test_submit_generates_translated_name(
-        self, http_client, test_enterprise_transaction
+        self, http_client, test_enterprise_transaction, enterprise_auth_token
     ):
         """
         Test that translated_name is generated correctly.
@@ -599,7 +728,11 @@ class TestSubmitFilenameGeneration:
             "transaction_id": transaction_id
         }
 
-        response = await http_client.post("/submit", json=payload)
+        response = await http_client.post(
+            "/submit",
+            json=payload,
+            headers={"Authorization": f"Bearer {enterprise_auth_token}"}
+        )
 
         assert response.status_code == 200
         data = response.json()

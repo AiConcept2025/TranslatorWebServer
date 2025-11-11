@@ -112,9 +112,14 @@ class UserTransactionListItem(BaseModel):
         description="Target language code (ISO 639-1)",
         examples=["es", "en", "de"]
     )
+    transaction_id: str = Field(
+        ...,
+        description="Primary unique transaction identifier (USER + 6-digit number)",
+        examples=["USER123456", "USER789012"]
+    )
     square_transaction_id: str = Field(
         ...,
-        description="Square payment transaction identifier",
+        description="Square payment transaction identifier (reference only)",
         examples=["SQR-1EC28E70F10B4D9E"]
     )
     date: str = Field(
@@ -170,6 +175,7 @@ class UserTransactionListItem(BaseModel):
                 "cost_per_unit": 0.15,
                 "source_language": "en",
                 "target_language": "es",
+                "transaction_id": "USER123456",
                 "square_transaction_id": "SQR-1EC28E70F10B4D9E",
                 "date": "2025-10-23T23:56:55.438Z",
                 "status": "completed",
@@ -265,6 +271,7 @@ class UserTransactionListResponse(BaseModel):
                             "cost_per_unit": 0.15,
                             "source_language": "en",
                             "target_language": "es",
+                            "transaction_id": "USER123456",
                             "square_transaction_id": "SQR-1EC28E70F10B4D9E",
                             "date": "2025-10-23T23:56:55.438Z",
                             "status": "completed",

@@ -115,3 +115,20 @@ def validate_transaction_id_format(transaction_id: str) -> bool:
 
     # Valid lengths: 6 (standard) or 16+ (fallback with timestamp)
     return len(numeric_part) == 6 or len(numeric_part) >= 16
+
+
+def generate_translation_transaction_id() -> str:
+    """
+    Generate transaction ID for translation_transactions collection.
+
+    Format: TXN-{10-character-hex}
+    Example: TXN-20FEF6D8FE, TXN-A1B2C3D4E5
+
+    Uses secrets module for cryptographically strong randomness.
+
+    Returns:
+        Transaction ID string like TXN-20FEF6D8FE
+    """
+    import secrets
+    hex_suffix = secrets.token_hex(5).upper()  # 10 hex characters
+    return f"TXN-{hex_suffix}"

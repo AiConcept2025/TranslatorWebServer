@@ -66,11 +66,15 @@ async def process_payment_files_background(
     payment_intent_id: str,
     amount: Optional[float],
     currency: Optional[str],
-    payment_metadata: Optional[PaymentMetadata] = None
+    payment_metadata: Optional[PaymentMetadata] = None,
+    transaction_id: Optional[str] = None
 ):
     """
     Background task to move files from Temp to Inbox and persist payment data.
     Runs asynchronously without blocking HTTP response.
+
+    Args:
+        transaction_id: Pre-generated transaction ID from payment handler (if available)
     """
     import time
     task_start = time.time()
@@ -153,64 +157,106 @@ async def process_payment_files_background(
         for i, file_info in enumerate(files_to_move, 1):
             print(f"   {i}. {file_info.get('filename')} (ID: {file_info.get('file_id')[:20]}...)")
 
-        # Move files from Temp to Inbox
-        print(f"\n📁 Step 3: Moving files from Temp to Inbox...")
-        move_start = time.time()
-        file_ids = [f['file_id'] for f in files_to_move]
-        result = await google_drive_service.move_files_to_inbox_on_payment_success(
-            customer_email=customer_email,
-            file_ids=file_ids
-        )
-        move_time = (time.time() - move_start) * 1000
-        print(f"⏱️  File move completed in {move_time:.2f}ms")
-        print(f"✅ Moved: {result['moved_successfully']}/{result['total_files']} files")
-        print(f"📂 Inbox folder ID: {result.get('inbox_folder_id', 'N/A')}")
+        # Create translation transaction record
+        print(f"\n💾 Step 2.5: Creating translation transaction record...")
+        transaction_start = time.time()
 
-        # Update file statuses - ONLY for successfully moved files
-        print(f"\n🔄 Step 4: Updating file statuses (only for successfully moved files)...")
-        update_start = time.time()
-        success_count = 0
-        error_count = 0
+        try:
+            from app.services.translation_transaction_service import create_translation_transaction
+            from app.utils.transaction_id_generator import generate_translation_transaction_id
+            from datetime import datetime, timezone
 
-        # Extract IDs of successfully moved files
-        successfully_moved_file_ids = [f['file_id'] for f in result.get('moved_files', [])]
+            # Use pre-generated transaction_id or generate new one
+            if not transaction_id:
+                transaction_id = generate_translation_transaction_id()
+                print(f"✅ Generated new transaction ID: {transaction_id}")
+            else:
+                print(f"✅ Using pre-generated transaction ID: {transaction_id}")
 
-        # Only update status for files that were actually moved
-        for i, file_id in enumerate(successfully_moved_file_ids, 1):
-            try:
-                await google_drive_service.update_file_status(
-                    file_id=file_id,
-                    new_status="payment_confirmed",
-                    payment_intent_id=payment_intent_id
-                )
-                success_count += 1
-                print(f"   {i}/{len(successfully_moved_file_ids)} ✓ Updated: {file_id[:20]}...")
-            except Exception as e:
-                error_count += 1
-                print(f"   {i}/{len(successfully_moved_file_ids)} ⚠️  Failed: {file_id[:20]}... - {str(e)[:50]}")
+            # Build documents array from files_to_move
+            documents = []
+            for file_info in files_to_move:
+                doc = {
+                    "file_name": file_info.get('filename'),
+                    "file_size": file_info.get('size', 0),
+                    "original_url": file_info.get('google_drive_url'),
+                    "translated_url": None,
+                    "translated_name": None,
+                    "status": "uploaded",
+                    "uploaded_at": datetime.fromisoformat(file_info.get('upload_timestamp').replace('Z', '+00:00')) if file_info.get('upload_timestamp') else datetime.now(timezone.utc),
+                    "translated_at": None,
+                    "processing_started_at": None,
+                    "processing_duration": None
+                }
+                documents.append(doc)
 
-        # Log files that failed to move (status remains 'awaiting_payment' for retry)
-        failed_move_count = result.get('failed_moves', 0)
-        if failed_move_count > 0:
-            print(f"\n⚠️  {failed_move_count} files failed to move - status NOT updated (will retry on next payment)")
-            for failed_file in result.get('failed_files', []):
-                print(f"      ❌ {failed_file['file_id'][:20]}...: {failed_file.get('error', 'Unknown error')[:60]}")
+            # Calculate pricing (using dummy $0.01 per page)
+            total_units = sum(file_info.get('page_count', 1) for file_info in files_to_move)
+            price_per_unit = 0.01  # $0.01 per page
+            total_price = round(total_units * price_per_unit, 2)
 
-        update_time = (time.time() - update_start) * 1000
-        print(f"⏱️  Status updates completed in {update_time:.2f}ms")
-        print(f"✅ Updated: {success_count}/{len(successfully_moved_file_ids)} successfully moved files")
-        if error_count > 0:
-            print(f"⚠️  Status update errors: {error_count}/{len(successfully_moved_file_ids)} files")
+            # Extract languages from first file (all files should have same languages)
+            source_language = files_to_move[0].get('source_language', 'en')
+            target_language = files_to_move[0].get('target_language', 'fr')
+
+            # Create transaction
+            mongo_id = await create_translation_transaction(
+                transaction_id=transaction_id,
+                user_id=customer_email,
+                documents=documents,
+                source_language=source_language,
+                target_language=target_language,
+                units_count=total_units,
+                price_per_unit=price_per_unit,
+                total_price=total_price,
+                status="pending_confirmation",  # Payment received, awaiting user confirmation
+                company_name=None,  # Individual users don't have companies
+                subscription_id=None,
+                unit_type="page"
+            )
+
+            transaction_time = (time.time() - transaction_start) * 1000
+
+            if mongo_id:
+                print(f"⏱️  Transaction creation completed in {transaction_time:.2f}ms")
+                print(f"✅ Translation transaction created:")
+                print(f"   transaction_id: {transaction_id}")
+                print(f"   MongoDB _id: {mongo_id}")
+                print(f"   Documents: {len(documents)}")
+                print(f"   Total units: {total_units} pages")
+                print(f"   Total price: ${total_price}")
+                print(f"   Languages: {source_language} → {target_language}")
+            else:
+                print(f"⏱️  Transaction creation attempted in {transaction_time:.2f}ms")
+                print(f"⚠️  Failed to create transaction record (mongo_id is None)")
+                transaction_id = None  # Reset if creation failed
+
+        except Exception as e:
+            transaction_time = (time.time() - transaction_start) * 1000
+            print(f"⏱️  Transaction creation attempted in {transaction_time:.2f}ms")
+            print(f"⚠️  Error creating transaction: {str(e)}")
+            logging.warning(f"Failed to create translation transaction for {customer_email}: {e}")
+            transaction_id = None  # Reset on error
+
+        # DO NOT move files - let confirm endpoint handle it
+        print(f"\n📁 Step 3: Files remain in Temp (awaiting user confirmation)")
+        print(f"   Files ready for confirmation: {len(files_to_move)}")
+        for i, file_info in enumerate(files_to_move, 1):
+            print(f"      {i}. {file_info.get('filename')} (ID: {file_info.get('file_id')[:20]}...)")
+        print(f"   ⚠️  Files will be moved when user clicks 'Confirm' button")
+        print(f"   ⚠️  Confirm endpoint will: update metadata → move to Inbox")
 
         total_time = (time.time() - task_start) * 1000
-        print(f"\n✅ BACKGROUND TASK COMPLETE")
+        print(f"\n✅ PAYMENT WEBHOOK COMPLETE (Files not moved yet)")
         print(f"⏱️  TOTAL TASK TIME: {total_time:.2f}ms")
+        print(f"   - Payment persistence: {persist_time:.2f}ms")
         print(f"   - File search: {find_time:.2f}ms")
-        print(f"   - File move: {move_time:.2f}ms")
-        print(f"   - Status updates: {update_time:.2f}ms")
+        if transaction_id:
+            print(f"   - Transaction creation: Completed")
+        print(f"   - File movement: SKIPPED (done by confirm endpoint)")
         print("=" * 80 + "\n")
 
-        logging.info(f"Background task completed for {customer_email}: {result['moved_successfully']}/{result['total_files']} files moved in {total_time:.2f}ms")
+        logging.info(f"Payment webhook completed for {customer_email}: {len(files_to_move)} files ready for confirmation (not moved yet)")
 
     except Exception as e:
         total_time = (time.time() - task_start) * 1000
@@ -271,7 +317,22 @@ async def handle_payment_success(
         print(f"   Amount: ${request.amount} {request.currency}")
         print(f"   Payment Method: {request.payment_method}")
 
-        # Schedule background file processing
+        # Create translation transaction (synchronously, returns transaction_id)
+        print(f"\n💾 Creating translation transaction...")
+        transaction_create_start = time.time()
+        transaction_id = None
+
+        try:
+            from app.utils.transaction_id_generator import generate_translation_transaction_id
+            transaction_id = generate_translation_transaction_id()
+            print(f"✅ Transaction ID generated: {transaction_id}")
+        except Exception as e:
+            print(f"⚠️  Failed to generate transaction ID: {str(e)}")
+            logging.warning(f"Failed to generate transaction ID: {e}")
+
+        transaction_create_time = (time.time() - transaction_create_start) * 1000
+
+        # Schedule background file processing (pass transaction_id)
         task_schedule_start = time.time()
         background_tasks.add_task(
             process_payment_files_background,
@@ -279,28 +340,35 @@ async def handle_payment_success(
             payment_intent_id=payment_intent_id,
             amount=request.amount,
             currency=request.currency,
-            payment_metadata=request.metadata
+            payment_metadata=request.metadata,
+            transaction_id=transaction_id  # Pass pre-generated transaction_id
         )
         task_schedule_time = (time.time() - task_schedule_start) * 1000
 
         total_time = (time.time() - start_time) * 1000
         print(f"\n⚡ INSTANT RESPONSE - Background task scheduled (took {task_schedule_time:.2f}ms)")
+        print(f"⏱️  Transaction ID generation: {transaction_create_time:.2f}ms")
         print(f"⏱️  TOTAL PROCESSING TIME: {total_time:.2f}ms")
         print("=" * 80 + "\n")
 
-        # Return IMMEDIATELY (< 100ms)
-        return JSONResponse(
-            content={
-                "success": True,
-                "message": "Payment confirmed. Files are being processed in the background.",
-                "data": {
-                    "customer_email": customer_email,
-                    "payment_intent_id": payment_intent_id,
-                    "status": "processing",
-                    "processing_time_ms": round(total_time, 2)
-                }
+        # Return IMMEDIATELY (< 100ms) with transaction_id
+        response_data = {
+            "success": True,
+            "message": "Payment confirmed. Files are being processed in the background.",
+            "data": {
+                "customer_email": customer_email,
+                "payment_intent_id": payment_intent_id,
+                "status": "processing",
+                "processing_time_ms": round(total_time, 2)
             }
-        )
+        }
+
+        # Add transaction_id to response if created successfully
+        if transaction_id:
+            response_data["data"]["transaction_id"] = transaction_id
+            print(f"📤 Returning transaction_id: {transaction_id}")
+
+        return JSONResponse(content=response_data)
 
     except ValueError as e:
         print(f"❌ VALIDATION ERROR: {e}")

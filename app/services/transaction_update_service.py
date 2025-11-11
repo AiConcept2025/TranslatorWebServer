@@ -18,17 +18,19 @@ def normalize_filename_for_comparison(filename: str) -> str:
     """
     Normalize filename for extension-agnostic comparison.
 
-    Removes file extension and _translated suffix, lowercases for case-insensitive
-    matching. This allows matching files that differ only in extension (e.g.,
-    original PDF vs translated DOCX).
+    Removes file extension and ALL _translated suffixes (handles multiple),
+    lowercases for case-insensitive matching. This allows matching files that
+    differ only in extension (e.g., original PDF vs translated DOCX) and handles
+    cases where GoogleTranslator re-processes already-translated files.
 
     Examples:
         "report_translated.docx" → "report"
         "report.pdf" → "report"
+        "report_translated_translated.docx" → "report"  ← Fixed multiple suffixes
         "My.Document.translated.docx" → "my.document"
         "file.backup.pdf" → "file.backup"
         "NuVIZ_Report_translated.docx" → "nuviz_report"
-        "NuVIZ_Report.pdf" → "nuviz_report"
+        "NuVIZ_Report_translated_translated_translated.pdf" → "nuviz_report"
 
     Args:
         filename: Full filename with extension
@@ -41,8 +43,9 @@ def normalize_filename_for_comparison(filename: str) -> str:
     # Remove extension (handles multiple dots correctly)
     name_without_ext = os.path.splitext(filename)[0]
 
-    # Remove _translated suffix if present
-    if name_without_ext.lower().endswith('_translated'):
+    # Remove ALL _translated suffixes (handles multiple re-translations)
+    # Loop until no more _translated suffixes remain
+    while name_without_ext.lower().endswith('_translated'):
         name_without_ext = name_without_ext[:-11]  # len('_translated') = 11
 
     # Lowercase for case-insensitive comparison
@@ -195,6 +198,30 @@ class TransactionUpdateService:
                     "comparison_method": "extension-agnostic (basename only)"
                 }
             )
+
+            # Enhanced diagnostic logging
+            logger.info("=" * 80)
+            logger.info("DOCUMENT LOOKUP - Starting Detailed Comparison")
+            logger.info("=" * 80)
+            logger.info(f"Incoming filename from webhook: '{file_name}'")
+            logger.info(f"Transaction ID: {transaction_id}")
+            logger.info(f"Search normalized (after removing '_translated'): '{search_normalized}'")
+
+            # Count how many _translated suffixes are in the incoming filename
+            translated_count = file_name.lower().count('_translated')
+            logger.info(f"Number of '_translated' suffixes found: {translated_count}")
+            if translated_count > 1:
+                logger.warning(f"⚠️  MULTIPLE '_translated' SUFFIXES DETECTED! GoogleTranslator may have re-processed this file.")
+
+            logger.info(f"\nTransaction has {len(documents)} document(s) in database:")
+            for i, doc in enumerate(documents, 1):
+                logger.info(f"  Document {i}:")
+                logger.info(f"    file_name:          '{doc.get('file_name')}'")
+                logger.info(f"    status:             {doc.get('status')}")
+                logger.info(f"    has translated_url: {bool(doc.get('translated_url'))}")
+                logger.info(f"    db_normalized:      '{normalize_filename_for_comparison(doc.get('file_name', ''))}'")
+
+            logger.info(f"\nStarting filename comparison...")
 
             # Find matching document by comparing normalized names (without extension)
             document_index = None
@@ -488,6 +515,30 @@ class TransactionUpdateService:
                     "comparison_method": "extension-agnostic (basename only)"
                 }
             )
+
+            # Enhanced diagnostic logging
+            logger.info("=" * 80)
+            logger.info("DOCUMENT LOOKUP - Starting Detailed Comparison")
+            logger.info("=" * 80)
+            logger.info(f"Incoming filename from webhook: '{file_name}'")
+            logger.info(f"Transaction ID: {transaction_id}")
+            logger.info(f"Search normalized (after removing '_translated'): '{search_normalized}'")
+
+            # Count how many _translated suffixes are in the incoming filename
+            translated_count = file_name.lower().count('_translated')
+            logger.info(f"Number of '_translated' suffixes found: {translated_count}")
+            if translated_count > 1:
+                logger.warning(f"⚠️  MULTIPLE '_translated' SUFFIXES DETECTED! GoogleTranslator may have re-processed this file.")
+
+            logger.info(f"\nTransaction has {len(documents)} document(s) in database:")
+            for i, doc in enumerate(documents, 1):
+                logger.info(f"  Document {i}:")
+                logger.info(f"    file_name:          '{doc.get('file_name')}'")
+                logger.info(f"    status:             {doc.get('status')}")
+                logger.info(f"    has translated_url: {bool(doc.get('translated_url'))}")
+                logger.info(f"    db_normalized:      '{normalize_filename_for_comparison(doc.get('file_name', ''))}'")
+
+            logger.info(f"\nStarting filename comparison...")
 
             # Find matching document by comparing normalized names (without extension)
             document_index = None

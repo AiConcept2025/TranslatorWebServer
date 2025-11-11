@@ -7,9 +7,12 @@ import os
 import io
 import logging
 import asyncio
-from typing import Dict, List, Optional, Tuple, Any
+import ssl
+import time
+from typing import Dict, List, Optional, Tuple, Any, Callable, TypeVar
 from pathlib import Path
 from datetime import datetime
+from functools import wraps
 
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
@@ -28,6 +31,122 @@ from app.exceptions.google_drive_exceptions import (
     handle_google_drive_error,
     handle_google_drive_exceptions
 )
+
+# Type variable for generic retry decorator
+T = TypeVar('T')
+
+
+def retry_on_ssl_error(
+    max_retries: int = 5,
+    initial_delay: float = 1.0,
+    backoff_factor: float = 2.0,
+    max_delay: float = 30.0
+):
+    """
+    Decorator to retry async functions on SSL and transient network errors.
+
+    Implements exponential backoff to handle intermittent SSL connection failures
+    commonly seen with httplib2 in Google Drive API operations.
+
+    SSL errors typically manifest as:
+    - ssl.SSLError: [SSL] record layer failure
+    - ConnectionResetError
+    - BrokenPipeError
+
+    Args:
+        max_retries: Maximum number of retry attempts (default: 5)
+        initial_delay: Initial delay in seconds (default: 1.0)
+        backoff_factor: Multiplier for exponential backoff (default: 2.0)
+        max_delay: Maximum delay between retries in seconds (default: 30.0)
+
+    Returns:
+        Decorated async function with retry logic
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        async def wrapper(*args, **kwargs) -> T:
+            last_exception = None
+            delay = initial_delay
+
+            for attempt in range(max_retries + 1):
+                try:
+                    # Attempt to execute the function
+                    return await func(*args, **kwargs)
+
+                except ssl.SSLError as e:
+                    last_exception = e
+                    error_msg = str(e)
+
+                    if attempt < max_retries:
+                        # Log retry with details
+                        logging.warning(
+                            f"SSL error in {func.__name__} (attempt {attempt + 1}/{max_retries + 1}): "
+                            f"{error_msg}. Retrying in {delay:.1f}s..."
+                        )
+
+                        # Wait before retry with exponential backoff
+                        await asyncio.sleep(delay)
+
+                        # Calculate next delay with exponential backoff, capped at max_delay
+                        delay = min(delay * backoff_factor, max_delay)
+                    else:
+                        # Final attempt failed
+                        logging.error(
+                            f"SSL error in {func.__name__} failed after {max_retries + 1} attempts: "
+                            f"{error_msg}"
+                        )
+
+                except (ConnectionResetError, BrokenPipeError, ConnectionError) as e:
+                    last_exception = e
+                    error_msg = str(e)
+
+                    if attempt < max_retries:
+                        # Log retry for connection errors
+                        logging.warning(
+                            f"Connection error in {func.__name__} (attempt {attempt + 1}/{max_retries + 1}): "
+                            f"{error_msg}. Retrying in {delay:.1f}s..."
+                        )
+
+                        # Wait before retry
+                        await asyncio.sleep(delay)
+                        delay = min(delay * backoff_factor, max_delay)
+                    else:
+                        logging.error(
+                            f"Connection error in {func.__name__} failed after {max_retries + 1} attempts: "
+                            f"{error_msg}"
+                        )
+
+                except HttpError as e:
+                    # For Google API HTTP errors, only retry on specific transient errors
+                    # 429: Too Many Requests, 500: Internal Server Error, 503: Service Unavailable
+                    if e.resp.status in (429, 500, 503) and attempt < max_retries:
+                        last_exception = e
+                        logging.warning(
+                            f"Transient HTTP error {e.resp.status} in {func.__name__} "
+                            f"(attempt {attempt + 1}/{max_retries + 1}). Retrying in {delay:.1f}s..."
+                        )
+
+                        await asyncio.sleep(delay)
+                        delay = min(delay * backoff_factor, max_delay)
+                    else:
+                        # Non-retryable HTTP error or final attempt - re-raise immediately
+                        raise
+
+                except Exception as e:
+                    # For all other exceptions, don't retry - re-raise immediately
+                    logging.debug(f"Non-retryable exception in {func.__name__}: {type(e).__name__}")
+                    raise
+
+            # All retries exhausted - raise the last exception
+            if last_exception:
+                raise GoogleDriveError(
+                    f"Operation {func.__name__} failed after {max_retries + 1} attempts due to "
+                    f"{type(last_exception).__name__}: {str(last_exception)}",
+                    original_error=last_exception
+                )
+
+        return wrapper
+    return decorator
 
 
 class GoogleDriveService:
@@ -254,14 +373,8 @@ class GoogleDriveService:
             resumable=True
         )
 
-        # Upload file
-        file = await asyncio.to_thread(
-            lambda: self.service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields='id,name,size,createdTime,webViewLink,parents'
-            ).execute()
-        )
+        # Upload file with retry logic for SSL errors
+        file = await self._upload_file_with_retry(file_metadata, media)
 
         logging.info(f"File uploaded successfully: {file.get('id')}")
 
@@ -326,14 +439,8 @@ class GoogleDriveService:
             resumable=True
         )
 
-        # Upload file
-        file = await asyncio.to_thread(
-            lambda: self.service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields='id,name,size,createdTime,webViewLink,parents'
-            ).execute()
-        )
+        # Upload file with retry logic for SSL errors
+        file = await self._upload_file_with_retry(file_metadata, media)
 
         logging.info(f"File uploaded successfully: {file.get('id')}")
 
@@ -377,12 +484,8 @@ class GoogleDriveService:
             body['name'] = metadata['name']
 
         if body:
-            await asyncio.to_thread(
-                lambda: self.service.files().update(
-                    fileId=file_id,
-                    body=body
-                ).execute()
-            )
+            # Update metadata with retry logic for SSL errors
+            await self._update_file_metadata_with_retry(file_id, body)
 
         logging.info(f"Updated metadata for file {file_id}")
         return True
@@ -406,11 +509,10 @@ class GoogleDriveService:
         # Query for files in the folder
         query = f"'{folder_id}' in parents and trashed=false"
 
-        results = await asyncio.to_thread(
-            lambda: self.service.files().list(
-                q=query,
-                fields='files(id,name,size,createdTime,webViewLink,mimeType,properties)'
-            ).execute()
+        # List files with retry logic for SSL errors
+        results = await self._list_files_with_retry(
+            query=query,
+            fields='files(id,name,size,createdTime,webViewLink,mimeType,properties)'
         )
 
         files = results.get('files', [])
@@ -436,21 +538,20 @@ class GoogleDriveService:
     async def delete_file(self, file_id: str) -> bool:
         """
         Delete file from Google Drive.
-        
+
         Args:
             file_id: File ID to delete
-            
+
         Returns:
             True if successful
-            
+
         Raises:
             GoogleDriveError: If deletion fails
         """
         logging.info(f"Deleting Google Drive file: {file_id}")
 
-        await asyncio.to_thread(
-            lambda: self.service.files().delete(fileId=file_id).execute()
-        )
+        # Delete file with retry logic for SSL errors
+        await self._delete_file_with_retry(file_id)
         logging.info(f"Deleted Google Drive file: {file_id}")
         return True
     
@@ -484,11 +585,10 @@ class GoogleDriveService:
         }
 
         try:
-            folder_details = await asyncio.to_thread(
-                lambda: self.service.files().get(
-                    fileId=folder_id,
-                    fields='name,createdTime,modifiedTime'
-                ).execute()
+            # Get folder details with retry logic for SSL errors
+            folder_details = await self._get_file_with_retry(
+                file_id=folder_id,
+                fields='name,createdTime,modifiedTime'
             )
 
             folder_info.update({
@@ -566,13 +666,11 @@ class GoogleDriveService:
                 print(f"   [{index}/{len(file_ids)}] Moving {file_id}...")
 
                 # Move file: remove from Temp, add to Inbox
-                updated_file = await asyncio.to_thread(
-                    lambda fid=file_id: self.service.files().update(
-                        fileId=fid,
-                        addParents=inbox_folder_id,
-                        removeParents=temp_folder_id,
-                        fields='id,name,parents'
-                    ).execute()
+                # Wrap in retry logic to handle SSL errors
+                updated_file = await self._move_file_with_retry(
+                    file_id=file_id,
+                    add_parents=inbox_folder_id,
+                    remove_parents=temp_folder_id
                 )
 
                 file_name = updated_file.get('name', 'Unknown')
@@ -645,10 +743,8 @@ class GoogleDriveService:
 
         for file_id in file_ids:
             try:
-                # Delete the file - use default argument to capture file_id value
-                await asyncio.to_thread(
-                    lambda fid=file_id: self.service.files().delete(fileId=fid).execute()
-                )
+                # Delete the file with retry logic for SSL errors
+                await self._delete_file_with_retry(file_id)
 
                 deleted_files.append({
                     'file_id': file_id,
@@ -677,6 +773,7 @@ class GoogleDriveService:
         logging.info(f"Deletion operation completed: {len(deleted_files)}/{len(file_ids)} files deleted successfully")
         return result
     
+    @retry_on_ssl_error(max_retries=5, initial_delay=1.0, backoff_factor=2.0, max_delay=30.0)
     async def _get_file_parent(self, file_id: str) -> str:
         """
         Get the parent folder ID of a file.
@@ -691,6 +788,7 @@ class GoogleDriveService:
             GoogleDriveError: If getting parent fails
         """
         # Run synchronous Google Drive API call in thread pool
+        # Retry decorator will handle SSL errors automatically
         file_info = await asyncio.to_thread(
             lambda: self.service.files().get(
                 fileId=file_id,
@@ -703,7 +801,174 @@ class GoogleDriveService:
             raise GoogleDriveStorageError(f"File {file_id} has no parent folder")
 
         return parents[0]  # Return first parent
-    
+
+    @retry_on_ssl_error(max_retries=5, initial_delay=1.0, backoff_factor=2.0, max_delay=30.0)
+    async def _move_file_with_retry(
+        self,
+        file_id: str,
+        add_parents: str,
+        remove_parents: str
+    ) -> Dict[str, Any]:
+        """
+        Move file between folders with SSL error retry logic.
+
+        Args:
+            file_id: File ID to move
+            add_parents: Folder ID to add as parent
+            remove_parents: Folder ID to remove as parent
+
+        Returns:
+            Updated file metadata
+
+        Raises:
+            GoogleDriveError: If file move fails after retries
+        """
+        # Run synchronous Google Drive API call in thread pool
+        # Retry decorator will handle SSL errors automatically
+        updated_file = await asyncio.to_thread(
+            lambda: self.service.files().update(
+                fileId=file_id,
+                addParents=add_parents,
+                removeParents=remove_parents,
+                fields='id,name,parents'
+            ).execute()
+        )
+
+        return updated_file
+
+    @retry_on_ssl_error(max_retries=5, initial_delay=1.0, backoff_factor=2.0, max_delay=30.0)
+    async def _delete_file_with_retry(self, file_id: str) -> None:
+        """
+        Delete file from Google Drive with SSL error retry logic.
+
+        Args:
+            file_id: File ID to delete
+
+        Raises:
+            GoogleDriveError: If file deletion fails after retries
+        """
+        # Run synchronous Google Drive API call in thread pool
+        # Retry decorator will handle SSL errors automatically
+        await asyncio.to_thread(
+            lambda: self.service.files().delete(fileId=file_id).execute()
+        )
+
+    @retry_on_ssl_error(max_retries=5, initial_delay=1.0, backoff_factor=2.0, max_delay=30.0)
+    async def _upload_file_with_retry(
+        self,
+        file_metadata: Dict[str, Any],
+        media: MediaIoBaseUpload
+    ) -> Dict[str, Any]:
+        """
+        Upload file to Google Drive with SSL error retry logic.
+
+        Args:
+            file_metadata: File metadata dictionary
+            media: Media upload object
+
+        Returns:
+            Created file information
+
+        Raises:
+            GoogleDriveError: If file upload fails after retries
+        """
+        # Run synchronous Google Drive API call in thread pool
+        # Retry decorator will handle SSL errors automatically
+        file = await asyncio.to_thread(
+            lambda: self.service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id,name,size,createdTime,webViewLink,parents'
+            ).execute()
+        )
+
+        return file
+
+    @retry_on_ssl_error(max_retries=5, initial_delay=1.0, backoff_factor=2.0, max_delay=30.0)
+    async def _update_file_metadata_with_retry(
+        self,
+        file_id: str,
+        body: Dict[str, Any]
+    ) -> None:
+        """
+        Update file metadata in Google Drive with SSL error retry logic.
+
+        Args:
+            file_id: File ID to update
+            body: Metadata update body
+
+        Raises:
+            GoogleDriveError: If metadata update fails after retries
+        """
+        # Run synchronous Google Drive API call in thread pool
+        # Retry decorator will handle SSL errors automatically
+        await asyncio.to_thread(
+            lambda: self.service.files().update(
+                fileId=file_id,
+                body=body
+            ).execute()
+        )
+
+    @retry_on_ssl_error(max_retries=5, initial_delay=1.0, backoff_factor=2.0, max_delay=30.0)
+    async def _list_files_with_retry(
+        self,
+        query: str,
+        fields: str
+    ) -> Dict[str, Any]:
+        """
+        List files in Google Drive with SSL error retry logic.
+
+        Args:
+            query: Google Drive query string
+            fields: Fields to return
+
+        Returns:
+            List results from Google Drive
+
+        Raises:
+            GoogleDriveError: If listing fails after retries
+        """
+        # Run synchronous Google Drive API call in thread pool
+        # Retry decorator will handle SSL errors automatically
+        results = await asyncio.to_thread(
+            lambda: self.service.files().list(
+                q=query,
+                fields=fields
+            ).execute()
+        )
+
+        return results
+
+    @retry_on_ssl_error(max_retries=5, initial_delay=1.0, backoff_factor=2.0, max_delay=30.0)
+    async def _get_file_with_retry(
+        self,
+        file_id: str,
+        fields: str
+    ) -> Dict[str, Any]:
+        """
+        Get file metadata from Google Drive with SSL error retry logic.
+
+        Args:
+            file_id: File ID to get
+            fields: Fields to return
+
+        Returns:
+            File metadata
+
+        Raises:
+            GoogleDriveError: If getting file fails after retries
+        """
+        # Run synchronous Google Drive API call in thread pool
+        # Retry decorator will handle SSL errors automatically
+        file_info = await asyncio.to_thread(
+            lambda: self.service.files().get(
+                fileId=file_id,
+                fields=fields
+            ).execute()
+        )
+
+        return file_info
+
     async def _find_or_create_folder(self, name: str, parent_id: Optional[str] = None) -> str:
         """
         Find existing folder or create new one in Google Drive.
@@ -729,6 +994,7 @@ class GoogleDriveService:
         logging.info(f"Created new folder '{name}': {folder_id}")
         return folder_id
     
+    @retry_on_ssl_error(max_retries=5, initial_delay=1.0, backoff_factor=2.0, max_delay=30.0)
     async def _create_folder(self, name: str, parent_id: Optional[str] = None) -> str:
         """
         Create a folder in Google Drive.
@@ -752,6 +1018,7 @@ class GoogleDriveService:
             file_metadata['parents'] = [parent_id]
 
         # Run synchronous Google Drive API call in thread pool
+        # Retry decorator will handle SSL errors automatically
         folder = await asyncio.to_thread(
             lambda: self.service.files().create(
                 body=file_metadata,
@@ -763,6 +1030,7 @@ class GoogleDriveService:
         logging.info(f"Created Google Drive folder '{name}': {folder_id}")
         return folder_id
     
+    @retry_on_ssl_error(max_retries=5, initial_delay=1.0, backoff_factor=2.0, max_delay=30.0)
     async def _find_folder(self, name: str, parent_id: Optional[str] = None) -> Optional[str]:
         """
         Find folder by name in Google Drive.
@@ -783,6 +1051,7 @@ class GoogleDriveService:
             query += f" and '{parent_id}' in parents"
 
         # Run synchronous Google Drive API call in thread pool
+        # Retry decorator will handle SSL errors automatically
         results = await asyncio.to_thread(
             lambda: self.service.files().list(
                 q=query,
@@ -879,10 +1148,8 @@ class GoogleDriveService:
                 file_name = file_info.get('filename') or file_info.get('name')  # Try both possible keys
 
                 try:
-                    # Use default argument to capture file_id value in loop
-                    await asyncio.to_thread(
-                        lambda fid=file_id: self.service.files().delete(fileId=fid).execute()
-                    )
+                    # Delete file with retry logic for SSL errors
+                    await self._delete_file_with_retry(file_id)
                     deleted_files.append({
                         "id": file_id,
                         "name": file_name,
@@ -928,11 +1195,10 @@ class GoogleDriveService:
         query = f"properties has {{key='customer_email' and value='{customer_email}'}} and properties has {{key='status' and value='{status}'}} and trashed=false"
 
         try:
-            results = await asyncio.to_thread(
-                lambda: self.service.files().list(
-                    q=query,
-                    fields='files(id,name,size,createdTime,webViewLink,mimeType,properties,parents)'
-                ).execute()
+            # Search files with retry logic for SSL errors
+            results = await self._list_files_with_retry(
+                query=query,
+                fields='files(id,name,size,createdTime,webViewLink,mimeType,properties,parents)'
             )
 
             files = results.get('files', [])
@@ -1018,12 +1284,10 @@ class GoogleDriveService:
         try:
             logging.info(f"Updating file {file_id} properties")
 
-            # Update the file properties
-            await asyncio.to_thread(
-                lambda: self.service.files().update(
-                    fileId=file_id,
-                    body={'properties': properties}
-                ).execute()
+            # Update the file properties with retry logic for SSL errors
+            await self._update_file_metadata_with_retry(
+                file_id=file_id,
+                body={'properties': properties}
             )
 
             logging.info(f"File {file_id} properties updated successfully")

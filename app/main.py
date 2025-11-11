@@ -961,6 +961,20 @@ async def translate_files(
 # ============================================================================
 # Transaction Confirmation/Decline Models
 # ============================================================================
+class TransactionConfirmRequest(BaseModel):
+    """Request body for confirming Square payment - client sends payment info only"""
+    square_transaction_id: Optional[str] = Field(
+        None,
+        description="Square payment ID (optional reference) or 'NONE' if payment failed",
+        example="sqt_3030c9a6c8c94a5180e2"
+    )
+    status: bool = Field(
+        default=True,
+        description="True if payment approved, False if failed"
+    )
+    # NOTE: transaction_ids are NOT sent from client - server generates them automatically
+
+
 class TransactionActionRequest(BaseModel):
     transaction_ids: List[str]
 
@@ -1152,170 +1166,312 @@ async def process_transaction_confirmation_background(
 # ============================================================================
 @app.post("/api/transactions/confirm", tags=["Transactions"])
 async def confirm_transactions(
-    request: TransactionActionRequest,
+    request: TransactionConfirmRequest,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Confirm transactions and move files from Temp/ to Inbox/.
+    Confirm Square payment and create transaction OR delete files on failure.
 
     This endpoint:
-    1. Updates transaction status from "started" to "confirmed"
-    2. Moves files from customer_email/Temp/ to customer_email/Inbox/
-    3. Returns count of successfully moved files
+    - IF payment succeeded (status=True):
+      1. Find customer's files in Temp folder
+      2. Generate TXN-format transaction ID
+      3. Create transaction record in user_transactions
+      4. Update file metadata with transaction_id
+      5. Move files from Temp/ to Inbox/
+      6. Return success with transaction_id
+
+    - IF payment failed (status=False):
+      1. Find customer's files in Temp folder
+      2. Delete all files
+      3. Return failure message
     """
-    print(f"[CONFIRM ENDPOINT] ✅ REACHED! Pydantic body parsing completed successfully!")
-    print(f"[CONFIRM ENDPOINT] Transaction IDs: {request.transaction_ids}")
-    print(f"[CONFIRM ENDPOINT] Current user: {current_user.get('email')}")
+    from datetime import datetime, timezone
+    from app.utils.transaction_id_generator import generate_translation_transaction_id
+
+    # ========== REQUEST VALIDATION LOGGING ==========
+    print("\n" + "=" * 80)
+    print("🔔 CONFIRM ENDPOINT - REQUEST RECEIVED")
+    print("=" * 80)
+    logging.info(f"[CONFIRM ENDPOINT] Request received at /api/transactions/confirm")
+
+    print(f"✅ Pydantic body parsing completed successfully!")
+    logging.info(f"[CONFIRM ENDPOINT] Pydantic validation passed")
+
+    # ========== CLIENT REQUEST BODY VERIFICATION ==========
+    print(f"\n📥 CLIENT REQUEST BODY (RAW):")
+    request_dict = request.model_dump()
+    print(f"   {request_dict}")
+    print(f"\n🔍 VERIFY: transaction_id in request? {'YES ❌ ERROR!' if 'transaction_id' in request_dict else 'NO ✅ CORRECT'}")
+    print(f"🔍 VERIFY: transaction_ids in request? {'YES ❌ ERROR!' if 'transaction_ids' in request_dict else 'NO ✅ CORRECT'}")
+    logging.info(f"[CONFIRM ENDPOINT] Client sent: {request_dict}")
+
+    print(f"\n📋 Request Details:")
+    print(f"   Square Transaction ID: {request.square_transaction_id}")
+    print(f"   Payment Status: {'APPROVED ✅' if request.status else 'FAILED ❌'}")
+    print(f"   Request Type: {type(request).__name__}")
+    print(f"   Status Type: {type(request.status).__name__} = {request.status}")
+    logging.info(f"[CONFIRM ENDPOINT] square_transaction_id={request.square_transaction_id}, status={request.status}")
+
+    print(f"👤 Current User:")
+    print(f"   Email: {current_user.get('email')}")
+    print(f"   User ID: {current_user.get('sub', 'N/A')}")
+    print("=" * 80 + "\n")
+    logging.info(f"[CONFIRM ENDPOINT] Authenticated user: {current_user.get('email')}")
 
     from app.database import database
     from app.services.google_drive_service import google_drive_service
-    from datetime import datetime, timezone
 
-    logging.info(f"[CONFIRM] User {current_user.get('email')} confirming {len(request.transaction_ids)} transactions")
-    print(f"[CONFIRM] Confirming transactions: {request.transaction_ids}")
-
-    if not request.transaction_ids:
-        raise HTTPException(status_code=400, detail="No transaction IDs provided")
+    customer_email = current_user.get("email")
 
     try:
-        # Fetch all transactions
-        transactions = []
-        print(f"[CONFIRM DEBUG] Fetching {len(request.transaction_ids)} transaction(s) from database...")
-        for txn_id in request.transaction_ids:
-            txn = await database.translation_transactions.find_one({"transaction_id": txn_id})
-            if txn:
-                transactions.append(txn)
-                # Access nested documents array (post-migration structure)
-                documents = txn.get('documents', [])
-                print(f"[CONFIRM DEBUG] Found transaction {txn_id}")
-                print(f"[CONFIRM DEBUG]   - user_id: {txn.get('user_id', 'MISSING')}")
-                print(f"[CONFIRM DEBUG]   - documents: {len(documents)} document(s)")
-                if documents:
-                    first_doc = documents[0]
-                    print(f"[CONFIRM DEBUG]   - original_url: {first_doc.get('original_url', 'MISSING')}")
-                    print(f"[CONFIRM DEBUG]   - file_name: {first_doc.get('file_name', 'MISSING')}")
-                else:
-                    # Fallback for backward compatibility (shouldn't happen after migration)
-                    print(f"[CONFIRM DEBUG]   - original_file_url (legacy): {txn.get('original_file_url', 'MISSING')}")
-                    print(f"[CONFIRM DEBUG]   - file_name (legacy): {txn.get('file_name', 'MISSING')}")
-                print(f"[CONFIRM DEBUG]   - status: {txn.get('status', 'MISSING')}")
-            else:
-                logging.warning(f"[CONFIRM] Transaction {txn_id} not found")
-                print(f"[CONFIRM DEBUG] ❌ Transaction {txn_id} NOT FOUND in database")
+        # ========== SUCCESS FLOW: Payment Approved ==========
+        if request.status:
+            print("\n" + "=" * 80)
+            print("✅ SUCCESS FLOW - Payment Approved")
+            print("=" * 80)
+            print(f"📧 Customer Email: {customer_email}")
+            print(f"💳 Square Transaction ID: {request.square_transaction_id}")
+            logging.info(f"[CONFIRM] Payment APPROVED for {customer_email}, square_txn={request.square_transaction_id}")
 
-        if not transactions:
-            raise HTTPException(status_code=404, detail="No valid transactions found")
+            # 1. Find files in Temp folder with awaiting_payment status
+            print(f"\n📁 Step 1/6: Searching for files in Temp folder...")
+            print(f"   Searching for: customer_email={customer_email}, status=awaiting_payment")
+            logging.info(f"[CONFIRM] Searching Temp folder for {customer_email} with status=awaiting_payment")
 
-        # Extract customer email and company name from first transaction
-        first_txn = transactions[0]
-        customer_email = first_txn.get("user_id", "")  # user_id contains email
-        company_name = first_txn.get("company_name")  # company_name for enterprise customers
-        print(f"[CONFIRM DEBUG] Customer email extracted: {customer_email}")
-        print(f"[CONFIRM DEBUG] Company name extracted: {company_name or 'None (individual customer)'}")
+            try:
+                files_in_temp = await google_drive_service.find_files_by_customer_email(
+                    customer_email=customer_email,
+                    status="awaiting_payment"
+                )
+                print(f"   ✅ Search completed successfully")
+                logging.info(f"[CONFIRM] File search completed, found {len(files_in_temp) if files_in_temp else 0} files")
+            except Exception as e:
+                print(f"   ❌ File search failed: {e}")
+                logging.error(f"[CONFIRM] File search error: {e}", exc_info=True)
+                raise
 
-        # Get file IDs from documents array (post-migration) or original_file_url (pre-migration fallback)
-        file_ids = []
-        print(f"[CONFIRM DEBUG] Extracting file IDs from {len(transactions)} transaction(s)...")
-        for i, txn in enumerate(transactions, 1):
-            # Try nested structure first (post-migration)
-            documents = txn.get("documents", [])
+            if not files_in_temp:
+                print(f"   ❌ No files found in Temp folder for {customer_email}")
+                logging.warning(f"[CONFIRM] No files found in Temp for {customer_email}")
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No files found in Temp folder for customer {customer_email}"
+                )
 
-            if documents:
-                # Process all documents in the transaction
-                for doc_idx, doc in enumerate(documents):
-                    url = doc.get("original_url", "")
-                    print(f"[CONFIRM DEBUG] Transaction {i}/{len(transactions)}, Document {doc_idx+1}/{len(documents)}: URL = '{url}'")
+            print(f"   ✅ Found {len(files_in_temp)} file(s) in Temp folder")
+            for i, file_info in enumerate(files_in_temp, 1):
+                print(f"      File {i}: {file_info.get('filename')} (ID: {file_info.get('file_id', 'N/A')[:20]}...)")
+            logging.info(f"[CONFIRM] Found {len(files_in_temp)} files: {[f.get('filename') for f in files_in_temp]}")
 
-                    # Extract file ID from Google Drive URL - handles multiple formats:
-                    # - Google Docs: https://docs.google.com/document/d/{file_id}/edit
-                    # - Google Sheets: https://docs.google.com/spreadsheets/d/{file_id}/edit
-                    # - Google Drive: https://drive.google.com/file/d/{file_id}/view
-                    file_id = None
-                    if "/document/d/" in url:
-                        file_id = url.split("/document/d/")[1].split("/")[0]
-                        print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /document/d/ pattern: {file_id}")
-                    elif "/spreadsheets/d/" in url:
-                        file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
-                        print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /spreadsheets/d/ pattern: {file_id}")
-                    elif "/file/d/" in url:
-                        file_id = url.split("/file/d/")[1].split("/")[0]
-                        print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /file/d/ pattern: {file_id}")
-                    else:
-                        print(f"[CONFIRM DEBUG]   ❌ URL does not match any known Google Drive pattern - SKIPPED")
+            # 2. Generate TXN-format transaction ID
+            print(f"\n🔢 Step 2/6: Generating transaction ID...")
+            try:
+                transaction_id = generate_translation_transaction_id()
+                print(f"   ✅ Generated transaction ID: {transaction_id}")
+                logging.info(f"[CONFIRM] Generated transaction_id={transaction_id}")
+            except Exception as e:
+                print(f"   ❌ Transaction ID generation failed: {e}")
+                logging.error(f"[CONFIRM] Transaction ID generation error: {e}", exc_info=True)
+                raise
 
-                    if file_id:
-                        file_ids.append(file_id)
-            else:
-                # Fallback to flat structure (pre-migration - should not happen but defensive coding)
-                url = txn.get("original_file_url", "")
-                print(f"[CONFIRM DEBUG] Transaction {i}/{len(transactions)} (LEGACY): URL = '{url}'")
+            # 3. Extract metadata from first file to get pricing/language info
+            print(f"\n📊 Step 3/6: Extracting metadata from files...")
+            first_file = files_in_temp[0]
+            source_language = first_file.get('source_language', 'unknown')
+            target_language = first_file.get('target_language', 'unknown')
+            page_count = first_file.get('page_count', 0)
+            total_units = sum(file_info.get('page_count', 0) for file_info in files_in_temp)
+            total_price = total_units * 0.01  # $0.01 per page
 
-                file_id = None
-                if "/document/d/" in url:
-                    file_id = url.split("/document/d/")[1].split("/")[0]
-                    print(f"[CONFIRM DEBUG]   ✅ Extracted file_id (legacy) from /document/d/ pattern: {file_id}")
-                elif "/spreadsheets/d/" in url:
-                    file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
-                    print(f"[CONFIRM DEBUG]   ✅ Extracted file_id (legacy) from /spreadsheets/d/ pattern: {file_id}")
-                elif "/file/d/" in url:
-                    file_id = url.split("/file/d/")[1].split("/")[0]
-                    print(f"[CONFIRM DEBUG]   ✅ Extracted file_id (legacy) from /file/d/ pattern: {file_id}")
-                else:
-                    print(f"[CONFIRM DEBUG]   ❌ URL does not match any known Google Drive pattern - SKIPPED")
+            print(f"   Metadata extracted:")
+            print(f"      Source Language: {source_language}")
+            print(f"      Target Language: {target_language}")
+            print(f"      Total Units: {total_units}")
+            print(f"      Total Price: ${total_price}")
+            logging.info(f"[CONFIRM] Metadata: source={source_language}, target={target_language}, units={total_units}, price=${total_price}")
+
+            # 4. Create transaction record in user_transactions collection
+            print(f"\n💾 Step 4/6: Creating transaction record in database...")
+            from bson.decimal128 import Decimal128
+            from decimal import Decimal
+
+            documents = []
+            for file_info in files_in_temp:
+                documents.append({
+                    "file_name": file_info.get('filename'),
+                    "original_url": file_info.get('google_drive_url'),
+                    "status": "pending",
+                    "uploaded_at": datetime.now(timezone.utc)
+                })
+
+            transaction_data = {
+                "transaction_id": transaction_id,
+                "user_id": customer_email,
+                "source_language": source_language,
+                "target_language": target_language,
+                "units_count": total_units,
+                "price_per_unit": Decimal128(Decimal("0.01")),
+                "total_price": Decimal128(Decimal(str(total_price))),
+                "currency": "usd",
+                "unit_type": "page",
+                "status": "processing",
+                "documents": documents,
+                "payment_method": "square",
+                "square_transaction_id": request.square_transaction_id,
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
+            }
+
+            try:
+                result = await database.user_transactions.insert_one(transaction_data)
+                print(f"   ✅ Transaction record created: {result.inserted_id}")
+                logging.info(f"[CONFIRM] Transaction record created: {transaction_id}, MongoDB ID: {result.inserted_id}")
+            except Exception as e:
+                print(f"   ❌ Database insert failed: {e}")
+                logging.error(f"[CONFIRM] Database insert error: {e}", exc_info=True)
+                raise
+
+            # 5. Update file metadata with transaction_id
+            print(f"\n🏷️  Step 5/6: Updating file metadata with transaction_id...")
+            metadata_success_count = 0
+            metadata_fail_count = 0
+
+            for i, file_info in enumerate(files_in_temp, 1):
+                file_id = file_info.get('file_id')
+                filename = file_info.get('filename', 'unknown')
 
                 if file_id:
-                    file_ids.append(file_id)
+                    try:
+                        print(f"   Updating file {i}/{len(files_in_temp)}: {filename[:40]}...")
+                        await google_drive_service.update_file_metadata(
+                            file_id=file_id,
+                            metadata={
+                                'transaction_id': transaction_id,
+                                'status': 'processing',
+                                'payment_date': datetime.now(timezone.utc).isoformat()
+                            }
+                        )
+                        metadata_success_count += 1
+                        print(f"   ✓ Metadata updated for {filename[:40]}")
+                    except Exception as e:
+                        metadata_fail_count += 1
+                        print(f"   ✗ Failed to update metadata for {filename[:40]}: {e}")
+                        logging.error(f"[CONFIRM] Metadata update failed for {file_id}: {e}")
 
-        print(f"[CONFIRM DEBUG] Total file IDs extracted: {len(file_ids)}")
-        print(f"[CONFIRM DEBUG] File IDs: {file_ids}")
+            print(f"   ✅ Metadata updates: {metadata_success_count} succeeded, {metadata_fail_count} failed")
+            logging.info(f"[CONFIRM] Metadata updates: {metadata_success_count}/{len(files_in_temp)} succeeded")
 
-        # Log what we're about to do (fast - logging only)
-        if company_name:
-            logging.info(f"[CONFIRM] Scheduling background task to move {len(file_ids)} files from {company_name}/{customer_email}/Temp/ to Inbox/")
-            print(f"[CONFIRM] Scheduling background task: {len(file_ids)} files from {company_name}/{customer_email}/Temp/ to Inbox/")
+            # 6. Move files from Temp to Inbox
+            print(f"\n📂 Step 6/6: Moving files from Temp to Inbox...")
+            file_ids_to_move = [file_info.get('file_id') for file_info in files_in_temp if file_info.get('file_id')]
+
+            print(f"   Files to move: {len(file_ids_to_move)}")
+            if file_ids_to_move:
+                try:
+                    move_result = await google_drive_service.move_files_to_inbox_on_payment_success(
+                        customer_email=customer_email,
+                        file_ids=file_ids_to_move,
+                        company_name=None  # Individual user
+                    )
+
+                    moved_count = move_result.get('moved_successfully', 0)
+                    failed_count = move_result.get('failed_moves', 0)
+
+                    print(f"   ✅ Files moved: {moved_count} succeeded, {failed_count} failed")
+                    logging.info(f"[CONFIRM] File movement: {moved_count}/{len(file_ids_to_move)} succeeded")
+
+                    if failed_count > 0:
+                        print(f"   ⚠️  WARNING: {failed_count} files failed to move")
+                        logging.warning(f"[CONFIRM] {failed_count} files failed to move")
+                except Exception as e:
+                    print(f"   ❌ File movement failed: {e}")
+                    logging.error(f"[CONFIRM] File movement error: {e}", exc_info=True)
+                    raise
+
+            print(f"\n✅ PAYMENT CONFIRMATION COMPLETE")
+            print(f"   Transaction ID: {transaction_id}")
+            print(f"   Files processed: {len(files_in_temp)}")
+            print(f"   Total amount: ${total_price}")
+            print("=" * 80 + "\n")
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": "Payment confirmed and transaction created successfully",
+                    "data": {
+                        "transaction_id": transaction_id,
+                        "confirmed_transactions": 1,
+                        "moved_files": moved_count if file_ids_to_move else 0,
+                        "total_amount": total_price,
+                        "customer_email": customer_email
+                    }
+                }
+            )
+
+        # ========== FAILURE FLOW: Payment Failed ==========
         else:
-            logging.info(f"[CONFIRM] Scheduling background task to move {len(file_ids)} files from {customer_email}/Temp/ to Inbox/")
-            print(f"[CONFIRM] Scheduling background task: {len(file_ids)} files from {customer_email}/Temp/ to Inbox/")
+            print("\n" + "=" * 80)
+            print("❌ FAILURE FLOW - Payment Failed")
+            print("=" * 80)
+            print(f"📧 Customer Email: {customer_email}")
+            print(f"💳 Square Transaction ID: {request.square_transaction_id}")
+            logging.info(f"[CONFIRM] Payment FAILED for {customer_email}, square_txn={request.square_transaction_id}")
 
-        # Schedule background task for file move, verification, and updates
-        print(f"[CONFIRM] Adding background task to queue...")
-        background_tasks.add_task(
-            process_transaction_confirmation_background,
-            transaction_ids=request.transaction_ids,
-            customer_email=customer_email,
-            company_name=company_name,
-            file_ids=file_ids
-        )
-        print(f"[CONFIRM] ✅ Background task scheduled successfully")
+            # Find and delete files in Temp folder
+            print(f"\n🗑️  Searching for files to delete...")
+            try:
+                files_in_temp = await google_drive_service.find_files_by_customer_email(
+                    customer_email=customer_email,
+                    status="awaiting_payment"
+                )
+                print(f"   Found {len(files_in_temp) if files_in_temp else 0} files to delete")
+            except Exception as e:
+                print(f"   ❌ File search failed: {e}")
+                logging.error(f"[CONFIRM] File search error: {e}", exc_info=True)
+                raise
 
-        # Return IMMEDIATELY (< 1 second) - background task will handle everything else
-        response = {
-            "success": True,
-            "message": f"Transactions confirmed. Files are being moved to Inbox in the background.",
-            "data": {
-                "confirmed_transactions": len(request.transaction_ids),
-                "total_files": len(file_ids),
-                "status": "processing",
-                "customer_email": customer_email,
-                "company_name": company_name if company_name else None,
-                "processing_note": "Files are being moved and verified in the background. This may take 30-90 seconds to complete."
-            }
-        }
+            if files_in_temp:
+                file_ids_to_delete = [f.get('file_id') for f in files_in_temp if f.get('file_id')]
+                print(f"   Deleting {len(file_ids_to_delete)} files...")
 
-        logging.info(f"[CONFIRM] Immediate response sent: {len(request.transaction_ids)} transactions scheduled for processing")
-        print(f"[CONFIRM] ⚡ INSTANT RESPONSE: {len(request.transaction_ids)} transactions scheduled (background processing started)")
+                try:
+                    delete_result = await google_drive_service.delete_files_on_payment_failure(
+                        customer_email=customer_email,
+                        file_ids=file_ids_to_delete
+                    )
+                    deleted_count = delete_result.get('deleted_successfully', 0)
+                    print(f"   ✅ Deleted {deleted_count} files")
+                    logging.info(f"[CONFIRM] Deleted {deleted_count} files after payment failure")
+                except Exception as e:
+                    print(f"   ❌ File deletion failed: {e}")
+                    logging.error(f"[CONFIRM] File deletion error: {e}", exc_info=True)
 
-        return JSONResponse(content=response)
+            print("\n❌ PAYMENT FAILED - Files deleted")
+            print("=" * 80 + "\n")
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": False,
+                    "message": "Payment failed. Files have been deleted.",
+                    "data": {
+                        "deleted_files": len(files_in_temp) if files_in_temp else 0,
+                        "customer_email": customer_email
+                    }
+                }
+            )
 
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"[CONFIRM] Failed to confirm transactions: {e}", exc_info=True)
-        print(f"[CONFIRM] Error: {e}")
+        print(f"\n❌ UNEXPECTED ERROR: {e}")
+        logging.error(f"[CONFIRM] Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to confirm transactions: {str(e)}"
+            detail=f"Internal server error: {str(e)}"
         )
 
 

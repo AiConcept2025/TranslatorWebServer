@@ -229,7 +229,7 @@ class TestCRUDHelperFunctions:
         # Prepare data (use only 2 documents)
         data = valid_transaction_data_multiple_documents.copy()
         data["documents"] = data["documents"][:2]
-        transaction_id = data["square_transaction_id"]
+        square_txn_id = data["square_transaction_id"]
 
         # Create transaction
         result = await create_user_transaction(
@@ -241,7 +241,7 @@ class TestCRUDHelperFunctions:
             cost_per_unit=data["cost_per_unit"],
             source_language=data["source_language"],
             target_language=data["target_language"],
-            square_transaction_id=transaction_id,
+            square_transaction_id=square_txn_id,
             date=datetime.now(timezone.utc),
             status=data["status"],
             square_payment_id=data["square_payment_id"],
@@ -250,20 +250,24 @@ class TestCRUDHelperFunctions:
             payment_status=data["payment_status"],
         )
 
-        assert result == transaction_id
+        # Verify result is USER format transaction_id
+        assert result is not None
+        assert isinstance(result, str)
+        assert result.startswith("USER"), f"Should return USER format transaction_id, got: {result}"
 
         # Verify in database
         collection = database.user_transactions
-        db_transaction = await collection.find_one({"square_transaction_id": transaction_id})
+        db_transaction = await collection.find_one({"square_transaction_id": square_txn_id})
 
         assert db_transaction is not None
         assert db_transaction["user_email"] == data["user_email"]
+        assert db_transaction["transaction_id"] == result  # Verify transaction_id matches
         assert len(db_transaction["documents"]) == 2
         assert db_transaction["documents"][0]["document_name"] == "contract.pdf"
         assert db_transaction["documents"][1]["document_name"] == "invoice.docx"
 
-        # Cleanup
-        await collection.delete_one({"square_transaction_id": transaction_id})
+        # Cleanup using transaction_id (new primary key)
+        await collection.delete_one({"transaction_id": result})
 
     @pytest.mark.asyncio
     async def test_create_user_transaction_documents_array_validation(self):

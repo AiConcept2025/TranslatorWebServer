@@ -260,6 +260,7 @@ class MongoDB:
         # User transactions collection indexes (for individual users)
         try:
             user_transactions_indexes = [
+                IndexModel([("transaction_id", ASCENDING)], unique=True, name="transaction_id_unique"),
                 IndexModel([("square_transaction_id", ASCENDING)], unique=True, name="square_transaction_id_unique"),
                 IndexModel([("user_email", ASCENDING)], name="user_email_idx"),
                 IndexModel([("date", ASCENDING)], name="date_desc_idx"),

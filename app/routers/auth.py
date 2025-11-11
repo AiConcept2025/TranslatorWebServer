@@ -779,14 +779,30 @@ async def user_login(request: UserLoginRequest):
         )
         logger.info(f"[LOGIN] Last login updated")
 
-        # Generate session token (simple token for now, can be JWT in production)
-        import secrets
-        session_token = secrets.token_urlsafe(32)
-
-        # Calculate expiration (8 hours from now)
+        # Generate JWT token (matches other login endpoints - corporate/individual/admin)
+        logger.info(f"[LOGIN] Creating JWT access token...")
+        from app.services.jwt_service import jwt_service
         from datetime import timedelta
-        expires_at = now + timedelta(hours=8)
+
+        # Create user data for JWT (self-contained token, no database storage)
+        user_token_data = {
+            "user_id": str(user["_id"]),
+            "email": user.get("user_email"),
+            "fullName": user.get("user_name"),  # Frontend expects this
+            "company_name": None,  # Individual users have no company
+            "permission_level": "user"
+        }
+
+        # Create JWT token with 8-hour expiration
+        expires_delta = timedelta(hours=8)
+        session_token = jwt_service.create_access_token(user_token_data, expires_delta)
+
+        expires_at = now + expires_delta
         expires_in = 28800  # 8 hours in seconds
+
+        logger.info(f"[LOGIN] JWT token created successfully")
+        logger.info(f"[LOGIN]   Token type: JWT (self-contained, stateless)")
+        logger.info(f"[LOGIN]   Token preview: {session_token[:16]}...{session_token[-8:]}")
 
         # Prepare response with data structure matching frontend expectations
         response_data = {

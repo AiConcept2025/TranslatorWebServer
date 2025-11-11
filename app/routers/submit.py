@@ -5,12 +5,13 @@ Submit endpoint for handling file submission requests from clients.
 import logging
 import time
 from typing import Dict, Tuple
-from fastapi import APIRouter, HTTPException, status as http_status
+from fastapi import APIRouter, HTTPException, status as http_status, Depends
 from fastapi.responses import JSONResponse
 
 from app.models.requests import SubmitRequest
 from app.models.responses import SubmitSuccessResponse, SubmitErrorResponse
 from app.services.submit_service import submit_service
+from app.middleware.auth_middleware import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,10 @@ def _cache_webhook_result(transaction_id: str, file_name: str, file_url: str, re
         500: {"model": SubmitErrorResponse, "description": "Database or server error"}
     }
 )
-async def submit_file(request: SubmitRequest):
+async def submit_file(
+    request: SubmitRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """
     Submit a translated file and update transaction database.
 
@@ -118,6 +122,10 @@ async def submit_file(request: SubmitRequest):
     logger.info("=" * 80)
     logger.info("SUBMIT ENDPOINT - Incoming Request")
     logger.info("=" * 80)
+    logger.info(
+        f"🔐 Authenticated user: {current_user['email']} "
+        f"(permission: {current_user.get('permission_level', 'user')})"
+    )
     logger.info(
         f"Submit request received - File: {request.file_name}, "
         f"User: {request.user_email}, Company: {request.company_name}, "

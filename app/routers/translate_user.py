@@ -394,22 +394,28 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
             )
             log_step(f"FILE {i} GDRIVE UPLOADED", f"File ID: {file_result['file_id']}")
 
-            # Update file metadata
-            log_step(f"FILE {i} METADATA UPDATE", "Setting file properties")
+            # Update file metadata (initial properties)
+            log_step(f"FILE {i} METADATA UPDATE", "Setting initial file properties")
+            initial_properties = {
+                "customer_email": request.email,
+                "user_name": request.userName,
+                "source_language": request.sourceLanguage,
+                "target_language": request.targetLanguage,
+                "page_count": str(page_count),
+                "unit_type": unit_type,
+                "status": "awaiting_payment",
+                "upload_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "original_filename": file_info.name,
+            }
             await google_drive_service.update_file_properties(
                 file_id=file_result["file_id"],
-                properties={
-                    "customer_email": request.email,
-                    "user_name": request.userName,
-                    "source_language": request.sourceLanguage,
-                    "target_language": request.targetLanguage,
-                    "page_count": str(page_count),
-                    "unit_type": unit_type,
-                    "status": "awaiting_payment",
-                    "upload_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    "original_filename": file_info.name,
-                },
+                properties=initial_properties,
             )
+
+            # Log all metadata values being set
+            print(f"   📋 File Metadata Set on Google Drive:")
+            for key, value in initial_properties.items():
+                print(f"      • {key}: {value}")
 
             # Create user transaction record
             square_tx_id = generate_square_transaction_id()
@@ -447,7 +453,16 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
 
             if tx_id:
                 square_transaction_ids.append(square_tx_id)
-                log_step(f"FILE {i} TRANSACTION CREATED", f"TX ID: {square_tx_id}")
+                log_step(f"FILE {i} TRANSACTION CREATED", f"TX ID: {tx_id}")
+
+                # Update file metadata with transaction_id
+                log_step(f"FILE {i} ADD TRANSACTION_ID", f"Adding {tx_id} to file metadata")
+                await google_drive_service.update_file_properties(
+                    file_id=file_result["file_id"],
+                    properties={"transaction_id": tx_id},
+                )
+                print(f"   📋 Updated File Metadata:")
+                print(f"      • transaction_id: {tx_id}")
             else:
                 log_step(f"FILE {i} TRANSACTION FAILED", "Transaction creation failed")
 

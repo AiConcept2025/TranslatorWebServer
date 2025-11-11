@@ -1297,6 +1297,71 @@ class GoogleDriveService:
             logging.error(f"Failed to update file {file_id} properties: {e}")
             raise GoogleDriveError(f"Failed to update file properties: {e}")
 
+    @handle_google_drive_exceptions("get file by ID")
+    async def get_file_by_id(self, file_id: str) -> Dict[str, Any]:
+        """
+        Get file information by Google Drive file ID (no searching).
+
+        This method directly fetches a file by its ID, which is much faster and more
+        accurate than searching. Used by payment confirmation to process only the
+        specific files the user uploaded.
+
+        Args:
+            file_id: Google Drive file ID
+
+        Returns:
+            Dictionary with file information including:
+            - file_id: Google Drive file ID
+            - filename: File name
+            - size: File size in bytes
+            - customer_email: Customer email from properties
+            - source_language: Source language from properties
+            - target_language: Target language from properties
+            - page_count: Page count from properties
+            - status: File status from properties
+            - upload_timestamp: Upload timestamp from properties
+            - google_drive_url: Web view link
+            - parents: Parent folder IDs
+
+        Raises:
+            GoogleDriveError: If file fetch fails or file not found
+        """
+        logging.info(f"Fetching file by ID: {file_id}")
+
+        try:
+            # Use retry logic for SSL errors
+            file = await self._get_file_with_retry(
+                file_id=file_id,
+                fields='id,name,size,createdTime,webViewLink,mimeType,properties,parents'
+            )
+
+            properties = file.get('properties', {})
+
+            file_info = {
+                'file_id': file['id'],
+                'filename': file['name'],
+                'size': int(file.get('size', 0)) if file.get('size') else 0,
+                'created_at': file.get('createdTime'),
+                'google_drive_url': file.get('webViewLink'),
+                'mime_type': file.get('mimeType'),
+                'parents': file.get('parents', []),
+
+                # Extract metadata from properties
+                'customer_email': properties.get('customer_email'),
+                'source_language': properties.get('source_language'),
+                'target_language': properties.get('target_language'),
+                'page_count': int(properties.get('page_count', 1)),
+                'status': properties.get('status'),
+                'upload_timestamp': properties.get('upload_timestamp')
+            }
+
+            logging.info(f"Successfully fetched file {file_id}: {file_info['filename']}")
+            return file_info
+
+        except Exception as e:
+            logging.error(f"Failed to fetch file {file_id}: {e}")
+            raise GoogleDriveError(f"Failed to fetch file by ID: {e}")
+
 
 # Global Google Drive service instance - initialized lazily
 _google_drive_service = None

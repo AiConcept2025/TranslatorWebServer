@@ -131,7 +131,7 @@ if settings.environment.lower() in ["test", "development"]:
     print("⚠️  Email diagnostic endpoints enabled (test/dev mode only)")
 
 # Import models for /translate endpoint
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional, Dict, Any
 
 class FileInfo(BaseModel):
@@ -962,7 +962,7 @@ async def translate_files(
 # Transaction Confirmation/Decline Models
 # ============================================================================
 class TransactionConfirmRequest(BaseModel):
-    """Request body for confirming Square payment - client sends payment info only"""
+    """Request body for confirming Square payment - client sends payment info AND file_ids"""
     square_transaction_id: Optional[str] = Field(
         None,
         description="Square payment ID (optional reference) or 'NONE' if payment failed",
@@ -972,7 +972,14 @@ class TransactionConfirmRequest(BaseModel):
         default=True,
         description="True if payment approved, False if failed"
     )
-    # NOTE: transaction_ids are NOT sent from client - server generates them automatically
+    file_ids: List[str] = Field(
+        default=[],
+        description="List of Google Drive file IDs to process (from upload response). If empty, falls back to search (enterprise flow)",
+        example=["1abc2def3ghi", "4jkl5mno6pqr"]
+    )
+    # NOTE:
+    # - Individual flow: Client sends file_ids from upload response - server processes only those files
+    # - Enterprise flow: Empty array - server falls back to search by email + status
 
 
 class TransactionActionRequest(BaseModel):
@@ -1235,35 +1242,89 @@ async def confirm_transactions(
             print(f"💳 Square Transaction ID: {request.square_transaction_id}")
             logging.info(f"[CONFIRM] Payment APPROVED for {customer_email}, square_txn={request.square_transaction_id}")
 
-            # 1. Find files in Temp folder with awaiting_payment status
-            print(f"\n📁 Step 1/6: Searching for files in Temp folder...")
-            print(f"   Searching for: customer_email={customer_email}, status=awaiting_payment")
-            logging.info(f"[CONFIRM] Searching Temp folder for {customer_email} with status=awaiting_payment")
+            # 1. Fetch files: either by ID (Individual) or by search (Enterprise)
+            if request.file_ids:
+                # INDIVIDUAL FLOW: Fetch specific files by ID (from upload response)
+                print(f"\n📁 Step 1/6: Fetching files by ID (Individual flow)...")
+                print(f"   File IDs to process: {request.file_ids}")
+                logging.info(f"[CONFIRM] Individual flow: Fetching {len(request.file_ids)} files by ID for {customer_email}")
 
-            try:
-                files_in_temp = await google_drive_service.find_files_by_customer_email(
-                    customer_email=customer_email,
-                    status="awaiting_payment"
-                )
-                print(f"   ✅ Search completed successfully")
-                logging.info(f"[CONFIRM] File search completed, found {len(files_in_temp) if files_in_temp else 0} files")
-            except Exception as e:
-                print(f"   ❌ File search failed: {e}")
-                logging.error(f"[CONFIRM] File search error: {e}", exc_info=True)
-                raise
+                files_in_temp = []
+                for i, file_id in enumerate(request.file_ids, 1):
+                    try:
+                        print(f"   Fetching file {i}/{len(request.file_ids)}: {file_id}...")
+                        file_info = await google_drive_service.get_file_by_id(file_id)
 
-            if not files_in_temp:
-                print(f"   ❌ No files found in Temp folder for {customer_email}")
-                logging.warning(f"[CONFIRM] No files found in Temp for {customer_email}")
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No files found in Temp folder for customer {customer_email}"
-                )
+                        # Security: Verify file belongs to this user
+                        if file_info.get('customer_email') != customer_email:
+                            error_msg = f"File {file_id} does not belong to you"
+                            print(f"   🚫 SECURITY VIOLATION: {error_msg}")
+                            logging.error(f"[CONFIRM] Security violation: {error_msg}")
+                            raise HTTPException(
+                                status_code=403,
+                                detail=error_msg
+                            )
 
-            print(f"   ✅ Found {len(files_in_temp)} file(s) in Temp folder")
-            for i, file_info in enumerate(files_in_temp, 1):
-                print(f"      File {i}: {file_info.get('filename')} (ID: {file_info.get('file_id', 'N/A')[:20]}...)")
-            logging.info(f"[CONFIRM] Found {len(files_in_temp)} files: {[f.get('filename') for f in files_in_temp]}")
+                        # Verify file is awaiting payment
+                        file_status = file_info.get('status')
+                        if file_status != 'awaiting_payment':
+                            error_msg = f"File {file_id} is not awaiting payment (status: {file_status})"
+                            print(f"   ❌ INVALID STATUS: {error_msg}")
+                            logging.error(f"[CONFIRM] Invalid file status: {error_msg}")
+                            raise HTTPException(
+                                status_code=400,
+                                detail=error_msg
+                            )
+
+                        files_in_temp.append(file_info)
+                        print(f"   ✅ File {i}: {file_info.get('filename')}")
+                        logging.info(f"[CONFIRM] File {i} fetched: {file_info.get('filename')}")
+                    except HTTPException:
+                        raise
+                    except Exception as e:
+                        error_msg = f"Failed to fetch file {file_id}: {str(e)}"
+                        print(f"   ❌ ERROR: {error_msg}")
+                        logging.error(f"[CONFIRM] File fetch error: {error_msg}", exc_info=True)
+                        raise HTTPException(
+                            status_code=500,
+                            detail=error_msg
+                        )
+
+                print(f"   ✅ Successfully fetched {len(files_in_temp)} file(s)")
+                for i, file_info in enumerate(files_in_temp, 1):
+                    print(f"      File {i}: {file_info.get('filename')} (ID: {file_info.get('file_id', 'N/A')[:20]}...)")
+                logging.info(f"[CONFIRM] All files fetched: {[f.get('filename') for f in files_in_temp]}")
+
+            else:
+                # ENTERPRISE FLOW: Search by email + status (backward compatible)
+                print(f"\n📁 Step 1/6: Searching for files (Enterprise flow)...")
+                print(f"   Searching for: customer_email={customer_email}, status=awaiting_payment")
+                logging.info(f"[CONFIRM] Enterprise flow: Searching Temp folder for {customer_email} with status=awaiting_payment")
+
+                try:
+                    files_in_temp = await google_drive_service.find_files_by_customer_email(
+                        customer_email=customer_email,
+                        status="awaiting_payment"
+                    )
+                    print(f"   ✅ Search completed successfully")
+                    logging.info(f"[CONFIRM] File search completed, found {len(files_in_temp) if files_in_temp else 0} files")
+                except Exception as e:
+                    print(f"   ❌ File search failed: {e}")
+                    logging.error(f"[CONFIRM] File search error: {e}", exc_info=True)
+                    raise
+
+                if not files_in_temp:
+                    print(f"   ❌ No files found in Temp folder for {customer_email}")
+                    logging.warning(f"[CONFIRM] No files found in Temp for {customer_email}")
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"No files found in Temp folder for customer {customer_email}"
+                    )
+
+                print(f"   ✅ Found {len(files_in_temp)} file(s) in Temp folder")
+                for i, file_info in enumerate(files_in_temp, 1):
+                    print(f"      File {i}: {file_info.get('filename')} (ID: {file_info.get('file_id', 'N/A')[:20]}...)")
+                logging.info(f"[CONFIRM] Found {len(files_in_temp)} files: {[f.get('filename') for f in files_in_temp]}")
 
             # 2. Generate TXN-format transaction ID
             print(f"\n🔢 Step 2/6: Generating transaction ID...")

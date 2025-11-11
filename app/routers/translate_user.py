@@ -525,6 +525,9 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
         f"{total_units} units, ${total_amount:.2f}",
     )
 
+    # Extract file_ids for easy access by frontend (for payment confirmation)
+    uploaded_file_ids = [f["file_id"] for f in stored_files if f["status"] == "stored" and f["file_id"]]
+
     response_data = {
         "success": True,
         "data": {
@@ -532,6 +535,8 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
             "status": "stored",
             "progress": 100,
             "message": "Files uploaded successfully. Ready for payment.",
+            # File IDs for payment confirmation (frontend sends these to /confirm)
+            "uploaded_file_ids": uploaded_file_ids,
             # Pricing information (frontend expects these exact field names)
             "pricing": {
                 "total_pages": total_units,  # Changed from total_units to match frontend

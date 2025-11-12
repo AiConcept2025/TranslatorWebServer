@@ -1222,9 +1222,17 @@ async def confirm_transactions(
     print(f"\n📥 CLIENT REQUEST BODY (RAW):")
     request_dict = request.model_dump()
     print(f"   {request_dict}")
-    print(f"\n🔍 VERIFY: transaction_id in request? {'YES ❌ ERROR!' if 'transaction_id' in request_dict else 'NO ✅ CORRECT'}")
-    print(f"🔍 VERIFY: transaction_ids in request? {'YES ❌ ERROR!' if 'transaction_ids' in request_dict else 'NO ✅ CORRECT'}")
+
+    # Detailed field verification
+    print(f"\n🔍 FIELD VERIFICATION:")
+    print(f"   transaction_id in request: {'YES ✅' if 'transaction_id' in request_dict and request_dict['transaction_id'] else 'NO ❌ MISSING!'}")
+    print(f"   transaction_id value: {request_dict.get('transaction_id', 'NOT PROVIDED')}")
+    print(f"   square_transaction_id: {request_dict.get('square_transaction_id', 'NOT PROVIDED')}")
+    print(f"   file_ids: {request_dict.get('file_ids', 'NOT PROVIDED')}")
+    print(f"   status: {request_dict.get('status', 'NOT PROVIDED')}")
+
     logging.info(f"[CONFIRM ENDPOINT] Client sent: {request_dict}")
+    logging.info(f"[CONFIRM ENDPOINT] transaction_id present: {'YES' if request_dict.get('transaction_id') else 'NO'}")
 
     print(f"\n📋 Request Details:")
     print(f"   Square Transaction ID: {request.square_transaction_id}")

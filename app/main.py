@@ -513,7 +513,7 @@ async def translate_files(
     # Detect customer type (enterprise with company_name vs individual without)
     # IMPORTANT: Do this BEFORE creating folders so we know which structure to create
     company_name = current_user.get("company_name") if current_user else None
-    is_enterprise = company_name is not None
+    is_enterprise = company_name is not None and company_name != ""
 
     # Enhanced customer type logging
     log_step("CUSTOMER TYPE DETECTED", f"{'Enterprise' if is_enterprise else 'Individual'} (company: {company_name})")
@@ -1343,6 +1343,30 @@ async def confirm_transactions(
             from bson.decimal128 import Decimal128
             from decimal import Decimal
 
+            # Validate authentication
+            if not current_user:
+                error_msg = "Authentication required: current_user is None"
+                print(f"   ❌ CRITICAL: {error_msg}")
+                logging.error(f"[CONFIRM] {error_msg}. This should not happen - check auth middleware.")
+                raise HTTPException(
+                    status_code=401,
+                    detail="Authentication required. Please log in again."
+                )
+
+            # Validate customer_email exists
+            customer_email = current_user.get("email")
+            if not customer_email:
+                error_msg = "Invalid JWT: missing email field"
+                print(f"   ❌ CRITICAL: {error_msg}")
+                logging.error(f"[CONFIRM] {error_msg}. JWT: {current_user}")
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid authentication token. Please log in again."
+                )
+
+            print(f"   ✅ Authenticated user: {customer_email}")
+            logging.info(f"[CONFIRM] User authenticated: {customer_email}")
+
             if not request.transaction_id:
                 error_msg = "transaction_id is required"
                 print(f"   ❌ {error_msg}")
@@ -1357,10 +1381,25 @@ async def confirm_transactions(
             logging.info(f"[CONFIRM] Using transaction_id from request: {transaction_id}")
 
             # Determine flow type and collection based on company_name in JWT
-            company_name = current_user.get("company_name") if current_user else None
+            company_name = current_user.get("company_name")
             is_enterprise = company_name is not None and company_name != ""
 
             if is_enterprise:
+                # Verify company exists in database
+                company_doc = await database.company.find_one({"company_name": company_name})
+
+                if not company_doc:
+                    error_msg = f"Invalid company '{company_name}' in JWT token"
+                    print(f"   🚫 SECURITY: {error_msg}")
+                    logging.error(f"[CONFIRM] {error_msg} for user {customer_email}")
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Invalid company credentials. Please re-authenticate."
+                    )
+
+                print(f"   ✅ Company validated: {company_name}")
+                logging.info(f"[CONFIRM] Company validation passed: {company_name}")
+
                 collection = database.translation_transactions
                 flow_type = "Enterprise"
                 print(f"   Flow: {flow_type} (Company: {company_name})")
@@ -1388,16 +1427,90 @@ async def confirm_transactions(
             print(f"   ✅ Found transaction in {collection.name}")
             logging.info(f"[CONFIRM] Found transaction {transaction_id} in {collection.name}")
 
-            # Extract metadata (handle different field names between collections)
-            total_units = existing_transaction.get("number_of_units") or existing_transaction.get("units_count", 0)
-            total_price_raw = existing_transaction.get("total_cost") or existing_transaction.get("total_price", 0)
-            total_price = float(total_price_raw) if isinstance(total_price_raw, Decimal128) else total_price_raw
+            # Authorization check: Verify user has permission to access this transaction
+            print(f"\n🔒 Verifying authorization...")
+
+            if is_enterprise:
+                # Enterprise: Verify transaction belongs to user's company
+                txn_company = existing_transaction.get("company_name")
+
+                if txn_company != company_name:
+                    error_msg = (
+                        f"Authorization denied: User from company '{company_name}' "
+                        f"attempted to access transaction from company '{txn_company}'"
+                    )
+                    print(f"   🚫 {error_msg}")
+                    logging.error(f"[CONFIRM] SECURITY VIOLATION: {error_msg}. User: {customer_email}, Transaction: {transaction_id}")
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You don't have permission to access this transaction"
+                    )
+
+                print(f"   ✅ Authorization passed: Company '{company_name}' owns transaction")
+                logging.info(f"[CONFIRM] Authorization verified: {company_name} accessing {transaction_id}")
+
+            else:
+                # Individual: Verify transaction belongs to current user
+                txn_user = (existing_transaction.get("user_id") or existing_transaction.get("user_email") or "").lower()
+                current_email = (customer_email or "").lower()
+
+                if not txn_user or txn_user != current_email:
+                    error_msg = (
+                        f"Authorization denied: User '{customer_email}' "
+                        f"attempted to access transaction from user '{txn_user}'"
+                    )
+                    print(f"   🚫 {error_msg}")
+                    logging.error(f"[CONFIRM] SECURITY VIOLATION: {error_msg}. Transaction: {transaction_id}")
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You don't have permission to access this transaction"
+                    )
+
+                print(f"   ✅ Authorization passed: User '{customer_email}' owns transaction")
+                logging.info(f"[CONFIRM] Authorization verified: {customer_email} accessing {transaction_id}")
+
+            # Extract metadata with explicit flow-based field access
+            if is_enterprise:
+                total_units = existing_transaction.get("units_count")
+                total_price_raw = existing_transaction.get("total_price")
+                units_field = "units_count"
+                price_field = "total_price"
+            else:
+                total_units = existing_transaction.get("number_of_units")
+                total_price_raw = existing_transaction.get("total_cost")
+                units_field = "number_of_units"
+                price_field = "total_cost"
+
+            # Validate required fields exist
+            if total_units is None:
+                error_msg = f"Transaction {transaction_id} missing required field '{units_field}'"
+                print(f"   ❌ {error_msg}")
+                logging.error(f"[CONFIRM] {error_msg}. Flow: {flow_type}, Collection: {collection.name}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Transaction data incomplete: missing {units_field}"
+                )
+
+            if total_price_raw is None:
+                error_msg = f"Transaction {transaction_id} missing required field '{price_field}'"
+                print(f"   ❌ {error_msg}")
+                logging.error(f"[CONFIRM] {error_msg}. Flow: {flow_type}, Collection: {collection.name}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Transaction data incomplete: missing {price_field}"
+                )
+
+            # Convert Decimal128 to float (handle MongoDB numeric type)
+            total_price = float(total_price_raw) if isinstance(total_price_raw, Decimal128) else float(total_price_raw)
 
             print(f"   Transaction details:")
             print(f"      Transaction ID: {transaction_id}")
-            print(f"      Total Units: {total_units}")
-            print(f"      Total Price: ${total_price}")
-            logging.info(f"[CONFIRM] Transaction details: units={total_units}, price=${total_price}")
+            print(f"      Total Units: {total_units} (field: {units_field})")
+            print(f"      Total Price: ${total_price} (field: {price_field})")
+            logging.info(
+                f"[CONFIRM] Transaction details: id={transaction_id}, units={total_units}, "
+                f"price=${total_price}, flow={flow_type}, fields=({units_field}, {price_field})"
+            )
 
             # 3. Update transaction with payment/approval confirmation
             print(f"\n💾 Step 3/6: Updating transaction ({flow_type})...")

@@ -1367,45 +1367,22 @@ async def confirm_transactions(
             print(f"   ✅ Authenticated user: {customer_email}")
             logging.info(f"[CONFIRM] User authenticated: {customer_email}")
 
-            # Get transaction_id from request or fallback to file metadata (backward compatibility)
-            transaction_id = request.transaction_id
-
-            if not transaction_id:
-                # BACKWARD COMPATIBILITY: Extract from file metadata if not provided
-                print(f"   ⚠️  transaction_id not in request, extracting from file metadata (DEPRECATED)")
-                logging.warning(
-                    f"[CONFIRM] DEPRECATED: transaction_id not provided in request. "
-                    f"Falling back to file metadata extraction. "
-                    f"Please update frontend to send transaction_id."
+            # transaction_id is REQUIRED - frontend must send it from stored state
+            if not request.transaction_id:
+                error_msg = (
+                    "transaction_id is required. Frontend must send the transaction_id "
+                    "that was returned from /translate-user and stored in browser state."
+                )
+                print(f"   ❌ {error_msg}")
+                logging.error(f"[CONFIRM] {error_msg}")
+                raise HTTPException(
+                    status_code=400,
+                    detail="transaction_id is required"
                 )
 
-                if not files_in_temp:
-                    error_msg = "No files found and no transaction_id provided"
-                    print(f"   ❌ {error_msg}")
-                    logging.error(f"[CONFIRM] {error_msg}")
-                    raise HTTPException(
-                        status_code=400,
-                        detail=error_msg
-                    )
-
-                # Extract transaction_id from first file's metadata
-                first_file = files_in_temp[0]
-                transaction_id = first_file.get('transaction_id')
-
-                if not transaction_id:
-                    error_msg = f"File {first_file.get('filename')} has no transaction_id in metadata"
-                    print(f"   ❌ {error_msg}")
-                    logging.error(f"[CONFIRM] {error_msg}")
-                    raise HTTPException(
-                        status_code=404,
-                        detail=error_msg
-                    )
-
-                print(f"   ✅ Extracted transaction_id from file metadata: {transaction_id}")
-                logging.info(f"[CONFIRM] Using transaction_id from file metadata: {transaction_id}")
-            else:
-                print(f"   ✅ Using transaction_id from request: {transaction_id}")
-                logging.info(f"[CONFIRM] Using transaction_id from request: {transaction_id}")
+            transaction_id = request.transaction_id
+            print(f"   ✅ Using transaction_id from request: {transaction_id}")
+            logging.info(f"[CONFIRM] Using transaction_id from request: {transaction_id}")
 
             # Determine flow type and collection based on company_name in JWT
             company_name = current_user.get("company_name")

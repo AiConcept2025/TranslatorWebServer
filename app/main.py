@@ -38,6 +38,13 @@ from slowapi.errors import RateLimitExceeded
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle application startup and shutdown events."""
+    # Configure logging FIRST (before any logging calls)
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level.upper(), logging.INFO),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        force=True  # Override any existing configuration
+    )
+
     # Startup
     logging.info(f"Starting {settings.app_name} v{settings.app_version}")
 
@@ -972,6 +979,11 @@ class TransactionConfirmRequest(BaseModel):
         default=True,
         description="True if payment approved, False if failed"
     )
+    transaction_id: Optional[str] = Field(
+        None,
+        description="Transaction ID from /translate-user (Individual flow only)",
+        example="USER123456"
+    )
     file_ids: List[str] = Field(
         default=[],
         description="List of Google Drive file IDs to process (from upload response). If empty, falls back to search (enterprise flow)",
@@ -1178,16 +1190,16 @@ async def confirm_transactions(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Confirm Square payment and create transaction OR delete files on failure.
+    Confirm Square payment and update existing transaction OR delete files on failure.
 
     This endpoint:
     - IF payment succeeded (status=True):
       1. Find customer's files in Temp folder
-      2. Generate TXN-format transaction ID
-      3. Create transaction record in user_transactions
+      2. Find existing USER###### transaction by Square transaction ID
+      3. Update transaction status to 'processing'
       4. Update file metadata with transaction_id
       5. Move files from Temp/ to Inbox/
-      6. Return success with transaction_id
+      6. Return success with transaction_id (no duplicate creation)
 
     - IF payment failed (status=False):
       1. Find customer's files in Temp folder
@@ -1326,76 +1338,105 @@ async def confirm_transactions(
                     print(f"      File {i}: {file_info.get('filename')} (ID: {file_info.get('file_id', 'N/A')[:20]}...)")
                 logging.info(f"[CONFIRM] Found {len(files_in_temp)} files: {[f.get('filename') for f in files_in_temp]}")
 
-            # 2. Generate TXN-format transaction ID
-            print(f"\n🔢 Step 2/6: Generating transaction ID...")
-            try:
-                transaction_id = generate_translation_transaction_id()
-                print(f"   ✅ Generated transaction ID: {transaction_id}")
-                logging.info(f"[CONFIRM] Generated transaction_id={transaction_id}")
-            except Exception as e:
-                print(f"   ❌ Transaction ID generation failed: {e}")
-                logging.error(f"[CONFIRM] Transaction ID generation error: {e}", exc_info=True)
-                raise
-
-            # 3. Extract metadata from first file to get pricing/language info
-            print(f"\n📊 Step 3/6: Extracting metadata from files...")
-            first_file = files_in_temp[0]
-            source_language = first_file.get('source_language', 'unknown')
-            target_language = first_file.get('target_language', 'unknown')
-            page_count = first_file.get('page_count', 0)
-            total_units = sum(file_info.get('page_count', 0) for file_info in files_in_temp)
-            total_price = total_units * 0.01  # $0.01 per page
-
-            print(f"   Metadata extracted:")
-            print(f"      Source Language: {source_language}")
-            print(f"      Target Language: {target_language}")
-            print(f"      Total Units: {total_units}")
-            print(f"      Total Price: ${total_price}")
-            logging.info(f"[CONFIRM] Metadata: source={source_language}, target={target_language}, units={total_units}, price=${total_price}")
-
-            # 4. Create transaction record in user_transactions collection
-            print(f"\n💾 Step 4/6: Creating transaction record in database...")
+            # 2. Get transaction_id from request (UNIFIED - Both Individual and Enterprise)
+            print(f"\n🔍 Step 2/6: Getting transaction ID...")
             from bson.decimal128 import Decimal128
             from decimal import Decimal
 
-            documents = []
-            for file_info in files_in_temp:
-                documents.append({
-                    "file_name": file_info.get('filename'),
-                    "original_url": file_info.get('google_drive_url'),
-                    "status": "pending",
-                    "uploaded_at": datetime.now(timezone.utc)
-                })
+            if not request.transaction_id:
+                error_msg = "transaction_id is required"
+                print(f"   ❌ {error_msg}")
+                logging.error(f"[CONFIRM] {error_msg}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=error_msg
+                )
 
-            transaction_data = {
-                "transaction_id": transaction_id,
-                "user_id": customer_email,
-                "source_language": source_language,
-                "target_language": target_language,
-                "units_count": total_units,
-                "price_per_unit": Decimal128(Decimal("0.01")),
-                "total_price": Decimal128(Decimal(str(total_price))),
-                "currency": "usd",
-                "unit_type": "page",
-                "status": "processing",
-                "documents": documents,
-                "payment_method": "square",
-                "square_transaction_id": request.square_transaction_id,
-                "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc)
-            }
+            transaction_id = request.transaction_id
+            print(f"   ✅ Using transaction_id from request: {transaction_id}")
+            logging.info(f"[CONFIRM] Using transaction_id from request: {transaction_id}")
 
+            # Determine flow type and collection based on company_name in JWT
+            company_name = current_user.get("company_name") if current_user else None
+            is_enterprise = company_name is not None and company_name != ""
+
+            if is_enterprise:
+                collection = database.translation_transactions
+                flow_type = "Enterprise"
+                print(f"   Flow: {flow_type} (Company: {company_name})")
+                logging.info(f"[CONFIRM] Enterprise flow detected: {company_name}")
+            else:
+                collection = database.user_transactions
+                flow_type = "Individual"
+                print(f"   Flow: {flow_type}")
+                logging.info(f"[CONFIRM] Individual flow detected")
+
+            # Find existing transaction in appropriate collection
+            existing_transaction = await collection.find_one({
+                "transaction_id": transaction_id
+            })
+
+            if not existing_transaction:
+                error_msg = f"No transaction found with transaction_id={transaction_id} in {collection.name}"
+                print(f"   ❌ {error_msg}")
+                logging.error(f"[CONFIRM] {error_msg}")
+                raise HTTPException(
+                    status_code=404,
+                    detail=error_msg
+                )
+
+            print(f"   ✅ Found transaction in {collection.name}")
+            logging.info(f"[CONFIRM] Found transaction {transaction_id} in {collection.name}")
+
+            # Extract metadata (handle different field names between collections)
+            total_units = existing_transaction.get("number_of_units") or existing_transaction.get("units_count", 0)
+            total_price_raw = existing_transaction.get("total_cost") or existing_transaction.get("total_price", 0)
+            total_price = float(total_price_raw) if isinstance(total_price_raw, Decimal128) else total_price_raw
+
+            print(f"   Transaction details:")
+            print(f"      Transaction ID: {transaction_id}")
+            print(f"      Total Units: {total_units}")
+            print(f"      Total Price: ${total_price}")
+            logging.info(f"[CONFIRM] Transaction details: units={total_units}, price=${total_price}")
+
+            # 3. Update transaction with payment/approval confirmation
+            print(f"\n💾 Step 3/6: Updating transaction ({flow_type})...")
             try:
-                result = await database.user_transactions.insert_one(transaction_data)
-                print(f"   ✅ Transaction record created: {result.inserted_id}")
-                logging.info(f"[CONFIRM] Transaction record created: {transaction_id}, MongoDB ID: {result.inserted_id}")
-            except Exception as e:
-                print(f"   ❌ Database insert failed: {e}")
-                logging.error(f"[CONFIRM] Database insert error: {e}", exc_info=True)
-                raise
+                update_fields = {
+                    "status": "processing",
+                    "updated_at": datetime.now(timezone.utc)
+                }
 
-            # 5. Update file metadata with transaction_id
-            print(f"\n🏷️  Step 5/6: Updating file metadata with transaction_id...")
+                # Add payment/approval fields based on flow type
+                if is_enterprise:
+                    update_fields["approval_status"] = "APPROVED"
+                    update_fields["approved_at"] = datetime.now(timezone.utc)
+                    print(f"   Setting approval_status=APPROVED")
+                else:
+                    update_fields["square_payment_id"] = request.square_transaction_id
+                    update_fields["payment_status"] = "COMPLETED"
+                    update_fields["payment_date"] = datetime.now(timezone.utc)
+                    print(f"   Setting payment_status=COMPLETED, square_payment_id={request.square_transaction_id}")
+
+                update_result = await collection.update_one(
+                    {"transaction_id": transaction_id},
+                    {"$set": update_fields}
+                )
+
+                if update_result.modified_count > 0:
+                    print(f"   ✅ Transaction updated")
+                    logging.info(f"[CONFIRM] Transaction {transaction_id} updated successfully")
+                else:
+                    print(f"   ⚠️  Transaction not updated (may already be updated)")
+                    logging.warning(f"[CONFIRM] Transaction {transaction_id} not modified")
+
+            except Exception as e:
+                print(f"   ❌ Failed to update transaction: {e}")
+                logging.error(f"[CONFIRM] Transaction update error: {e}", exc_info=True)
+                # Don't raise - continue with file operations
+
+            # 4. Update file metadata
+            print(f"\n🏷️  Step 4/6: Updating file metadata...")
             metadata_success_count = 0
             metadata_fail_count = 0
 
@@ -1406,13 +1447,20 @@ async def confirm_transactions(
                 if file_id:
                     try:
                         print(f"   Updating file {i}/{len(files_in_temp)}: {filename[:40]}...")
+                        metadata = {
+                            'transaction_id': transaction_id,
+                            'status': 'processing'
+                        }
+
+                        # Add flow-specific timestamp
+                        if is_enterprise:
+                            metadata['approved_at'] = datetime.now(timezone.utc).isoformat()
+                        else:
+                            metadata['payment_date'] = datetime.now(timezone.utc).isoformat()
+
                         await google_drive_service.update_file_metadata(
                             file_id=file_id,
-                            metadata={
-                                'transaction_id': transaction_id,
-                                'status': 'processing',
-                                'payment_date': datetime.now(timezone.utc).isoformat()
-                            }
+                            metadata=metadata
                         )
                         metadata_success_count += 1
                         print(f"   ✓ Metadata updated for {filename[:40]}")
@@ -1421,20 +1469,21 @@ async def confirm_transactions(
                         print(f"   ✗ Failed to update metadata for {filename[:40]}: {e}")
                         logging.error(f"[CONFIRM] Metadata update failed for {file_id}: {e}")
 
-            print(f"   ✅ Metadata updates: {metadata_success_count} succeeded, {metadata_fail_count} failed")
+            print(f"   ✅ Updated {metadata_success_count}/{len(files_in_temp)} files")
             logging.info(f"[CONFIRM] Metadata updates: {metadata_success_count}/{len(files_in_temp)} succeeded")
 
-            # 6. Move files from Temp to Inbox
-            print(f"\n📂 Step 6/6: Moving files from Temp to Inbox...")
+            # 5. Move files from Temp to Inbox
+            print(f"\n📂 Step 5/6: Moving files from Temp to Inbox...")
             file_ids_to_move = [file_info.get('file_id') for file_info in files_in_temp if file_info.get('file_id')]
 
             print(f"   Files to move: {len(file_ids_to_move)}")
+            moved_count = 0
             if file_ids_to_move:
                 try:
                     move_result = await google_drive_service.move_files_to_inbox_on_payment_success(
                         customer_email=customer_email,
                         file_ids=file_ids_to_move,
-                        company_name=None  # Individual user
+                        company_name=company_name if is_enterprise else None
                     )
 
                     moved_count = move_result.get('moved_successfully', 0)
@@ -1451,23 +1500,27 @@ async def confirm_transactions(
                     logging.error(f"[CONFIRM] File movement error: {e}", exc_info=True)
                     raise
 
-            print(f"\n✅ PAYMENT CONFIRMATION COMPLETE")
+            print(f"\n✅ CONFIRMATION COMPLETE ({flow_type})")
             print(f"   Transaction ID: {transaction_id}")
             print(f"   Files processed: {len(files_in_temp)}")
             print(f"   Total amount: ${total_price}")
+            if is_enterprise:
+                print(f"   Company: {company_name}")
             print("=" * 80 + "\n")
 
             return JSONResponse(
                 status_code=200,
                 content={
                     "success": True,
-                    "message": "Payment confirmed and transaction created successfully",
+                    "message": "Transaction confirmed successfully",
                     "data": {
                         "transaction_id": transaction_id,
                         "confirmed_transactions": 1,
-                        "moved_files": moved_count if file_ids_to_move else 0,
+                        "moved_files": moved_count,
                         "total_amount": total_price,
-                        "customer_email": customer_email
+                        "company_name": company_name,
+                        "customer_email": customer_email,
+                        "flow_type": flow_type
                     }
                 }
             )

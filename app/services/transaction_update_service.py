@@ -52,6 +52,39 @@ def normalize_filename_for_comparison(filename: str) -> str:
     return name_without_ext.lower()
 
 
+def generate_translated_filename(original_filename: str) -> str:
+    """
+    Generate translated filename by adding '_translated' suffix before extension.
+
+    Args:
+        original_filename: Original filename (e.g., "report.pdf" or "report_translated.pdf")
+
+    Returns:
+        Translated filename (e.g., "report_translated.pdf")
+
+    Examples:
+        "report.pdf" → "report_translated.pdf"
+        "document.docx" → "document_translated.docx"
+        "file_translated.pdf" → "file_translated.pdf" (idempotent - no double suffix)
+        "My.Document.pdf" → "My.Document_translated.pdf"
+
+    Note:
+        This function is idempotent - calling it multiple times on same filename
+        will not add multiple _translated suffixes.
+    """
+    import os
+
+    # Split filename and extension
+    base_name, extension = os.path.splitext(original_filename)
+
+    # Check if already has _translated suffix (idempotency check)
+    if base_name.endswith('_translated'):
+        return original_filename
+
+    # Add _translated suffix before extension
+    return f"{base_name}_translated{extension}"
+
+
 def normalize_filename_for_lookup(file_name: str) -> str:
     """
     DEPRECATED: Use normalize_filename_for_comparison instead.
@@ -606,6 +639,29 @@ class TransactionUpdateService:
             translated_name = self._generate_translated_name(file_name)
             logger.debug(f"Generated translated_name: {translated_name}")
 
+            # Enhanced logging: Show exactly what will be updated
+            logger.info("=" * 80)
+            logger.info("PREPARING DATABASE UPDATE (Individual)")
+            logger.info("=" * 80)
+            logger.info(
+                "Fields to update in user_transactions",
+                extra={
+                    "transaction_id": transaction_id,
+                    "document_index": document_index,
+                    "fields_to_update": {
+                        "translated_url": file_url,
+                        "translated_name": translated_name,
+                        "translated_at": "datetime.now(timezone.utc)",
+                        "updated_at": "datetime.now(timezone.utc)"
+                    },
+                    "increment_completed_documents": True
+                }
+            )
+            logger.info(f"Document index: {document_index}")
+            logger.info(f"Setting translated_url: {file_url}")
+            logger.info(f"Setting translated_name: {translated_name}")
+            logger.info(f"Will increment completed_documents counter")
+
             # Update the specific document in the array with IDEMPOTENCY guard
             # NOTE: We already found the correct document_index above by matching lookup_name,
             # so we only need transaction_id in the filter. Adding file_name here would cause
@@ -648,6 +704,31 @@ class TransactionUpdateService:
             )
 
             update_result = await collection.update_one(update_filter, update_operations)
+
+            # Enhanced update result logging
+            logger.info("=" * 80)
+            logger.info("DATABASE UPDATE RESULT")
+            logger.info("=" * 80)
+            logger.info(
+                "MongoDB update_one result",
+                extra={
+                    "matched_count": update_result.matched_count,
+                    "modified_count": update_result.modified_count,
+                    "update_successful": update_result.matched_count > 0 and update_result.modified_count > 0,
+                    "transaction_id": transaction_id,
+                    "document_index": document_index
+                }
+            )
+            logger.info(f"Matched: {update_result.matched_count}")
+            logger.info(f"Modified: {update_result.modified_count}")
+
+            if update_result.matched_count == 0:
+                logger.error("⚠️  UPDATE FAILED - No document matched the filter!")
+                logger.error(f"Filter used: {update_filter}")
+            elif update_result.modified_count == 0:
+                logger.warning("⚠️  UPDATE MATCHED but MODIFIED 0 - Document may already be updated (idempotency check)")
+            else:
+                logger.info(f"✅ Successfully updated document {document_index} in transaction {transaction_id}")
 
             logger.debug(
                 f"DB UPDATE RESULT (Individual)",

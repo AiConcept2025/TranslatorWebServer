@@ -567,7 +567,7 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
                 "total_amount": total_amount,
                 "currency": "usd",  # Lowercase to match frontend expectations
                 "customer_type": "individual",  # Added for frontend
-                "transaction_ids": [batch_square_tx_id],  # ✅ FIX: Single ID in array for backward compatibility
+                "transaction_ids": [batch_transaction_id] if batch_transaction_id else [],  # ✅ Database transaction ID (USER######), not Square ID
             },
             # File information
             "files": {

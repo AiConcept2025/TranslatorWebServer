@@ -5,7 +5,7 @@ Submit endpoint for handling file submission requests from clients.
 import logging
 import time
 from typing import Dict, Tuple, Optional
-from fastapi import APIRouter, HTTPException, status as http_status, Depends
+from fastapi import APIRouter, HTTPException, status as http_status, Depends, Request
 from fastapi.responses import JSONResponse
 
 from app.models.requests import SubmitRequest
@@ -95,6 +95,7 @@ def _cache_webhook_result(transaction_id: str, file_name: str, file_url: str, re
     }
 )
 async def submit_file(
+    raw_request: Request,
     request: SubmitRequest,
     current_user: Optional[dict] = Depends(get_optional_user)
 ):
@@ -118,9 +119,30 @@ async def submit_file(
     - 404: Transaction or document not found
     - 500: Database or server error
     """
-    # Enhanced request logging with all parameters
+    # ===================================================================
+    # ENHANCED RAW REQUEST LOGGING (for GoogleTranslator debugging)
+    # ===================================================================
     logger.info("=" * 80)
-    logger.info("SUBMIT ENDPOINT - Incoming Request")
+    logger.info("SUBMIT ENDPOINT - RAW REQUEST CAPTURE")
+    logger.info("=" * 80)
+
+    # Log request metadata
+    logger.info(f"🔍 Request Method: {raw_request.method}")
+    logger.info(f"🔍 Request URL: {raw_request.url}")
+    logger.info(f"🔍 Client Host: {raw_request.client.host if raw_request.client else 'Unknown'}")
+    logger.info(f"🔍 Content-Type: {raw_request.headers.get('content-type', 'Not specified')}")
+
+    # Log all headers (for debugging webhook authentication)
+    logger.info("📋 Request Headers:")
+    for header_name, header_value in raw_request.headers.items():
+        # Mask authorization tokens for security
+        if header_name.lower() in ['authorization', 'x-api-key']:
+            logger.info(f"   {header_name}: {header_value[:20]}...MASKED")
+        else:
+            logger.info(f"   {header_name}: {header_value}")
+
+    logger.info("=" * 80)
+    logger.info("SUBMIT ENDPOINT - VALIDATED REQUEST DATA")
     logger.info("=" * 80)
 
     # Log authentication status

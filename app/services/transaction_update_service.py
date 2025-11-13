@@ -338,6 +338,7 @@ class TransactionUpdateService:
                     f"documents.{document_index}.translated_url": file_url,
                     f"documents.{document_index}.translated_name": translated_name,
                     f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
+                    f"documents.{document_index}.status": "completed",
                     "updated_at": datetime.now(timezone.utc)
                 },
                 # Increment completed_documents counter ONLY after successful match
@@ -678,6 +679,7 @@ class TransactionUpdateService:
                     f"documents.{document_index}.translated_url": file_url,
                     f"documents.{document_index}.translated_name": translated_name,
                     f"documents.{document_index}.translated_at": datetime.now(timezone.utc),
+                    f"documents.{document_index}.status": "completed",
                     "updated_at": datetime.now(timezone.utc)
                 },
                 # Increment completed_documents counter ONLY after successful match

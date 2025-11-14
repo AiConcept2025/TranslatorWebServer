@@ -273,11 +273,20 @@ async def update_subscription(
     """
     timestamp = datetime.now(timezone.utc).isoformat()
     logger.info(f"🔍 [{timestamp}] PATCH /api/subscriptions/{subscription_id} - START")
-    logger.info(f"📥 Request Data: subscription_id={subscription_id}, "
-               f"update_fields={update_data.model_dump(exclude_unset=True)}")
-    logger.info(f"👤 Admin User: {admin.get('email', 'unknown')}")
+    logger.info(f"📥 Request Parameters:")
+    logger.info(f"   - subscription_id: {subscription_id}")
+    logger.info(f"   - Admin User: {admin.get('email', 'unknown')}")
+    logger.info(f"📦 Request Body (update_data):")
+
+    # Log full request body with all fields
+    update_dict = update_data.model_dump(exclude_unset=True)
+    for key, value in update_dict.items():
+        logger.info(f"   - {key}: {value}")
+
+    logger.info(f"📋 Full Update Payload: {update_dict}")
 
     try:
+        logger.info(f"🔄 Calling subscription_service.update_subscription()...")
         subscription = await subscription_service.update_subscription(subscription_id, update_data)
         logger.info(f"🔎 Database Update Result: found={subscription is not None}")
 
@@ -285,8 +294,11 @@ async def update_subscription(
             logger.warning(f"❌ Subscription not found for update: id={subscription_id}")
             raise HTTPException(status_code=404, detail="Subscription not found")
 
-        logger.info(f"✅ Subscription updated: id={subscription['_id']}, "
-                   f"status={subscription['status']}")
+        logger.info(f"✅ Subscription updated successfully:")
+        logger.info(f"   - _id: {subscription['_id']}")
+        logger.info(f"   - company_name: {subscription.get('company_name')}")
+        logger.info(f"   - status: {subscription['status']}")
+        logger.info(f"   - updated_at: {subscription['updated_at']}")
 
         response_data = {
             "success": True,
@@ -297,14 +309,22 @@ async def update_subscription(
                 "updated_at": subscription["updated_at"].isoformat()
             }
         }
-        logger.info(f"📤 Response: {response_data}")
+        logger.info(f"📤 Response Data: {response_data}")
         return JSONResponse(content=response_data)
 
     except SubscriptionError as e:
-        logger.error(f"❌ Update failed: {e}", exc_info=True)
+        logger.error(f"❌ SubscriptionError during update:", exc_info=True)
+        logger.error(f"   - Error message: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"❌ Unexpected error: {e}", exc_info=True)
+        logger.error(f"❌ Unexpected error during subscription update:", exc_info=True)
+        logger.error(f"   - Error message: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Subscription ID: {subscription_id}")
+        logger.error(f"   - Update data: {update_dict}")
         raise HTTPException(status_code=500, detail="Failed to update subscription")
 
 

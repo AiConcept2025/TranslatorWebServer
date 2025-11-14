@@ -2767,6 +2767,11 @@ async def initialize_services():
     else:
         logging.warning("Stripe payment service not configured")
 
+    # Initialize scheduler service for automated tasks
+    from app.services.scheduler_service import scheduler_service
+    scheduler_service.start()
+    logging.info("Scheduler service started - automated tasks enabled")
+
     # Initialize file service
     try:
         from app.services.file_service import file_service
@@ -2780,6 +2785,14 @@ async def initialize_services():
 async def cleanup_services():
     """Cleanup services on shutdown."""
     logging.info("Cleaning up services...")
+
+    # Stop scheduler service
+    try:
+        from app.services.scheduler_service import scheduler_service
+        scheduler_service.stop()
+        logging.info("Scheduler service stopped")
+    except Exception as e:
+        logging.warning(f"Failed to stop scheduler service: {e}")
 
     # Disconnect from MongoDB
     from app.database import database

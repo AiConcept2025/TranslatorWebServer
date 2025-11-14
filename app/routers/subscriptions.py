@@ -4,6 +4,7 @@ Subscription management API endpoints.
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from typing import Optional, List
 import logging
 from datetime import datetime, timezone
@@ -265,6 +266,7 @@ async def options_subscription(subscription_id: str):
 @router.patch("/{subscription_id}")
 async def update_subscription(
     subscription_id: str,
+    request: Request,
     update_data: SubscriptionUpdate,
     admin: dict = Depends(get_admin_user)
 ):
@@ -276,10 +278,59 @@ async def update_subscription(
     logger.info(f"📥 Request Parameters:")
     logger.info(f"   - subscription_id: {subscription_id}")
     logger.info(f"   - Admin User: {admin.get('email', 'unknown')}")
+
+    # ============================================================
+    # STEP 1: Log Raw Request Body (Before Pydantic Validation)
+    # ============================================================
+    try:
+        raw_body = await request.body()
+        raw_body_str = raw_body.decode('utf-8') if raw_body else "{}"
+        logger.info(f"📨 Raw Request Body: {raw_body_str}")
+    except Exception as e:
+        logger.error(f"❌ Failed to read raw request body: {e}")
+        raw_body_str = "<unable to read>"
+
+    # ============================================================
+    # STEP 2: Pydantic Validation Logging
+    # ============================================================
+    # NOTE: FastAPI automatically validates the request body against the SubscriptionUpdate
+    # Pydantic model BEFORE this function is called. If validation fails, FastAPI returns
+    # a 422 Unprocessable Entity response with detailed error messages.
+    # If we reach this point, validation has already succeeded.
+    # Validation errors are automatically logged by FastAPI's exception handlers.
+    logger.info(f"🔍 Validating request with Pydantic SubscriptionUpdate model...")
+
+    # Get all fields from the Pydantic model
+    all_fields = set(SubscriptionUpdate.model_fields.keys())
+
+    # Get only fields that were actually set in the request
+    update_dict = update_data.model_dump(exclude_unset=True)
+    set_fields = set(update_dict.keys())
+    unset_fields = all_fields - set_fields
+
+    logger.info(f"✅ Pydantic validation passed")
+
+    # ============================================================
+    # STEP 3: Field-by-Field Logging (Type + Value + Set Status)
+    # ============================================================
+    logger.info(f"📋 Parsed Fields (Set={len(set_fields)}, Unset={len(unset_fields)}):")
+
+    # Log each SET field with type and value
+    for key, value in update_dict.items():
+        value_type = type(value).__name__
+        # Truncate long values for logging
+        value_display = str(value) if len(str(value)) < 100 else f"{str(value)[:97]}..."
+        logger.info(f"  ✓ {key}: {value_display} (type: {value_type})")
+
+    # Log unset fields
+    if unset_fields:
+        logger.info(f"❌ Unset Fields: {', '.join(sorted(unset_fields))}")
+    else:
+        logger.info(f"❌ Unset Fields: None (all fields provided)")
+
     logger.info(f"📦 Request Body (update_data):")
 
     # Log full request body with all fields
-    update_dict = update_data.model_dump(exclude_unset=True)
     for key, value in update_dict.items():
         logger.info(f"   - {key}: {value}")
 

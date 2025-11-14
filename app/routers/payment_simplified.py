@@ -36,6 +36,13 @@ class PaymentSuccessRequest(BaseModel):
     # Square transaction ID (for user payments)
     square_transaction_id: Optional[str] = None
 
+    # File IDs from upload response (eliminates need for Drive search)
+    file_ids: Optional[list[str]] = Field(
+        None,
+        alias='fileIds',
+        description="File IDs from upload response - enables direct lookup instead of search"
+    )
+
     # Payment details
     amount: Optional[float] = None
     currency: Optional[str] = "USD"
@@ -67,7 +74,8 @@ async def process_payment_files_background(
     amount: Optional[float],
     currency: Optional[str],
     payment_metadata: Optional[PaymentMetadata] = None,
-    transaction_id: Optional[str] = None
+    transaction_id: Optional[str] = None,
+    file_ids: Optional[list[str]] = None
 ):
     """
     Background task to move files from Temp to Inbox and persist payment data.
@@ -75,6 +83,7 @@ async def process_payment_files_background(
 
     Args:
         transaction_id: Pre-generated transaction ID from payment handler (if available)
+        file_ids: File IDs from upload response (enables direct lookup, eliminates Drive search)
     """
     import time
     task_start = time.time()
@@ -136,26 +145,41 @@ async def process_payment_files_background(
             print(f"⚠️  Failed to persist payment: {str(e)}")
             logging.warning(f"Failed to persist payment {payment_intent_id}: {e}")
 
-        # Find files awaiting payment
-        print(f"\n🔍 Step 2: Finding files for customer...")
+        # Get files - use direct lookup if file_ids provided, otherwise search
+        print(f"\n🔍 Step 2: Locating files for customer...")
         find_start = time.time()
-        files_to_move = await google_drive_service.find_files_by_customer_email(
-            customer_email=customer_email,
-            status="awaiting_payment"
-        )
+
+        if file_ids:
+            # OPTIMIZED: Direct file ID lookup (no search)
+            print(f"   Using direct file ID lookup ({len(file_ids)} files)")
+            files_to_move = []
+            for i, file_id in enumerate(file_ids, 1):
+                try:
+                    file_info = await google_drive_service.get_file_by_id(file_id)
+                    files_to_move.append(file_info)
+                    print(f"   ✓ {i}/{len(file_ids)}: {file_info.get('filename')} (ID: {file_id[:20]}...)")
+                except Exception as e:
+                    logging.warning(f"Failed to fetch file {file_id}: {e}")
+                    print(f"   ✗ {i}/{len(file_ids)}: Failed to fetch {file_id[:20]}... - {str(e)}")
+        else:
+            # FALLBACK: Search by email (legacy, finds all files - may include old uploads)
+            print(f"   ⚠️  No file_ids provided - falling back to Drive search (may find old files)")
+            files_to_move = await google_drive_service.find_files_by_customer_email(
+                customer_email=customer_email,
+                status="awaiting_payment"
+            )
+
         find_time = (time.time() - find_start) * 1000
-        print(f"⏱️  File search completed in {find_time:.2f}ms")
+        print(f"⏱️  File lookup completed in {find_time:.2f}ms")
 
         if not files_to_move:
-            print(f"⚠️  No pending files found for {customer_email}")
+            print(f"⚠️  No files found for {customer_email}")
             total_time = (time.time() - task_start) * 1000
             print(f"⏱️  BACKGROUND TASK TOTAL TIME: {total_time:.2f}ms")
             print("=" * 80 + "\n")
             return
 
-        print(f"\n✅ Found {len(files_to_move)} files to move:")
-        for i, file_info in enumerate(files_to_move, 1):
-            print(f"   {i}. {file_info.get('filename')} (ID: {file_info.get('file_id')[:20]}...)")
+        print(f"\n✅ Located {len(files_to_move)} files to process")
 
         # Create translation transaction record
         print(f"\n💾 Step 2.5: Creating translation transaction record...")
@@ -332,7 +356,7 @@ async def handle_payment_success(
 
         transaction_create_time = (time.time() - transaction_create_start) * 1000
 
-        # Schedule background file processing (pass transaction_id)
+        # Schedule background file processing (pass transaction_id and file_ids)
         task_schedule_start = time.time()
         background_tasks.add_task(
             process_payment_files_background,
@@ -341,7 +365,8 @@ async def handle_payment_success(
             amount=request.amount,
             currency=request.currency,
             payment_metadata=request.metadata,
-            transaction_id=transaction_id  # Pass pre-generated transaction_id
+            transaction_id=transaction_id,  # Pass pre-generated transaction_id
+            file_ids=request.file_ids  # Pass file IDs for direct lookup (eliminates search)
         )
         task_schedule_time = (time.time() - task_schedule_start) * 1000
 

@@ -215,3 +215,127 @@ class InvoiceListResponse(BaseModel):
             ]
         }
     }
+
+
+# ============================================================================
+# Invoice Create/Update Models
+# ============================================================================
+
+class InvoiceCreate(BaseModel):
+    """
+    Schema for creating a new invoice.
+
+    All fields are required except pdf_url which is optional.
+    """
+    company_name: str = Field(..., description="Company name (e.g., 'Acme Health LLC')")
+    subscription_id: str = Field(..., description="Subscription identifier linked to this invoice")
+    invoice_number: str = Field(..., description="Unique invoice number (e.g., INV-2025-001)")
+    invoice_date: str = Field(..., description="Invoice date in ISO 8601 format")
+    due_date: str = Field(..., description="Payment due date in ISO 8601 format")
+    total_amount: float = Field(..., ge=0, description="Total invoice amount in dollars (e.g., 106.00)")
+    tax_amount: float = Field(..., ge=0, description="Tax amount in dollars (e.g., 6.00)")
+    status: str = Field(..., description="Invoice status: sent | paid | overdue | cancelled")
+    pdf_url: Optional[str] = Field(None, description="URL to the invoice PDF document")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'company_name': 'Acme Health LLC',
+                'subscription_id': 'sub_abc123',
+                'invoice_number': 'INV-2025-001',
+                'invoice_date': '2025-10-08T00:07:00.396Z',
+                'due_date': '2025-11-07T00:07:00.396Z',
+                'total_amount': 106.00,
+                'tax_amount': 6.00,
+                'status': 'sent',
+                'pdf_url': 'https://storage.example.com/invoices/INV-2025-001.pdf'
+            }
+        }
+    }
+
+
+class InvoiceUpdate(BaseModel):
+    """
+    Schema for updating an existing invoice.
+
+    All fields are optional. Only provided fields will be updated.
+    Note: company_name, subscription_id, and invoice_number are immutable and will be ignored.
+    """
+    status: Optional[str] = Field(None, description="Invoice status: sent | paid | overdue | cancelled")
+    invoice_date: Optional[str] = Field(None, description="Invoice date in ISO 8601 format")
+    due_date: Optional[str] = Field(None, description="Payment due date in ISO 8601 format")
+    total_amount: Optional[float] = Field(None, ge=0, description="Total invoice amount in dollars")
+    tax_amount: Optional[float] = Field(None, ge=0, description="Tax amount in dollars")
+    pdf_url: Optional[str] = Field(None, description="URL to the invoice PDF document")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'status': 'paid',
+                'pdf_url': 'https://storage.example.com/invoices/INV-2025-001-updated.pdf'
+            }
+        }
+    }
+
+
+class InvoiceCreateResponse(BaseModel):
+    """Response for successful invoice creation."""
+    success: bool = Field(True, description="Indicates if the request was successful")
+    message: str = Field(..., description="Success message")
+    data: InvoiceListItem = Field(..., description="Created invoice data")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'success': True,
+                'message': 'Invoice created successfully',
+                'data': {
+                    '_id': '671b2bc25c62a0b61c084b34',
+                    'invoice_id': None,
+                    'company_name': 'Acme Health LLC',
+                    'subscription_id': 'sub_abc123',
+                    'invoice_number': 'INV-2025-001',
+                    'invoice_date': '2025-10-08T00:07:00.396Z',
+                    'due_date': '2025-11-07T00:07:00.396Z',
+                    'total_amount': 106.00,
+                    'tax_amount': 6.00,
+                    'status': 'sent',
+                    'pdf_url': 'https://storage.example.com/invoices/INV-2025-001.pdf',
+                    'payment_applications': [],
+                    'created_at': '2025-10-08T00:07:00.396Z'
+                }
+            }
+        }
+    }
+
+
+class InvoiceUpdateResponse(BaseModel):
+    """Response for successful invoice update."""
+    success: bool = Field(True, description="Indicates if the request was successful")
+    message: str = Field(..., description="Success message")
+    data: InvoiceListItem = Field(..., description="Updated invoice data")
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'success': True,
+                'message': 'Invoice updated successfully',
+                'data': {
+                    '_id': '671b2bc25c62a0b61c084b34',
+                    'invoice_id': None,
+                    'company_name': 'Acme Health LLC',
+                    'subscription_id': 'sub_abc123',
+                    'invoice_number': 'INV-2025-001',
+                    'invoice_date': '2025-10-08T00:07:00.396Z',
+                    'due_date': '2025-11-07T00:07:00.396Z',
+                    'total_amount': 106.00,
+                    'tax_amount': 6.00,
+                    'status': 'paid',
+                    'pdf_url': 'https://storage.example.com/invoices/INV-2025-001.pdf',
+                    'payment_applications': [],
+                    'created_at': '2025-10-08T00:07:00.396Z'
+                }
+            }
+        }
+    }
+

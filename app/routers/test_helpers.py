@@ -112,12 +112,41 @@ async def seed_test_data():
         upsert=True
     )
 
+    # Create test admin user in iris-admins collection
+    admin_password_hash = bcrypt.hashpw(
+        "TestPassword123!".encode('utf-8'),
+        bcrypt.gensalt()
+    ).decode('utf-8')
+
+    test_admin = {
+        "user_email": "test-admin@test.com",
+        "user_name": "Test Admin",
+        "password": admin_password_hash,
+        "permission_level": "admin",
+        "status": "active",
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+        "last_login": None
+    }
+
+    # Insert test admin (replace if exists)
+    await database.db["iris-admins"].replace_one(
+        {"user_email": test_admin["user_email"]},
+        test_admin,
+        upsert=True
+    )
+
     return {
         "message": "Test data seeded successfully",
         "test_user": {
             "email": test_user_login["user_email"],
             "name": test_user_login["user_name"],
             "password": "testpass123"  # Only return in test mode!
+        },
+        "test_admin": {
+            "email": test_admin["user_email"],
+            "name": test_admin["user_name"],
+            "password": "TestPassword123!"  # Only return in test mode!
         },
         "timestamp": datetime.utcnow().isoformat()
     }

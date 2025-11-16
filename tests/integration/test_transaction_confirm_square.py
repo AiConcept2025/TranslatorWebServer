@@ -380,8 +380,6 @@ async def test_success_flow_moves_files_to_inbox(mock_google_drive_service):
         call_args = mock_google_drive_service.move_files_to_inbox_on_payment_success.call_args
         assert call_args[1]["customer_email"] == "test@example.com"
         assert call_args[1]["file_ids"] == ["test-file-id-001"]
-        assert call_args[1]["company_name"] is None  # Individual user
-
         # Verify response
         assert data["data"]["files_moved"] == 1
         assert data["data"]["files_processed"] == 1

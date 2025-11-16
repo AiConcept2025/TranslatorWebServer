@@ -2,13 +2,13 @@
 Translation transaction management router for retrieving company transactions.
 """
 
-from fastapi import APIRouter, Path, Query, HTTPException, status
+from fastapi import APIRouter, Path, Query, HTTPException, status, Request
 from fastapi.responses import JSONResponse
 from typing import Optional
 import logging
 from bson import ObjectId
 from bson.decimal128 import Decimal128
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.database.mongodb import database
 from app.models.translation_transaction import TranslationTransactionListResponse
@@ -257,6 +257,7 @@ def serialize_translation_transaction_for_json(txn: dict) -> dict:
     }
 )
 async def get_company_translation_transactions(
+    request: Request,
     company_name: str = Path(
         ...,
         description="Company name",
@@ -368,21 +369,35 @@ async def get_company_translation_transactions(
     - Company name is populated via $lookup from company collection
     """
     try:
-        logger.info(f"Fetching translation transactions for company {company_name}, status={status_filter}, limit={limit}, skip={skip}")
+        # Request Start
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] GET /api/v1/translation-transactions/company/{company_name} - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - company_name (path): {company_name}")
+        logger.info(f"   - status (query): {status_filter}")
+        logger.info(f"   - limit (query): {limit}")
+        logger.info(f"   - skip (query): {skip}")
 
         # Validate status filter if provided
+        logger.info(f"🔍 Validating status filter...")
         valid_statuses = ["started", "confirmed", "pending", "failed"]
         if status_filter and status_filter not in valid_statuses:
+            logger.error(f"❌ Invalid status filter: {status_filter}")
+            logger.error(f"   - Valid statuses: {', '.join(valid_statuses)}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid transaction status. Must be one of: {', '.join(valid_statuses)}"
             )
+        logger.info(f"✅ Validation passed")
 
         # Build match stage using company_name
         match_stage = {"company_name": company_name}
 
         if status_filter:
             match_stage["status"] = status_filter
+
+        logger.info(f"🔍 Building aggregation pipeline...")
+        logger.info(f"   - match_stage: {match_stage}")
 
         # Aggregation pipeline:
         # 1. Match transactions by company_name (and optional status)
@@ -392,14 +407,23 @@ async def get_company_translation_transactions(
             {"$skip": skip},
             {"$limit": limit}
         ]
+        logger.info(f"   - pipeline stages: {len(pipeline)}")
 
         # Execute aggregation
+        logger.info(f"🔄 Calling database.translation_transactions.aggregate()...")
         transactions = await database.translation_transactions.aggregate(pipeline).to_list(length=limit)
+        logger.info(f"🔎 Database Result: found={len(transactions)} transactions")
 
         # Serialize all transactions (handles nested documents datetime fields)
+        logger.info(f"🔄 Serializing {len(transactions)} transactions...")
         transactions = [serialize_translation_transaction_for_json(txn) for txn in transactions]
+        logger.info(f"✅ Serialization complete")
 
-        logger.info(f"Found {len(transactions)} translation transactions for company {company_name}")
+        logger.info(f"✅ Retrieval successful:")
+        logger.info(f"   - company_name: {company_name}")
+        logger.info(f"   - transactions_count: {len(transactions)}")
+        logger.info(f"   - status_filter: {status_filter}")
+        logger.info(f"📤 Response: success=True, count={len(transactions)}, limit={limit}, skip={skip}")
 
         return JSONResponse(content={
             "success": True,
@@ -415,10 +439,17 @@ async def get_company_translation_transactions(
             }
         })
 
-    except HTTPException:
+    except HTTPException as e:
+        logger.error(f"❌ HTTPException:", exc_info=True)
+        logger.error(f"   - Error: {e.detail}")
+        logger.error(f"   - Status code: {e.status_code}")
+        logger.error(f"   - Error type: {type(e).__name__}")
         raise
     except Exception as e:
-        logger.error(f"Failed to retrieve translation transactions for company {company_name}: {e}", exc_info=True)
+        logger.error(f"❌ Failed to retrieve translation transactions:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Context: company_name={company_name}, status_filter={status_filter}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve translation transactions: {str(e)}"
@@ -483,19 +514,31 @@ async def get_companies_with_translations():
     - This endpoint dynamically reflects all companies in the database
     """
     try:
-        logger.info("Fetching unique companies with translation transactions")
+        # Request Start
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] GET /api/v1/translation-transactions/companies - START")
+        logger.info(f"📥 Request Parameters: None (no query params)")
 
         # Use MongoDB distinct to get unique company names
         # Filter out null/None values
+        logger.info(f"🔄 Calling database.translation_transactions.distinct('company_name')...")
         companies = await database.translation_transactions.distinct(
             "company_name",
             {"company_name": {"$ne": None}}
         )
+        logger.info(f"🔎 Database Result: found={len(companies)} unique companies")
 
         # Sort alphabetically
+        logger.info(f"🔄 Sorting companies alphabetically...")
         companies = sorted(companies)
+        logger.info(f"✅ Sorting complete")
 
-        logger.info(f"Found {len(companies)} unique companies with translation transactions")
+        logger.info(f"✅ Retrieval successful:")
+        logger.info(f"   - unique_companies_count: {len(companies)}")
+        if companies:
+            logger.info(f"   - first_company: {companies[0]}")
+            logger.info(f"   - last_company: {companies[-1]}")
+        logger.info(f"📤 Response: success=True, count={len(companies)}")
 
         return JSONResponse(content={
             "success": True,
@@ -506,7 +549,9 @@ async def get_companies_with_translations():
         })
 
     except Exception as e:
-        logger.error(f"Failed to retrieve companies: {e}", exc_info=True)
+        logger.error(f"❌ Failed to retrieve companies:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve companies: {str(e)}"

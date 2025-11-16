@@ -291,8 +291,7 @@ class TestNonEnterpriseTransactionMetadata:
             target_language="es",
             units_count=5,
             price_per_unit=0.01,
-            total_price=0.05,
-            company_name=None,  # NOT ENTERPRISE
+            total_price=0.05
             subscription_id=None,
             unit_type="page"
         )
@@ -497,8 +496,7 @@ class TestEnterpriseTransactionEdgeCases:
             target_language="ja",
             units_count=8,
             price_per_unit=0.01,
-            total_price=0.08,
-            company_name=None,  # Non-enterprise
+            total_price=0.08
             subscription_id=None,
             unit_type="page"
         )

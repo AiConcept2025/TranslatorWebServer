@@ -127,8 +127,7 @@ async def real_test_files(real_test_user: Dict[str, Any]) -> List[str]:
     # Step 1: Create folder structure (Inbox, Temp, Completed)
     print(f"✓ Creating folder structure for: {customer_email}")
     temp_folder_id = await google_drive_service.create_customer_folder_structure(
-        customer_email=customer_email,
-        company_name=None  # Individual user
+        customer_email=customer_email
     )
     print(f"✓ Temp folder ID: {temp_folder_id}")
 

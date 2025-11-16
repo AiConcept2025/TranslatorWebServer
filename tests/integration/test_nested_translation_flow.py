@@ -210,9 +210,7 @@ async def test_update_document_in_transaction(
     # Create initial transaction
     transaction_doc = {
         "transaction_id": transaction_id,
-        "user_id": "testuser@example.com",
-        "company_name": None,  # Individual customer
-        "source_language": "en",
+        "user_id": "testuser@example.com",        "source_language": "en",
         "target_language": "es",
         "units_count": 10,
         "price_per_unit": 0.10,
@@ -410,8 +408,7 @@ async def test_transaction_with_multiple_documents(
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_id": "multiuser@example.com",
-        "company_name": None,
-        "source_language": "fr",
+        "company_name": None,  "source_language": "fr",
         "target_language": "de",
         "units_count": 45,
         "price_per_unit": 0.08,
@@ -539,8 +536,7 @@ async def test_datetime_timezone_handling(cleanup_test_transactions):
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_id": "tztest@example.com",
-        "company_name": None,
-        "source_language": "en",
+        "company_name": None,  "source_language": "en",
         "target_language": "ja",
         "units_count": 5,
         "price_per_unit": 0.15,

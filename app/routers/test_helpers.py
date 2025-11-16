@@ -136,6 +136,50 @@ async def seed_test_data():
         upsert=True
     )
 
+    # Create test companies if they don't exist
+    test_companies = [
+        {
+            "company_name": "Acme Corporation",
+            "industry": "Technology",
+            "contact_email": "contact@acme.test.com",
+            "contact_phone": "+1-555-0100",
+            "address": "123 Tech Street, Silicon Valley, CA 94000",
+            "status": "active",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        },
+        {
+            "company_name": "Global Translation Inc",
+            "industry": "Translation Services",
+            "contact_email": "info@globaltrans.test.com",
+            "contact_phone": "+1-555-0200",
+            "address": "456 Language Ave, New York, NY 10001",
+            "status": "active",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        },
+        {
+            "company_name": "TechDocs Ltd",
+            "industry": "Documentation",
+            "contact_email": "hello@techdocs.test.com",
+            "contact_phone": "+1-555-0300",
+            "address": "789 Documentation Blvd, Austin, TX 78701",
+            "status": "active",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+    ]
+
+    companies_created = []
+    for company_data in test_companies:
+        # Insert company (replace if exists)
+        result = await database.db.company.replace_one(
+            {"company_name": company_data["company_name"]},
+            company_data,
+            upsert=True
+        )
+        companies_created.append(company_data["company_name"])
+
     return {
         "message": "Test data seeded successfully",
         "test_user": {
@@ -148,6 +192,7 @@ async def seed_test_data():
             "name": test_admin["user_name"],
             "password": "TestPassword123!"  # Only return in test mode!
         },
+        "companies_created": companies_created,
         "timestamp": datetime.utcnow().isoformat()
     }
 

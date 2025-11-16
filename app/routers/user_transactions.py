@@ -9,10 +9,10 @@ This module provides payment management endpoints for user_transactions collecti
 - Updating payment status
 """
 
-from fastapi import APIRouter, HTTPException, Query, Path, status
+from fastapi import APIRouter, HTTPException, Query, Path, status, Request
 from fastapi.responses import JSONResponse
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import EmailStr
 import logging
 import uuid
@@ -78,7 +78,7 @@ router = APIRouter(prefix="/api/v1/user-transactions", tags=["User Transaction P
 
 
 @router.post("/process", response_model=UserTransactionResponse, status_code=status.HTTP_201_CREATED)
-async def process_payment_transaction(transaction_data: UserTransactionCreate):
+async def process_payment_transaction(request: Request, transaction_data: UserTransactionCreate):
     """
     Process a payment and create user transaction record.
 
@@ -221,19 +221,48 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
     ```
     """
     try:
-        logger.info(
-            f"Processing payment transaction for {transaction_data.user_email}, "
-            f"Square ID: {transaction_data.square_transaction_id}"
-        )
+        # Request Start
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] POST /api/v1/user-transactions/process - START")
+
+        # Raw Request Body
+        try:
+            raw_body = await request.body()
+            raw_body_str = raw_body.decode('utf-8') if raw_body else "{}"
+            logger.info(f"📨 Raw Request Body: {raw_body_str}")
+        except Exception as e:
+            logger.error(f"❌ Failed to read raw request body: {e}")
+
+        # Pydantic Validation
+        logger.info(f"🔍 Validating with UserTransactionCreate...")
+        set_fields = {k: v for k, v in transaction_data.model_dump().items() if v is not None}
+        unset_fields = {k for k in transaction_data.model_fields.keys() if k not in set_fields}
+        logger.info(f"📋 Parsed Fields (Set={len(set_fields)}, Unset={len(unset_fields)}):")
+        for key, value in set_fields.items():
+            if key == "documents":
+                logger.info(f"   - {key}: {len(value)} documents")
+            else:
+                logger.info(f"   - {key}: {value}")
+        logger.info(f"✅ Validation passed")
+
+        logger.info(f"📥 Request Data:")
+        logger.info(f"   - user_email: {transaction_data.user_email}")
+        logger.info(f"   - square_transaction_id: {transaction_data.square_transaction_id}")
+        logger.info(f"   - number_of_units: {transaction_data.number_of_units}")
+        logger.info(f"   - unit_type: {transaction_data.unit_type}")
+        logger.info(f"   - documents_count: {len(transaction_data.documents)}")
 
         # Use provided date or default to current UTC time
         transaction_date = transaction_data.date if transaction_data.date else datetime.utcnow()
         payment_date = transaction_data.payment_date if transaction_data.payment_date else datetime.utcnow()
 
         # Convert documents to dict format
+        logger.info(f"🔄 Converting {len(transaction_data.documents)} documents to dict format...")
         documents_dict = [doc.model_dump() for doc in transaction_data.documents]
+        logger.info(f"✅ Document conversion complete")
 
         # Create transaction using helper function
+        logger.info(f"🔄 Calling create_user_transaction()...")
         result = await create_user_transaction(
             user_name=transaction_data.user_name,
             user_email=transaction_data.user_email,
@@ -252,34 +281,49 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
             payment_status=transaction_data.payment_status,
             payment_date=payment_date,
         )
+        logger.info(f"🔎 Database Result: created={result is not None}")
 
         if not result:
+            logger.error(f"❌ Failed to create transaction record in database")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create transaction record"
             )
 
         # Retrieve created transaction
+        logger.info(f"🔄 Calling get_user_transaction({transaction_data.square_transaction_id})...")
         transaction_doc = await get_user_transaction(transaction_data.square_transaction_id)
+        logger.info(f"🔎 Database Result: found={transaction_doc is not None}")
 
         if not transaction_doc:
+            logger.error(f"❌ Transaction created but could not be retrieved")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Transaction created but could not be retrieved"
             )
 
-        logger.info(
-            f"Transaction created successfully: {transaction_data.square_transaction_id}"
-        )
+        logger.info(f"✅ Transaction creation successful:")
+        logger.info(f"   - square_transaction_id: {transaction_data.square_transaction_id}")
+        logger.info(f"   - user_email: {transaction_data.user_email}")
+        logger.info(f"   - status: {transaction_data.status}")
+        logger.info(f"   - payment_status: {transaction_data.payment_status}")
+        logger.info(f"📤 Response: UserTransactionResponse with _id={transaction_doc.get('_id')}")
 
         # Convert to response format
         transaction_doc["_id"] = str(transaction_doc["_id"])
         return UserTransactionResponse(**transaction_doc)
 
-    except HTTPException:
+    except HTTPException as e:
+        logger.error(f"❌ HTTPException:", exc_info=True)
+        logger.error(f"   - Error: {e.detail}")
+        logger.error(f"   - Status code: {e.status_code}")
+        logger.error(f"   - Error type: {type(e).__name__}")
         raise
     except Exception as e:
-        logger.error(f"Failed to process payment transaction: {e}", exc_info=True)
+        logger.error(f"❌ Failed to process payment transaction:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Context: user_email={transaction_data.user_email}, square_transaction_id={transaction_data.square_transaction_id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process transaction: {str(e)}"
@@ -288,6 +332,7 @@ async def process_payment_transaction(transaction_data: UserTransactionCreate):
 
 @router.post("/{square_transaction_id}/refund", status_code=status.HTTP_200_OK)
 async def process_transaction_refund(
+    request: Request,
     square_transaction_id: str = Path(..., description="Square transaction ID"),
     refund_request: UserTransactionRefundRequest = None
 ):
@@ -344,20 +389,48 @@ async def process_transaction_refund(
     ```
     """
     try:
-        logger.info(
-            f"Processing refund for transaction {square_transaction_id}, "
-            f"amount: {refund_request.amount_cents} cents"
-        )
+        # Request Start
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] POST /api/v1/user-transactions/{square_transaction_id}/refund - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - square_transaction_id (path): {square_transaction_id}")
+
+        # Raw Request Body
+        try:
+            raw_body = await request.body()
+            raw_body_str = raw_body.decode('utf-8') if raw_body else "{}"
+            logger.info(f"📨 Raw Request Body: {raw_body_str}")
+        except Exception as e:
+            logger.error(f"❌ Failed to read raw request body: {e}")
+
+        # Pydantic Validation
+        logger.info(f"🔍 Validating with UserTransactionRefundRequest...")
+        set_fields = {k: v for k, v in refund_request.model_dump().items() if v is not None}
+        unset_fields = {k for k in refund_request.model_fields.keys() if k not in set_fields}
+        logger.info(f"📋 Parsed Fields (Set={len(set_fields)}, Unset={len(unset_fields)}):")
+        for key, value in set_fields.items():
+            logger.info(f"   - {key}: {value}")
+        logger.info(f"✅ Validation passed")
+
+        logger.info(f"📥 Refund Data:")
+        logger.info(f"   - refund_id: {refund_request.refund_id}")
+        logger.info(f"   - amount_cents: {refund_request.amount_cents}")
+        logger.info(f"   - currency: {refund_request.currency}")
 
         # Check if transaction exists
+        logger.info(f"🔄 Calling get_user_transaction({square_transaction_id})...")
         transaction = await get_user_transaction(square_transaction_id)
+        logger.info(f"🔎 Database Result: found={transaction is not None}")
+
         if not transaction:
+            logger.error(f"❌ Transaction not found: {square_transaction_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Transaction not found: {square_transaction_id}"
             )
 
         # Prepare refund data
+        logger.info(f"🔄 Preparing refund data...")
         refund_data = {
             "refund_id": refund_request.refund_id,
             "amount_cents": refund_request.amount_cents,
@@ -370,19 +443,32 @@ async def process_transaction_refund(
         if refund_request.reason:
             refund_data["reason"] = refund_request.reason
 
+        logger.info(f"   - refund_data prepared with {len(refund_data)} fields")
+
         # Add refund to transaction
+        logger.info(f"🔄 Calling add_refund_to_transaction()...")
         success = await add_refund_to_transaction(square_transaction_id, refund_data)
+        logger.info(f"🔎 Database Result: success={success}")
 
         if not success:
+            logger.error(f"❌ Failed to add refund to transaction")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to process refund"
             )
 
         # Retrieve updated transaction
+        logger.info(f"🔄 Calling get_user_transaction() to verify refund...")
         updated_transaction = await get_user_transaction(square_transaction_id)
+        total_refunds = len(updated_transaction.get("refunds", []))
+        logger.info(f"🔎 Database Result: total_refunds={total_refunds}")
 
-        logger.info(f"Refund processed successfully for transaction {square_transaction_id}")
+        logger.info(f"✅ Refund processing successful:")
+        logger.info(f"   - square_transaction_id: {square_transaction_id}")
+        logger.info(f"   - refund_id: {refund_request.refund_id}")
+        logger.info(f"   - amount_cents: {refund_request.amount_cents}")
+        logger.info(f"   - total_refunds: {total_refunds}")
+        logger.info(f"📤 Response: success=True, message='Refund processed successfully'")
 
         return JSONResponse(content={
             "success": True,
@@ -391,14 +477,21 @@ async def process_transaction_refund(
                 "square_transaction_id": square_transaction_id,
                 "refund_id": refund_request.refund_id,
                 "amount_cents": refund_request.amount_cents,
-                "total_refunds": len(updated_transaction.get("refunds", []))
+                "total_refunds": total_refunds
             }
         })
 
-    except HTTPException:
+    except HTTPException as e:
+        logger.error(f"❌ HTTPException:", exc_info=True)
+        logger.error(f"   - Error: {e.detail}")
+        logger.error(f"   - Status code: {e.status_code}")
+        logger.error(f"   - Error type: {type(e).__name__}")
         raise
     except Exception as e:
-        logger.error(f"Failed to process refund: {e}", exc_info=True)
+        logger.error(f"❌ Failed to process refund:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Context: square_transaction_id={square_transaction_id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process refund: {str(e)}"
@@ -407,6 +500,7 @@ async def process_transaction_refund(
 
 @router.get("")
 async def get_all_user_transactions(
+    request: Request,
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by transaction status"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of transactions to return"),
     skip: int = Query(0, ge=0, description="Number of transactions to skip for pagination")
@@ -477,23 +571,33 @@ async def get_all_user_transactions(
     ```
     """
     try:
-        logger.info(
-            f"Retrieving all user transactions, "
-            f"status filter: {status_filter or 'all'}, limit={limit}, skip={skip}"
-        )
+        # Request Start
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] GET /api/v1/user-transactions - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - status (query): {status_filter}")
+        logger.info(f"   - limit (query): {limit}")
+        logger.info(f"   - skip (query): {skip}")
 
         # Validate status filter if provided
+        logger.info(f"🔍 Validating status filter...")
         valid_statuses = ["completed", "pending", "failed"]
         if status_filter and status_filter not in valid_statuses:
+            logger.error(f"❌ Invalid status filter: {status_filter}")
+            logger.error(f"   - Valid statuses: {', '.join(valid_statuses)}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid transaction status. Must be one of: {', '.join(valid_statuses)}"
             )
+        logger.info(f"✅ Validation passed")
 
         # Build query filter
         match_stage = {}
         if status_filter:
             match_stage["status"] = status_filter
+
+        logger.info(f"🔍 Building aggregation pipeline...")
+        logger.info(f"   - match_stage: {match_stage}")
 
         # Query transactions with sorting (newest first) using aggregation
         from app.database.mongodb import database
@@ -507,17 +611,28 @@ async def get_all_user_transactions(
             {"$skip": skip},
             {"$limit": limit}
         ])
+        logger.info(f"   - pipeline stages: {len(pipeline)}")
 
         # Execute aggregation
+        logger.info(f"🔄 Calling database.user_transactions.aggregate()...")
         transactions = await database.user_transactions.aggregate(pipeline).to_list(length=None)
+        logger.info(f"🔎 Database Result: found={len(transactions)} transactions")
 
         # Get total count for the query
+        logger.info(f"🔄 Calling database.user_transactions.count_documents()...")
         total_count = await database.user_transactions.count_documents(match_stage)
+        logger.info(f"🔎 Database Result: total_count={total_count}")
 
         # Convert all transactions to JSON-serializable format
+        logger.info(f"🔄 Serializing {len(transactions)} transactions...")
         transactions = [serialize_transaction_for_json(txn) for txn in transactions]
+        logger.info(f"✅ Serialization complete")
 
-        logger.info(f"Found {len(transactions)} transactions (total: {total_count})")
+        logger.info(f"✅ Retrieval successful:")
+        logger.info(f"   - transactions_returned: {len(transactions)}")
+        logger.info(f"   - total_matching: {total_count}")
+        logger.info(f"   - status_filter: {status_filter}")
+        logger.info(f"📤 Response: success=True, count={len(transactions)}, total={total_count}")
 
         return JSONResponse(content={
             "success": True,
@@ -533,10 +648,17 @@ async def get_all_user_transactions(
             }
         })
 
-    except HTTPException:
+    except HTTPException as e:
+        logger.error(f"❌ HTTPException:", exc_info=True)
+        logger.error(f"   - Error: {e.detail}")
+        logger.error(f"   - Status code: {e.status_code}")
+        logger.error(f"   - Error type: {type(e).__name__}")
         raise
     except Exception as e:
-        logger.error(f"Failed to retrieve all transactions: {e}", exc_info=True)
+        logger.error(f"❌ Failed to retrieve all transactions:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Context: status_filter={status_filter}, limit={limit}, skip={skip}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve transactions: {str(e)}"
@@ -545,6 +667,7 @@ async def get_all_user_transactions(
 
 @router.get("/user/{email}")
 async def get_user_transaction_history(
+    request: Request,
     email: EmailStr = Path(..., description="User email address"),
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (completed, pending, failed)"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
@@ -618,23 +741,34 @@ async def get_user_transaction_history(
     ```
     """
     try:
-        logger.info(
-            f"Retrieving transaction history for {email}, "
-            f"status filter: {status_filter or 'all'}, limit={limit}, skip={skip}"
-        )
+        # Request Start
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] GET /api/v1/user-transactions/user/{email} - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - email (path): {email}")
+        logger.info(f"   - status (query): {status_filter}")
+        logger.info(f"   - limit (query): {limit}")
+        logger.info(f"   - skip (query): {skip}")
 
         # Validate status filter if provided
+        logger.info(f"🔍 Validating status filter...")
         valid_statuses = ["completed", "pending", "failed"]
         if status_filter and status_filter not in valid_statuses:
+            logger.error(f"❌ Invalid status filter: {status_filter}")
+            logger.error(f"   - Valid statuses: {', '.join(valid_statuses)}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid transaction status. Must be one of: {', '.join(valid_statuses)}"
             )
+        logger.info(f"✅ Validation passed")
 
         # Build query filter
         match_stage = {"user_email": email}
         if status_filter:
             match_stage["status"] = status_filter
+
+        logger.info(f"🔍 Building aggregation pipeline...")
+        logger.info(f"   - match_stage: {match_stage}")
 
         # Query transactions with sorting (newest first) using aggregation
         from app.database.mongodb import database
@@ -645,14 +779,23 @@ async def get_user_transaction_history(
             {"$skip": skip},
             {"$limit": limit}
         ]
+        logger.info(f"   - pipeline stages: {len(pipeline)}")
 
         # Execute aggregation
+        logger.info(f"🔄 Calling database.user_transactions.aggregate()...")
         transactions = await database.user_transactions.aggregate(pipeline).to_list(length=limit)
+        logger.info(f"🔎 Database Result: found={len(transactions)} transactions")
 
         # Convert all transactions to JSON-serializable format
+        logger.info(f"🔄 Serializing {len(transactions)} transactions...")
         transactions = [serialize_transaction_for_json(txn) for txn in transactions]
+        logger.info(f"✅ Serialization complete")
 
-        logger.info(f"Found {len(transactions)} transactions for {email}")
+        logger.info(f"✅ Retrieval successful:")
+        logger.info(f"   - user_email: {email}")
+        logger.info(f"   - transactions_count: {len(transactions)}")
+        logger.info(f"   - status_filter: {status_filter}")
+        logger.info(f"📤 Response: success=True, count={len(transactions)}")
 
         return JSONResponse(content={
             "success": True,
@@ -668,10 +811,17 @@ async def get_user_transaction_history(
             }
         })
 
-    except HTTPException:
+    except HTTPException as e:
+        logger.error(f"❌ HTTPException:", exc_info=True)
+        logger.error(f"   - Error: {e.detail}")
+        logger.error(f"   - Status code: {e.status_code}")
+        logger.error(f"   - Error type: {type(e).__name__}")
         raise
     except Exception as e:
-        logger.error(f"Failed to retrieve transaction history: {e}", exc_info=True)
+        logger.error(f"❌ Failed to retrieve transaction history:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Context: email={email}, status_filter={status_filter}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve transaction history: {str(e)}"
@@ -680,6 +830,7 @@ async def get_user_transaction_history(
 
 @router.get("/{square_transaction_id}")
 async def get_transaction_by_id(
+    request: Request,
     square_transaction_id: str = Path(..., description="Square transaction ID")
 ):
     """
@@ -732,11 +883,19 @@ async def get_transaction_by_id(
     ```
     """
     try:
-        logger.info(f"Retrieving transaction: {square_transaction_id}")
+        # Request Start
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] GET /api/v1/user-transactions/{square_transaction_id} - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - square_transaction_id (path): {square_transaction_id}")
 
+        # Database Operations
+        logger.info(f"🔄 Calling get_user_transaction({square_transaction_id})...")
         transaction = await get_user_transaction(square_transaction_id)
+        logger.info(f"🔎 Database Result: found={transaction is not None}")
 
         if not transaction:
+            logger.error(f"❌ Transaction not found: {square_transaction_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Transaction not found: {square_transaction_id}"
@@ -745,15 +904,28 @@ async def get_transaction_by_id(
         # Convert ObjectId to string
         transaction["_id"] = str(transaction["_id"])
 
+        logger.info(f"✅ Retrieval successful:")
+        logger.info(f"   - square_transaction_id: {square_transaction_id}")
+        logger.info(f"   - user_email: {transaction.get('user_email')}")
+        logger.info(f"   - status: {transaction.get('status')}")
+        logger.info(f"📤 Response: success=True, transaction data included")
+
         return JSONResponse(content={
             "success": True,
             "data": transaction
         })
 
-    except HTTPException:
+    except HTTPException as e:
+        logger.error(f"❌ HTTPException:", exc_info=True)
+        logger.error(f"   - Error: {e.detail}")
+        logger.error(f"   - Status code: {e.status_code}")
+        logger.error(f"   - Error type: {type(e).__name__}")
         raise
     except Exception as e:
-        logger.error(f"Failed to retrieve transaction: {e}", exc_info=True)
+        logger.error(f"❌ Failed to retrieve transaction:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Context: square_transaction_id={square_transaction_id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve transaction: {str(e)}"
@@ -762,6 +934,7 @@ async def get_transaction_by_id(
 
 @router.patch("/{square_transaction_id}/payment-status")
 async def update_transaction_payment_status(
+    request: Request,
     square_transaction_id: str = Path(..., description="Square transaction ID"),
     payment_status: str = Query(..., description="New payment status (APPROVED, COMPLETED, CANCELED, FAILED)")
 ):
@@ -801,31 +974,42 @@ async def update_transaction_payment_status(
     ```
     """
     try:
-        logger.info(
-            f"Updating payment status for transaction {square_transaction_id} "
-            f"to {payment_status}"
-        )
+        # Request Start
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] PATCH /api/v1/user-transactions/{square_transaction_id}/payment-status - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - square_transaction_id (path): {square_transaction_id}")
+        logger.info(f"   - payment_status (query): {payment_status}")
 
         # Check if transaction exists
+        logger.info(f"🔄 Calling get_user_transaction({square_transaction_id})...")
         transaction = await get_user_transaction(square_transaction_id)
+        logger.info(f"🔎 Database Result: found={transaction is not None}")
+
         if not transaction:
+            logger.error(f"❌ Transaction not found: {square_transaction_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Transaction not found: {square_transaction_id}"
             )
 
         # Update payment status
+        logger.info(f"🔄 Calling update_payment_status({square_transaction_id}, {payment_status})...")
         success = await update_payment_status(square_transaction_id, payment_status)
+        logger.info(f"🔎 Database Result: success={success}")
 
         if not success:
+            logger.error(f"❌ Failed to update payment status in database")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to update payment status"
             )
 
-        logger.info(
-            f"Payment status updated successfully for transaction {square_transaction_id}"
-        )
+        logger.info(f"✅ Payment status update successful:")
+        logger.info(f"   - square_transaction_id: {square_transaction_id}")
+        logger.info(f"   - new_payment_status: {payment_status}")
+        logger.info(f"   - updated_at: {datetime.utcnow().isoformat()}")
+        logger.info(f"📤 Response: success=True, message='Payment status updated successfully'")
 
         return JSONResponse(content={
             "success": True,
@@ -837,10 +1021,17 @@ async def update_transaction_payment_status(
             }
         })
 
-    except HTTPException:
+    except HTTPException as e:
+        logger.error(f"❌ HTTPException:", exc_info=True)
+        logger.error(f"   - Error: {e.detail}")
+        logger.error(f"   - Status code: {e.status_code}")
+        logger.error(f"   - Error type: {type(e).__name__}")
         raise
     except Exception as e:
-        logger.error(f"Failed to update payment status: {e}", exc_info=True)
+        logger.error(f"❌ Failed to update payment status:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Context: square_transaction_id={square_transaction_id}, payment_status={payment_status}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update payment status: {str(e)}"

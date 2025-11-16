@@ -320,9 +320,7 @@ async def test_enterprise_individual_user_403(mock_google_drive_service):
     """
     with patch("app.services.auth_service.auth_service.verify_session") as mock_verify:
         mock_verify.return_value = {
-            "email": "individual@example.com",
-            "company_name": None  # Individual user
-        }
+            "email": "individual@example.com",        }
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             headers = {"Authorization": "Bearer test-token"}
@@ -388,9 +386,7 @@ async def test_individual_confirm_success(mock_google_drive_service):
 
     with patch("app.services.auth_service.auth_service.verify_session") as mock_verify:
         mock_verify.return_value = {
-            "email": user_email,
-            "company_name": None  # Individual user
-        }
+            "email": user_email,        }
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             headers = {"Authorization": "Bearer test-token"}
@@ -426,8 +422,6 @@ async def test_individual_confirm_success(mock_google_drive_service):
             call_args = mock_google_drive_service.move_files_to_inbox_on_payment_success.call_args
             assert call_args[1]["customer_email"] == user_email
             assert call_args[1]["file_ids"] == ["file-ind-001"]
-            assert call_args[1]["company_name"] is None
-
 
 @pytest.mark.asyncio
 async def test_individual_confirm_cancel(mock_google_drive_service):
@@ -455,9 +449,7 @@ async def test_individual_confirm_cancel(mock_google_drive_service):
 
     with patch("app.services.auth_service.auth_service.verify_session") as mock_verify:
         mock_verify.return_value = {
-            "email": user_email,
-            "company_name": None
-        }
+            "email": user_email, }
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             headers = {"Authorization": "Bearer test-token"}
@@ -503,9 +495,7 @@ async def test_individual_wrong_user_403(mock_google_drive_service):
     # User B trying to access User A's transaction
     with patch("app.services.auth_service.auth_service.verify_session") as mock_verify:
         mock_verify.return_value = {
-            "email": "userB@example.com",
-            "company_name": None
-        }
+            "email": "userB@example.com", }
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             headers = {"Authorization": "Bearer test-token"}
@@ -545,9 +535,7 @@ async def test_individual_missing_file_ids_400(mock_google_drive_service):
 
     with patch("app.services.auth_service.auth_service.verify_session") as mock_verify:
         mock_verify.return_value = {
-            "email": user_email,
-            "company_name": None
-        }
+            "email": user_email, }
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             headers = {"Authorization": "Bearer test-token"}
@@ -584,9 +572,7 @@ async def test_individual_empty_file_ids_400(mock_google_drive_service):
 
     with patch("app.services.auth_service.auth_service.verify_session") as mock_verify:
         mock_verify.return_value = {
-            "email": user_email,
-            "company_name": None
-        }
+            "email": user_email, }
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             headers = {"Authorization": "Bearer test-token"}
@@ -711,9 +697,7 @@ async def test_individual_no_file_search_called(mock_google_drive_service):
 
     with patch("app.services.auth_service.auth_service.verify_session") as mock_verify:
         mock_verify.return_value = {
-            "email": user_email,
-            "company_name": None
-        }
+            "email": user_email, }
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             headers = {"Authorization": "Bearer test-token"}

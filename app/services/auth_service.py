@@ -419,7 +419,6 @@ class AuthService:
                 "user_id": user_id,
                 "user_name": user_name,
                 "email": email,
-                "company_name": None,  # No company for individual users
                 "permission_level": "user",  # Individual users are regular users
                 "status": "active",
                 "created_at": now,
@@ -475,7 +474,6 @@ class AuthService:
             "user_id": user.get("user_id"),
             "user_name": user.get("user_name"),
             "email": user.get("email"),
-            "company_name": None,  # Individual users have no company
             "permission_level": "user"
         }
 

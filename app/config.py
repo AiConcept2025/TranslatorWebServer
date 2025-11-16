@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     google_drive_owner_email: str = "danishevsky@gmail.com"    # Actual file owner (.env account)
     
     # Rate Limiting
+    rate_limiting_enabled: bool = True
     rate_limit_requests: int = 100
     rate_limit_window: int = 3600  # 1 hour
     
@@ -78,7 +79,7 @@ class Settings(BaseSettings):
     # CORS Configuration
     cors_origins: str = "http://localhost:3000,http://localhost:8080"
     cors_credentials: bool = True
-    cors_methods: str = "GET,POST,PUT,DELETE,OPTIONS"
+    cors_methods: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
     cors_headers: str = "*"
     
     # Background Tasks

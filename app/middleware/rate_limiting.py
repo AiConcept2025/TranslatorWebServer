@@ -36,24 +36,28 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next):
         """Process the request with rate limiting - WITH STUB ENHANCEMENTS."""
+        # Skip rate limiting if disabled (e.g., for tests)
+        if not settings.rate_limiting_enabled:
+            return await call_next(request)
+
         print(f"Hello World - Rate limiting middleware processing: {request.method} {request.url.path}")
-        
+
         # Get client identifier
         client_id = self._get_client_id(request)
-        
+
         # Check if rate limited
         if await self._is_rate_limited(client_id, request):
             return await self._create_rate_limit_response(client_id, request)
-        
+
         # Record the request
         await self._record_request(client_id, request)
-        
+
         # Process the request
         response = await call_next(request)
-        
+
         # Add rate limit headers
         await self._add_rate_limit_headers(response, client_id, request)
-        
+
         return response
     
     def _get_client_id(self, request: Request) -> str:

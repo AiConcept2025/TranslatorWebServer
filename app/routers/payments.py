@@ -526,26 +526,55 @@ async def create_payment(payment_data: PaymentCreate):
     ```
     """
     try:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] POST /api/v1/payments - START")
+        logger.info(f"📥 Request Data:")
+        logger.info(f"   - company_name: {payment_data.company_name}")
+        logger.info(f"   - user_email: {payment_data.user_email}")
+        logger.info(f"   - square_payment_id: {payment_data.square_payment_id}")
+        logger.info(f"   - amount: {payment_data.amount} cents")
+        logger.info(f"   - currency: {payment_data.currency}")
+        logger.info(f"   - payment_status: {payment_data.payment_status}")
+
         logger.info(f"Creating payment for {payment_data.user_email}, Square ID: {payment_data.square_payment_id}")
 
         # Create payment
+        logger.info(f"🔄 Calling payment_repository.create_payment()...")
         payment_id = await payment_repository.create_payment(payment_data)
+        logger.info(f"🔎 Payment created with ID: {payment_id}")
 
         # Retrieve created payment
+        logger.info(f"🔄 Retrieving created payment...")
         payment_doc = await payment_repository.get_payment_by_id(payment_id)
 
         if not payment_doc:
+            logger.error(f"❌ Payment created but could not be retrieved: id={payment_id}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Payment created but could not be retrieved"
             )
 
+        logger.info(f"✅ Payment created successfully:")
+        logger.info(f"   - _id: {payment_id}")
+        logger.info(f"   - company_name: {payment_doc.get('company_name')}")
+        logger.info(f"   - square_payment_id: {payment_doc.get('square_payment_id')}")
+        logger.info(f"   - amount: {payment_doc.get('amount')}")
+        logger.info(f"   - status: {payment_doc.get('payment_status')}")
+
+        response_data = payment_doc_to_response(payment_doc)
+        logger.info(f"📤 Response: _id={payment_id}, status={response_data.get('payment_status')}")
+
         logger.info(f"Payment created successfully: {payment_id}")
-        return payment_doc_to_response(payment_doc)
+        return response_data
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"❌ Failed to create payment:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - User email: {payment_data.user_email}")
+        logger.error(f"   - Square ID: {payment_data.square_payment_id}")
         logger.error(f"Failed to create payment: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -888,22 +917,46 @@ async def get_payment_by_id(
     ```
     """
     try:
-        validate_object_id(payment_id, "payment ID")
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] GET /api/v1/payments/{payment_id} - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - payment_id: {payment_id}")
 
+        logger.info(f"🔍 Validating payment_id format...")
+        validate_object_id(payment_id, "payment ID")
+        logger.info(f"✅ Payment ID validation passed")
+
+        logger.info(f"🔄 Calling payment_repository.get_payment_by_id()...")
         logger.info(f"Fetching payment by ID: {payment_id}")
         payment_doc = await payment_repository.get_payment_by_id(payment_id)
+        logger.info(f"🔎 Database Result: found={payment_doc is not None}")
 
         if not payment_doc:
+            logger.warning(f"❌ Payment not found: id={payment_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Payment not found: {payment_id}"
             )
 
-        return payment_doc_to_response(payment_doc)
+        logger.info(f"✅ Payment retrieved:")
+        logger.info(f"   - _id: {payment_id}")
+        logger.info(f"   - company_name: {payment_doc.get('company_name')}")
+        logger.info(f"   - square_payment_id: {payment_doc.get('square_payment_id')}")
+        logger.info(f"   - amount: {payment_doc.get('amount')}")
+        logger.info(f"   - status: {payment_doc.get('payment_status')}")
+
+        response_data = payment_doc_to_response(payment_doc)
+        logger.info(f"📤 Response: _id={payment_id}, status={response_data.get('payment_status')}")
+
+        return response_data
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"❌ Failed to retrieve payment:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Payment ID: {payment_id}")
         logger.error(f"Failed to retrieve payment {payment_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -934,23 +987,44 @@ async def get_payment_by_square_id(
     ```
     """
     try:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] GET /api/v1/payments/square/{square_payment_id} - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - square_payment_id: {square_payment_id}")
+
+        logger.info(f"🔄 Calling payment_repository.get_payment_by_square_id()...")
         logger.info(f"Fetching payment by Square ID: {square_payment_id}")
         payment_doc = await payment_repository.get_payment_by_square_id(square_payment_id)
+        logger.info(f"🔎 Database Result: found={payment_doc is not None}")
 
         if not payment_doc:
+            logger.warning(f"❌ Payment not found for Square ID: {square_payment_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Payment not found for Square ID: {square_payment_id}"
             )
 
+        logger.info(f"✅ Payment retrieved:")
+        logger.info(f"   - _id: {payment_doc.get('_id')}")
+        logger.info(f"   - company_name: {payment_doc.get('company_name')}")
+        logger.info(f"   - square_payment_id: {square_payment_id}")
+        logger.info(f"   - amount: {payment_doc.get('amount')}")
+        logger.info(f"   - status: {payment_doc.get('payment_status')}")
+
         # Return full payment document (not just PaymentResponse fields)
         payment_doc["_id"] = str(payment_doc["_id"])
+
+        logger.info(f"📤 Response: _id={payment_doc['_id']}, status={payment_doc.get('payment_status')}")
 
         return JSONResponse(content=payment_doc)
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"❌ Failed to retrieve payment by Square ID:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Square Payment ID: {square_payment_id}")
         logger.error(f"Failed to retrieve payment by Square ID {square_payment_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1327,6 +1401,14 @@ async def get_payments_by_email(
     ```
     """
     try:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] GET /api/v1/payments/email/{email} - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - email: {email}")
+        logger.info(f"   - limit: {limit}")
+        logger.info(f"   - skip: {skip}")
+
+        logger.info(f"🔄 Calling payment_repository.get_payments_by_email()...")
         logger.info(f"Fetching payments for email {email}, limit={limit}, skip={skip}")
 
         payments = await payment_repository.get_payments_by_email(
@@ -1334,14 +1416,22 @@ async def get_payments_by_email(
             limit=limit,
             skip=skip
         )
+        logger.info(f"🔎 Database Result: count={len(payments)}")
 
         # Convert ObjectIds to strings
+        logger.info(f"🔄 Serializing {len(payments)} payments...")
         for payment in payments:
             payment["_id"] = str(payment["_id"])
 
+        logger.info(f"✅ Payments retrieved successfully: count={len(payments)}")
+        if payments:
+            logger.info(f"📊 Sample Payment: _id={payments[0].get('_id')}, "
+                       f"square_payment_id={payments[0].get('square_payment_id')}, "
+                       f"amount={payments[0].get('amount')}")
+
         logger.info(f"Found {len(payments)} payments for email {email}")
 
-        return JSONResponse(content={
+        response_data = {
             "success": True,
             "data": {
                 "payments": payments,
@@ -1350,9 +1440,16 @@ async def get_payments_by_email(
                 "skip": skip,
                 "email": email
             }
-        })
+        }
+        logger.info(f"📤 Response: success=True, count={len(payments)}, email={email}")
+
+        return JSONResponse(content=response_data)
 
     except Exception as e:
+        logger.error(f"❌ Failed to retrieve payments for email:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Email: {email}")
         logger.error(f"Failed to retrieve payments for email {email}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1397,42 +1494,71 @@ async def update_payment(
     ```
     """
     try:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] PATCH /api/v1/payments/{square_payment_id} - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - square_payment_id: {square_payment_id}")
+
+        if update_data:
+            update_dict = update_data.model_dump(exclude_unset=True)
+            logger.info(f"📨 Update Data:")
+            for key, value in update_dict.items():
+                logger.info(f"   - {key}: {value}")
+
         logger.info(f"Updating payment {square_payment_id}")
 
         # Check if payment exists
+        logger.info(f"🔄 Checking if payment exists...")
         existing_payment = await payment_repository.get_payment_by_square_id(square_payment_id)
+        logger.info(f"🔎 Existing Payment: found={existing_payment is not None}")
+
         if not existing_payment:
+            logger.warning(f"❌ Payment not found: {square_payment_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Payment not found: {square_payment_id}"
             )
 
         # Update payment
+        logger.info(f"🔄 Calling payment_repository.update_payment()...")
         updated = await payment_repository.update_payment(square_payment_id, update_data)
+        logger.info(f"🔎 Update Result: success={updated}")
 
         if not updated:
+            logger.error(f"❌ Payment update failed for: {square_payment_id}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Payment update failed"
             )
 
         # Retrieve updated payment
+        logger.info(f"🔄 Retrieving updated payment...")
         payment_doc = await payment_repository.get_payment_by_square_id(square_payment_id)
 
+        logger.info(f"✅ Payment updated successfully:")
+        logger.info(f"   - square_payment_id: {square_payment_id}")
+        logger.info(f"   - status: {payment_doc.get('payment_status')}")
         logger.info(f"Payment {square_payment_id} updated successfully")
 
         # Convert ObjectIds to strings
         payment_doc["_id"] = str(payment_doc["_id"])
 
-        return JSONResponse(content={
+        response_data = {
             "success": True,
             "message": "Payment updated successfully",
             "data": payment_doc
-        })
+        }
+        logger.info(f"📤 Response: success=True, _id={payment_doc['_id']}")
+
+        return JSONResponse(content=response_data)
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"❌ Failed to update payment:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Square Payment ID: {square_payment_id}")
         logger.error(f"Failed to update payment {square_payment_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1519,18 +1645,35 @@ async def process_refund(
     ```
     """
     try:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] POST /api/v1/payments/{square_payment_id}/refund - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - square_payment_id: {square_payment_id}")
+        logger.info(f"📨 Refund Data:")
+        logger.info(f"   - refund_id: {refund_request.refund_id}")
+        logger.info(f"   - amount: {refund_request.amount} cents")
+        logger.info(f"   - currency: {refund_request.currency}")
+        logger.info(f"   - idempotency_key: {refund_request.idempotency_key}")
+
         logger.info(f"Processing refund for payment {square_payment_id}, amount: {refund_request.amount} cents")
 
         # Validate refund amount
+        logger.info(f"🔍 Validating refund amount...")
         if refund_request.amount <= 0:
+            logger.error(f"❌ Invalid refund amount: {refund_request.amount}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Refund amount must be greater than 0"
             )
+        logger.info(f"✅ Refund amount validation passed")
 
         # Check if payment exists
+        logger.info(f"🔄 Checking if payment exists...")
         existing_payment = await payment_repository.get_payment_by_square_id(square_payment_id)
+        logger.info(f"🔎 Existing Payment: found={existing_payment is not None}")
+
         if not existing_payment:
+            logger.warning(f"❌ Payment not found: {square_payment_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Payment not found: {square_payment_id}"
@@ -1538,35 +1681,50 @@ async def process_refund(
 
         # Check if refund amount exceeds payment amount
         payment_amount = existing_payment.get("amount", 0)
+        logger.info(f"🔍 Validating refund amount vs payment amount...")
+        logger.info(f"   - Payment amount: {payment_amount} cents")
+        logger.info(f"   - Refund amount: {refund_request.amount} cents")
+
         if refund_request.amount > payment_amount:
+            logger.error(f"❌ Refund amount exceeds payment amount: {refund_request.amount} > {payment_amount}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Refund amount ({refund_request.amount}) exceeds payment amount ({payment_amount})"
             )
+        logger.info(f"✅ Refund amount validation passed")
 
         # Process refund
+        logger.info(f"🔄 Calling payment_repository.process_refund()...")
         refunded = await payment_repository.process_refund(
             square_payment_id=square_payment_id,
             refund_id=refund_request.refund_id,
             refund_amount=refund_request.amount,
             refund_reason=None
         )
+        logger.info(f"🔎 Refund processing result: success={refunded}")
 
         if not refunded:
+            logger.error(f"❌ Refund processing failed for: {square_payment_id}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Refund processing failed"
             )
 
         # Retrieve updated payment
+        logger.info(f"🔄 Retrieving updated payment...")
         payment_doc = await payment_repository.get_payment_by_square_id(square_payment_id)
 
+        logger.info(f"✅ Refund processed successfully:")
+        logger.info(f"   - square_payment_id: {square_payment_id}")
+        logger.info(f"   - refund_id: {refund_request.refund_id}")
+        logger.info(f"   - amount: {refund_request.amount} cents")
+        logger.info(f"   - payment_status: {payment_doc.get('payment_status')}")
         logger.info(f"Refund processed successfully for payment {square_payment_id}")
 
         # Convert ObjectIds to strings
         payment_doc["_id"] = str(payment_doc["_id"])
 
-        return JSONResponse(content={
+        response_data = {
             "success": True,
             "message": f"Refund processed: {refund_request.amount} cents",
             "data": {
@@ -1577,11 +1735,19 @@ async def process_refund(
                     "idempotency_key": refund_request.idempotency_key
                 }
             }
-        })
+        }
+        logger.info(f"📤 Response: success=True, refund_id={refund_request.refund_id}")
+
+        return JSONResponse(content=response_data)
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"❌ Failed to process refund:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Square Payment ID: {square_payment_id}")
+        logger.error(f"   - Refund ID: {refund_request.refund_id}")
         logger.error(f"Failed to process refund for payment {square_payment_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1645,6 +1811,14 @@ async def get_company_payment_stats(
     ```
     """
     try:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] GET /api/v1/payments/company/{company_name}/stats - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - company_name: {company_name}")
+        logger.info(f"   - start_date: {start_date}")
+        logger.info(f"   - end_date: {end_date}")
+
+        logger.info(f"🔄 Calling payment_repository.get_payment_stats_by_company()...")
         logger.info(f"Fetching payment stats for company {company_name}, start={start_date}, end={end_date}")
 
         stats = await payment_repository.get_payment_stats_by_company(
@@ -1652,15 +1826,21 @@ async def get_company_payment_stats(
             start_date=start_date,
             end_date=end_date
         )
+        logger.info(f"🔎 Stats retrieved: {stats}")
 
         # Calculate success rate
         total_payments = stats.get("total_payments", 0)
         completed_payments = stats.get("completed_payments", 0)
         success_rate = (completed_payments / total_payments * 100) if total_payments > 0 else 0.0
 
+        logger.info(f"✅ Statistics calculated:")
+        logger.info(f"   - company_name: {company_name}")
+        logger.info(f"   - total_payments: {total_payments}")
+        logger.info(f"   - completed_payments: {completed_payments}")
+        logger.info(f"   - success_rate: {round(success_rate, 2)}%")
         logger.info(f"Retrieved stats for company {company_name}: {total_payments} total payments")
 
-        return JSONResponse(content={
+        response_data = {
             "success": True,
             "data": {
                 "company_name": company_name,
@@ -1671,11 +1851,18 @@ async def get_company_payment_stats(
                     "end_date": end_date.isoformat() if end_date else None
                 }
             }
-        })
+        }
+        logger.info(f"📤 Response: success=True, total_payments={total_payments}, success_rate={round(success_rate, 2)}%")
+
+        return JSONResponse(content=response_data)
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"❌ Failed to retrieve payment stats:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Company: {company_name}")
         logger.error(f"Failed to retrieve stats for company {company_name}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

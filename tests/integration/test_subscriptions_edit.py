@@ -466,8 +466,8 @@ class TestUsagePeriods:
 
         # Verify last period has correct data
         last_period = record_after["usage_periods"][-1]
-        assert last_period["subscription_units"] == 1000
-        assert last_period["used_units"] == 0
+        assert last_period["units_allocated"] == 1000
+        assert last_period["units_used"] == 0
 
         print(f"✅ Test passed: Usage period added successfully (count: {original_periods_count} → {new_periods_count})")
 
@@ -517,8 +517,8 @@ class TestUsagePeriods:
         # Get subscription with usage period
         record_before = await db.subscriptions.find_one({"_id": ObjectId(subscription_id)})
         last_period_before = record_before["usage_periods"][-1]
-        original_used_units = last_period_before["used_units"]
-        print(f"📊 Before: used_units={original_used_units}")
+        original_used_units = last_period_before["units_used"]
+        print(f"📊 Before: units_used={original_used_units}")
 
         # Record usage
         # NOTE: This endpoint requires authentication, so it may fail without proper token
@@ -547,9 +547,9 @@ class TestUsagePeriods:
         # Verify database
         record_after = await db.subscriptions.find_one({"_id": ObjectId(subscription_id)})
         last_period_after = record_after["usage_periods"][-1]
-        assert last_period_after["used_units"] == original_used_units + 50
+        assert last_period_after["units_used"] == original_used_units + 50
 
-        print(f"✅ Test passed: Usage recorded (used_units: {original_used_units} → {last_period_after['used_units']})")
+        print(f"✅ Test passed: Usage recorded (units_used: {original_used_units} → {last_period_after['units_used']})")
 
 
 # ============================================================================

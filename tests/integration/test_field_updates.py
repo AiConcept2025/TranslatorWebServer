@@ -319,7 +319,7 @@ class TestUsagePeriodFields:
 
         # Verify
         updated = await db.subscriptions.find_one({"_id": subscription["_id"]})
-        assert updated["usage_periods"][0]["subscription_units"] == 1500
+        assert updated["usage_periods"][0]["units_allocated"] == 1500
 
         print(f"✅ Units allocated updated: 1000 → 1500")
 
@@ -359,7 +359,7 @@ class TestUsagePeriodFields:
 
         # Verify
         updated = await db.subscriptions.find_one({"_id": subscription["_id"]})
-        assert updated["usage_periods"][0]["used_units"] == 350
+        assert updated["usage_periods"][0]["units_used"] == 350
 
         print(f"✅ Units used updated: 200 → 350")
 

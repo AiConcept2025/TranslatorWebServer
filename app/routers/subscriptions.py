@@ -32,6 +32,9 @@ async def create_subscription(
     """
     Create a new subscription (Admin only).
 
+    **IMPORTANT:** Company must exist in the database before creating a subscription.
+    If the company does not exist, the request will fail with HTTP 400.
+
     Request:
     ```json
     {
@@ -45,6 +48,19 @@ async def create_subscription(
         "start_date": "2025-01-01T00:00:00Z",
         "end_date": "2025-12-31T23:59:59Z",
         "status": "active"
+    }
+    ```
+
+    Responses:
+    - **201 Created**: Subscription created successfully
+    - **400 Bad Request**: Company does not exist in database
+    - **401 Unauthorized**: Admin authentication required
+    - **422 Unprocessable Entity**: Validation error (invalid data)
+
+    Error Example (Company Not Found):
+    ```json
+    {
+        "detail": "Cannot create subscription: Company 'Acme Translation Corp' does not exist in database"
     }
     ```
     """
@@ -109,27 +125,25 @@ async def get_subscription(
     # Helper function to serialize usage periods
     def serialize_usage_period(period):
         """Convert datetime objects in usage period to ISO format and calculate derived fields."""
-        subscription_units = period.get("subscription_units", 0)
-        used_units = period.get("used_units", 0)
+        units_allocated = period.get("units_allocated", 0)
+        units_used = period.get("units_used", 0)
         promotional_units = period.get("promotional_units", 0)
 
-        # Calculate total allocated units (subscription + promotional)
-        units_allocated = subscription_units + promotional_units
+        # Calculate total allocated units (base + promotional)
+        total_allocated = units_allocated + promotional_units
 
         # Calculate remaining units
-        units_remaining = units_allocated - used_units
+        units_remaining = total_allocated - units_used
 
         return {
-            # Backend fields
-            "subscription_units": subscription_units,
-            "used_units": used_units,
+            # Database fields
+            "units_allocated": units_allocated,
+            "units_used": units_used,
             "promotional_units": promotional_units,
             "price_per_unit": period.get("price_per_unit", 0.0),
             "period_start": period["period_start"].isoformat() if period.get("period_start") else None,
             "period_end": period["period_end"].isoformat() if period.get("period_end") else None,
-            # Frontend compatibility fields
-            "units_allocated": units_allocated,
-            "units_used": used_units,
+            # Calculated fields
             "units_remaining": units_remaining,
             "last_updated": period.get("updated_at", period.get("period_end")).isoformat() if period.get("updated_at") or period.get("period_end") else None
         }
@@ -187,27 +201,25 @@ async def get_company_subscriptions(
     # Helper function to serialize usage periods
     def serialize_usage_period(period):
         """Convert datetime objects in usage period to ISO format and calculate derived fields."""
-        subscription_units = period.get("subscription_units", 0)
-        used_units = period.get("used_units", 0)
+        units_allocated = period.get("units_allocated", 0)
+        units_used = period.get("units_used", 0)
         promotional_units = period.get("promotional_units", 0)
 
-        # Calculate total allocated units (subscription + promotional)
-        units_allocated = subscription_units + promotional_units
+        # Calculate total allocated units (base + promotional)
+        total_allocated = units_allocated + promotional_units
 
         # Calculate remaining units
-        units_remaining = units_allocated - used_units
+        units_remaining = total_allocated - units_used
 
         return {
-            # Backend fields
-            "subscription_units": subscription_units,
-            "used_units": used_units,
+            # Database fields
+            "units_allocated": units_allocated,
+            "units_used": units_used,
             "promotional_units": promotional_units,
             "price_per_unit": period.get("price_per_unit", 0.0),
             "period_start": period["period_start"].isoformat() if period.get("period_start") else None,
             "period_end": period["period_end"].isoformat() if period.get("period_end") else None,
-            # Frontend compatibility fields
-            "units_allocated": units_allocated,
-            "units_used": used_units,
+            # Calculated fields
             "units_remaining": units_remaining,
             "last_updated": period.get("updated_at", period.get("period_end")).isoformat() if period.get("updated_at") or period.get("period_end") else None
         }
@@ -244,23 +256,56 @@ async def get_company_subscriptions(
 
 
 @router.options("/{subscription_id}")
-async def options_subscription(subscription_id: str):
+async def options_subscription(subscription_id: str, request: Request):
     """
     Handle CORS preflight requests for subscription updates.
 
     This endpoint doesn't require authentication because it's just a CORS preflight check.
     The actual PATCH request will require authentication.
     """
-    timestamp = datetime.now(timezone.utc).isoformat()
-    logger.info(f"🔍 [{timestamp}] OPTIONS /api/subscriptions/{subscription_id} - CORS Preflight")
-    return JSONResponse(
-        content={"success": True},
-        status_code=200,
-        headers={
+    # ENTRY POINT - This proves the handler was reached
+    logger.info(f"🎯 OPTIONS HANDLER REACHED - subscription_id={subscription_id}")
+
+    try:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔍 [{timestamp}] OPTIONS /api/subscriptions/{subscription_id} - START")
+
+        # Log ALL request headers
+        logger.info(f"📥 Request Headers:")
+        for header_name, header_value in request.headers.items():
+            logger.info(f"   - {header_name}: {header_value}")
+
+        # Log specific CORS headers
+        logger.info(f"🌐 CORS Headers:")
+        logger.info(f"   - Origin: {request.headers.get('origin', 'NOT_SET')}")
+        logger.info(f"   - Access-Control-Request-Method: {request.headers.get('access-control-request-method', 'NOT_SET')}")
+        logger.info(f"   - Access-Control-Request-Headers: {request.headers.get('access-control-request-headers', 'NOT_SET')}")
+
+        # Prepare response
+        logger.info(f"🔄 Preparing CORS preflight response...")
+        response_headers = {
             "Access-Control-Allow-Methods": "GET, PATCH, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, Authorization",
         }
-    )
+        logger.info(f"📤 Response Headers:")
+        for header_name, header_value in response_headers.items():
+            logger.info(f"   - {header_name}: {header_value}")
+
+        logger.info(f"✅ CORS preflight response prepared successfully")
+        logger.info(f"📤 Returning 200 OK with CORS headers")
+
+        return JSONResponse(
+            content={"success": True},
+            status_code=200,
+            headers=response_headers
+        )
+
+    except Exception as e:
+        logger.error(f"❌ OPTIONS handler failed:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - subscription_id: {subscription_id}")
+        raise
 
 
 @router.patch("/{subscription_id}")

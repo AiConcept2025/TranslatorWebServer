@@ -611,7 +611,10 @@ async def translate_files(
     print(f"\n👤 Customer Type: {'Enterprise' if is_enterprise else 'Individual'}")
     if is_enterprise:
         print(f"   Company: {company_name}")
-    print(f"   User: {current_user.get('user_name', 'N/A')} ({request.email})")
+
+    # Safely handle current_user which might be None for individual users
+    user_name = current_user.get('user_name', 'N/A') if current_user else 'Individual User'
+    print(f"   User: {user_name} ({request.email})")
 
     # For enterprise users, validate company exists in database
     # CRITICAL: Enforce referential integrity - REJECT if company doesn't exist
@@ -808,8 +811,8 @@ async def translate_files(
                 price_per_page = float(price_value)
 
             # Enhanced subscription logging - Find current active period
-            # Database schema: subscription_units, used_units, promotional_units
-            # Formula: total_remaining = (subscription_units + promotional_units) - used_units
+            # Database schema: units_allocated, units_used, promotional_units
+            # Formula: total_remaining = (units_allocated + promotional_units) - units_used
             usage_periods = subscription.get("usage_periods", [])
             subscription_unit = subscription.get("subscription_unit", "page")
             status = subscription.get("status", "unknown")
@@ -836,12 +839,12 @@ async def translate_files(
 
             # Calculate availability from current active period only
             if current_period:
-                subscription_units = current_period.get("subscription_units", 0)
-                used_units = current_period.get("used_units", 0)
+                units_allocated = current_period.get("units_allocated", 0)
+                units_used = current_period.get("units_used", 0)
                 promotional_units = current_period.get("promotional_units", 0)
-                total_allocated = subscription_units + promotional_units
-                total_used = used_units
-                total_remaining = total_allocated - used_units
+                total_allocated = units_allocated + promotional_units
+                total_used = units_used
+                total_remaining = total_allocated - units_used
             else:
                 # No active period found - cannot use subscription
                 total_allocated = 0
@@ -858,7 +861,7 @@ async def translate_files(
                 logging.info(f"[SUBSCRIPTION]   Current Period: {current_period_idx}")
                 logging.info(f"[SUBSCRIPTION]   Period Start: {current_period.get('period_start')}")
                 logging.info(f"[SUBSCRIPTION]   Period End: {current_period.get('period_end')}")
-                logging.info(f"[SUBSCRIPTION]   Subscription Units: {subscription_units}")
+                logging.info(f"[SUBSCRIPTION]   Units Allocated: {units_allocated}")
                 logging.info(f"[SUBSCRIPTION]   Promotional Units: {promotional_units}")
                 logging.info(f"[SUBSCRIPTION]   Total Allocated: {total_allocated} {subscription_unit}s")
                 logging.info(f"[SUBSCRIPTION]   Used Units: {total_used} {subscription_unit}s")
@@ -867,7 +870,7 @@ async def translate_files(
                 print(f"\n📊 Current Subscription Period:")
                 print(f"   Status: {status}")
                 print(f"   Period: {current_period_idx} ({current_period.get('period_start')} to {current_period.get('period_end')})")
-                print(f"   Subscription Units: {subscription_units} {subscription_unit}s")
+                print(f"   Units Allocated: {units_allocated} {subscription_unit}s")
                 print(f"   Promotional Units: {promotional_units} {subscription_unit}s")
                 print(f"   Total Allocated: {total_allocated} {subscription_unit}s")
                 print(f"   Used Units: {total_used} {subscription_unit}s")
@@ -1999,6 +2002,29 @@ async def confirm_enterprise_transaction(
                 if failed_count > 0:
                     logging.warning(f"[CONFIRM-ENTERPRISE] {failed_count} files failed to move")
 
+                # Update subscription usage
+                subscription_id = transaction.get("subscription_id")
+                units_count = transaction.get("units_count", 0)
+
+                if subscription_id and units_count > 0:
+                    from app.services.subscription_service import subscription_service
+                    from app.models.subscription import UsageUpdate
+
+                    try:
+                        usage_update = UsageUpdate(
+                            units_to_add=units_count,
+                            use_promotional_units=False
+                        )
+                        await subscription_service.record_usage(
+                            subscription_id=str(subscription_id),
+                            usage_data=usage_update
+                        )
+                        logging.info(f"[CONFIRM-ENTERPRISE] Updated subscription usage: +{units_count} units")
+                    except Exception as e:
+                        logging.error(f"[CONFIRM-ENTERPRISE] Subscription update failed: {e}")
+                        # Don't fail the entire operation if usage tracking fails
+                        # The files were moved successfully, so we should return success
+
                 return JSONResponse(
                     status_code=200,
                     content={
@@ -2621,6 +2647,17 @@ async def timeout_middleware(request: Request, call_next):
     start_time = time_module.time()
     print(f"[TIMEOUT MIDDLEWARE] START: {request.method} {request.url.path}")
 
+    # Get logger for this middleware
+    logger = logging.getLogger(__name__)
+
+    # Special logging for OPTIONS requests (CORS preflight)
+    if request.method == "OPTIONS":
+        logger.info(f"🌐 [MIDDLEWARE] OPTIONS request detected - CORS preflight")
+        logger.info(f"   - Path: {request.url.path}")
+        logger.info(f"   - Origin: {request.headers.get('origin', 'NOT_SET')}")
+        logger.info(f"   - Access-Control-Request-Method: {request.headers.get('access-control-request-method', 'NOT_SET')}")
+        logger.info(f"   - Access-Control-Request-Headers: {request.headers.get('access-control-request-headers', 'NOT_SET')}")
+
     try:
         # Set timeout based on endpoint
         if "/files/upload" in str(request.url):
@@ -2637,6 +2674,30 @@ async def timeout_middleware(request: Request, call_next):
         print(f"[TIMEOUT MIDDLEWARE] Timeout set to {timeout}s, calling next middleware...")
         response = await asyncio.wait_for(call_next(request), timeout=timeout)
         elapsed = time_module.time() - start_time
+
+        # Log response status
+        status_code = getattr(response, 'status_code', None)
+        if status_code:
+            if 400 <= status_code < 500:
+                logger.error(f"❌ [MIDDLEWARE] Client Error {status_code}:")
+                logger.error(f"   - Method: {request.method}")
+                logger.error(f"   - Path: {request.url.path}")
+                logger.error(f"   - Elapsed: {elapsed:.2f}s")
+                # Try to log response body for debugging
+                try:
+                    if hasattr(response, 'body'):
+                        body_bytes = response.body
+                        if body_bytes:
+                            body_str = body_bytes.decode('utf-8')
+                            logger.error(f"   - Response body: {body_str[:500]}")  # Limit to 500 chars
+                except Exception as e:
+                    logger.error(f"   - Could not read response body: {e}")
+            elif status_code >= 500:
+                logger.error(f"❌ [MIDDLEWARE] Server Error {status_code}:")
+                logger.error(f"   - Method: {request.method}")
+                logger.error(f"   - Path: {request.url.path}")
+                logger.error(f"   - Elapsed: {elapsed:.2f}s")
+
         print(f"[TIMEOUT MIDDLEWARE] COMPLETE: {elapsed:.2f}s - {request.method} {request.url.path}")
         return response
 
@@ -2672,6 +2733,16 @@ async def timeout_middleware(request: Request, call_next):
 
         logging.warning(f"Request timeout: {request.method} {request.url.path} (>{timeout}s)")
         return response
+
+    except Exception as e:
+        elapsed = time_module.time() - start_time
+        logger.error(f"❌ [MIDDLEWARE] Unexpected error:", exc_info=True)
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Error message: {str(e)}")
+        logger.error(f"   - Method: {request.method}")
+        logger.error(f"   - Path: {request.url.path}")
+        logger.error(f"   - Elapsed: {elapsed:.2f}s")
+        raise
 
 
 # Custom OpenAPI schema

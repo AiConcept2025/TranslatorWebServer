@@ -31,7 +31,68 @@ class EncodingFixMiddleware(BaseHTTPMiddleware):
         logger.info(f"[ENCODING FIX] Processing: {request.method} {request.url.path}")
         print(f"[ENCODING FIX] Processing: {request.method} {request.url.path}")
 
-        # CRITICAL FIX: DO NOT consume request body in middleware
+        # ===================================================================
+        # SPECIAL HANDLING FOR /submit ENDPOINT (GoogleTranslator debugging)
+        # ===================================================================
+        # Capture raw request body BEFORE Pydantic validation for debugging
+        if request.url.path == "/submit":
+            try:
+                # Read and cache the body for logging
+                body = await request.body()
+
+                print("=" * 80)
+                print("🔍 /submit REQUEST - RAW BODY CAPTURE (BEFORE VALIDATION)")
+                print("=" * 80)
+                print(f"📦 Content-Length: {len(body)} bytes")
+                print(f"📦 Content-Type: {request.headers.get('content-type', 'unknown')}")
+
+                # Decode and log the body
+                try:
+                    body_str = body.decode('utf-8')
+                    print(f"\n📦 Raw Body (UTF-8):")
+                    print(body_str)
+
+                    # Try to parse as JSON for pretty printing
+                    try:
+                        import json
+                        body_json = json.loads(body_str)
+                        print(f"\n📦 Parsed JSON:")
+                        print(json.dumps(body_json, indent=2))
+
+                        # Highlight the transaction_id value
+                        transaction_id = body_json.get('transaction_id')
+                        print(f"\n🎯 TRANSACTION_ID VALUE: {repr(transaction_id)}")
+                        print(f"🎯 TRANSACTION_ID TYPE: {type(transaction_id).__name__}")
+
+                        if transaction_id is None:
+                            print("❌ ISSUE CONFIRMED: transaction_id is null/None in request!")
+                        elif not transaction_id:
+                            print(f"❌ ISSUE: transaction_id is empty: {repr(transaction_id)}")
+                        else:
+                            print(f"✅ transaction_id looks valid: {transaction_id}")
+
+                    except json.JSONDecodeError as e:
+                        print(f"⚠️  JSON parsing failed: {e}")
+                except UnicodeDecodeError:
+                    print(f"⚠️  Body is not UTF-8: {body.hex()[:200]}")
+
+                print("=" * 80)
+
+                # IMPORTANT: Re-wrap body in a new stream for Pydantic to consume
+                # This prevents the "body already consumed" issue
+                from io import BytesIO
+
+                async def receive():
+                    return {"type": "http.request", "body": body}
+
+                # Create a new request scope with cached body
+                request._receive = receive
+
+            except Exception as e:
+                print(f"⚠️  Error capturing /submit body: {e}")
+                logger.error(f"Error capturing /submit request body: {e}", exc_info=True)
+
+        # CRITICAL FIX: DO NOT consume request body in middleware for other endpoints
         # BaseHTTPMiddleware + body reading causes stream corruption and ClientDisconnect errors
         # FastAPI/Pydantic handles encoding perfectly - this middleware is unnecessary
         #
@@ -39,10 +100,11 @@ class EncodingFixMiddleware(BaseHTTPMiddleware):
         # Problem: Consuming body stream causes it to be unavailable to endpoints
         # Result: FastAPI waits indefinitely for body data, causing 90s timeouts
         #
-        # Solution: Skip body processing entirely, let FastAPI handle it
+        # Solution: Skip body processing entirely, let FastAPI handle it (except /submit above)
 
-        logger.info(f"[ENCODING FIX] Skipping body processing for: {request.url.path}")
-        print(f"[ENCODING FIX] SKIPPING {request.url.path} - Body NOT consumed (middleware disabled)")
+        if request.url.path != "/submit":
+            logger.info(f"[ENCODING FIX] Skipping body processing for: {request.url.path}")
+            print(f"[ENCODING FIX] SKIPPING {request.url.path} - Body NOT consumed (middleware disabled)")
 
         return await call_next(request)
     

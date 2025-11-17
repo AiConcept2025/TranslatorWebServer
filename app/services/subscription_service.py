@@ -265,18 +265,12 @@ class SubscriptionService:
         # promotional_units + units_allocated - units_used >= units_needed
         promotional_units_in_period = current_period.get("promotional_units", 0)
 
-        # FIX: Use .get() with fallback to handle missing or renamed fields
-        # Some periods may have 'units_allocated' or 'subscription_units' or both
-        units_allocated = (
-            current_period.get("units_allocated") or
-            current_period.get("subscription_units") or
-            0
-        )
-        # FIXED: Use correct field name 'used_units' as it exists in DB schema
-        used_units = current_period.get("used_units", 0)
+        # Get units from current period using correct field names
+        units_allocated = current_period.get("units_allocated", 0)
+        units_used = current_period.get("units_used", 0)
 
         # Validate units_allocated was found
-        if units_allocated == 0 and "units_allocated" not in current_period and "subscription_units" not in current_period:
+        if units_allocated == 0 and "units_allocated" not in current_period:
             logger.error(
                 f"[SUBSCRIPTION] Invalid usage period: units_allocated not found. "
                 f"Period keys: {list(current_period.keys())}, Period data: {current_period}"
@@ -286,29 +280,29 @@ class SubscriptionService:
                 f"Available fields: {list(current_period.keys())}"
             )
 
-        total_available = promotional_units_in_period + units_allocated - used_units
+        total_available = promotional_units_in_period + units_allocated - units_used
 
         # Check if we have enough (must have at least units_needed, can be equal)
         if total_available < units_to_add:
             logger.warning(
                 f"[SUBSCRIPTION] Insufficient units for subscription {subscription_id}. "
                 f"Need {units_to_add}, have {total_available} "
-                f"(promotional: {promotional_units_in_period}, allocated: {units_allocated}, used: {used_units})"
+                f"(promotional: {promotional_units_in_period}, allocated: {units_allocated}, used: {units_used})"
             )
             raise SubscriptionError(
                 f"Insufficient units. Need {units_to_add}, have {total_available} "
-                f"(promotional: {promotional_units_in_period}, allocated: {units_allocated}, used: {used_units})"
+                f"(promotional: {promotional_units_in_period}, allocated: {units_allocated}, used: {units_used})"
             )
 
         # Log before update
         logger.info(f"[SUBSCRIPTION UPDATE] Subscription: {subscription_id}")
         logger.info(f"[SUBSCRIPTION UPDATE] Period index: {current_period_idx}")
-        logger.info(f"[SUBSCRIPTION UPDATE] Current used_units: {used_units}, Adding: {units_to_add}, New total: {used_units + units_to_add}")
+        logger.info(f"[SUBSCRIPTION UPDATE] Current units_used: {units_used}, Adding: {units_to_add}, New total: {units_used + units_to_add}")
         logger.info(f"[SUBSCRIPTION UPDATE] Total available before: {total_available}")
 
-        # FIXED: Update using correct field name 'used_units' and remove non-existent 'units_remaining'
+        # Update using correct field name 'units_used'
         update_query = {
-            f"usage_periods.{current_period_idx}.used_units": used_units + units_to_add,
+            f"usage_periods.{current_period_idx}.units_used": units_used + units_to_add,
             f"usage_periods.{current_period_idx}.last_updated": now,
             "updated_at": now
         }
@@ -326,7 +320,7 @@ class SubscriptionService:
             # Verify the update
             updated_period = result["usage_periods"][current_period_idx]
             logger.info(f"[SUBSCRIPTION UPDATE] ✅ Update successful")
-            logger.info(f"[SUBSCRIPTION UPDATE] New used_units: {updated_period.get('used_units', 0)}")
+            logger.info(f"[SUBSCRIPTION UPDATE] New units_used: {updated_period.get('units_used', 0)}")
             logger.info(f"[SUBSCRIPTION UPDATE] Last updated: {updated_period.get('last_updated')}")
         else:
             logger.error(f"[SUBSCRIPTION UPDATE] ❌ Update failed - no document returned")

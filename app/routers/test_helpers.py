@@ -112,6 +112,74 @@ async def seed_test_data():
         upsert=True
     )
 
+    # Create test admin user in iris-admins collection
+    admin_password_hash = bcrypt.hashpw(
+        "TestPassword123!".encode('utf-8'),
+        bcrypt.gensalt()
+    ).decode('utf-8')
+
+    test_admin = {
+        "user_email": "test-admin@test.com",
+        "user_name": "Test Admin",
+        "password": admin_password_hash,
+        "permission_level": "admin",
+        "status": "active",
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+        "last_login": None
+    }
+
+    # Insert test admin (replace if exists)
+    await database.db["iris-admins"].replace_one(
+        {"user_email": test_admin["user_email"]},
+        test_admin,
+        upsert=True
+    )
+
+    # Create test companies if they don't exist
+    test_companies = [
+        {
+            "company_name": "Acme Corporation",
+            "industry": "Technology",
+            "contact_email": "contact@acme.test.com",
+            "contact_phone": "+1-555-0100",
+            "address": "123 Tech Street, Silicon Valley, CA 94000",
+            "status": "active",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        },
+        {
+            "company_name": "Global Translation Inc",
+            "industry": "Translation Services",
+            "contact_email": "info@globaltrans.test.com",
+            "contact_phone": "+1-555-0200",
+            "address": "456 Language Ave, New York, NY 10001",
+            "status": "active",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        },
+        {
+            "company_name": "TechDocs Ltd",
+            "industry": "Documentation",
+            "contact_email": "hello@techdocs.test.com",
+            "contact_phone": "+1-555-0300",
+            "address": "789 Documentation Blvd, Austin, TX 78701",
+            "status": "active",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+    ]
+
+    companies_created = []
+    for company_data in test_companies:
+        # Insert company (replace if exists)
+        result = await database.db.company.replace_one(
+            {"company_name": company_data["company_name"]},
+            company_data,
+            upsert=True
+        )
+        companies_created.append(company_data["company_name"])
+
     return {
         "message": "Test data seeded successfully",
         "test_user": {
@@ -119,6 +187,12 @@ async def seed_test_data():
             "name": test_user_login["user_name"],
             "password": "testpass123"  # Only return in test mode!
         },
+        "test_admin": {
+            "email": test_admin["user_email"],
+            "name": test_admin["user_name"],
+            "password": "TestPassword123!"  # Only return in test mode!
+        },
+        "companies_created": companies_created,
         "timestamp": datetime.utcnow().isoformat()
     }
 

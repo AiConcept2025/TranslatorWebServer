@@ -11,7 +11,7 @@ import ssl
 import time
 from typing import Dict, List, Optional, Tuple, Any, Callable, TypeVar
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 
 from googleapiclient.discovery import build
@@ -1270,14 +1270,14 @@ class GoogleDriveService:
     async def update_file_properties(self, file_id: str, properties: Dict[str, str]) -> bool:
         """
         Update file properties in Google Drive.
-        
+
         Args:
             file_id: Google Drive file ID
             properties: Dictionary of properties to set
-            
+
         Returns:
             True if successful
-            
+
         Raises:
             GoogleDriveError: If update fails
         """
@@ -1296,6 +1296,136 @@ class GoogleDriveService:
         except Exception as e:
             logging.error(f"Failed to update file {file_id} properties: {e}")
             raise GoogleDriveError(f"Failed to update file properties: {e}")
+
+    @handle_google_drive_exceptions("clean trash folder")
+    async def clean_trash_folder(self) -> Dict[str, Any]:
+        """
+        Clean all files from Trash folder if not empty.
+        Called on a timer every hour.
+
+        Returns:
+            Dictionary with cleanup results including:
+            - trash_was_empty: Whether trash was already empty
+            - files_found: Number of files found in trash
+            - files_deleted: Number of files successfully deleted
+            - errors: List of any errors encountered
+
+        Raises:
+            GoogleDriveError: If cleanup fails critically
+        """
+        start_time = time.time()
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+        logging.info("=" * 80)
+        logging.info(f"🗑️  TRASH CLEANUP STARTED at {timestamp}")
+        logging.info("=" * 80)
+        print(f"\n🗑️  TRASH CLEANUP STARTED at {timestamp}")
+
+        try:
+            # Query for all trashed files
+            query = "trashed=true"
+
+            # List all trashed files with retry logic
+            results = await self._list_files_with_retry(
+                query=query,
+                fields='files(id,name,size,trashedTime,mimeType)'
+            )
+
+            files = results.get('files', [])
+            files_count = len(files)
+
+            # Check if trash is empty
+            if files_count == 0:
+                elapsed = time.time() - start_time
+                logging.info(f"✅ TRASH FOLDER IS EMPTY - No cleanup needed")
+                logging.info(f"⏱️  Cleanup check completed in {elapsed:.2f}s")
+                logging.info("=" * 80)
+                print(f"✅ TRASH FOLDER IS EMPTY - No cleanup needed (checked in {elapsed:.2f}s)")
+
+                return {
+                    'trash_was_empty': True,
+                    'files_found': 0,
+                    'files_deleted': 0,
+                    'total_size_bytes': 0,
+                    'errors': [],
+                    'duration_seconds': elapsed
+                }
+
+            # Trash is not empty - proceed with deletion
+            total_size = sum(int(f.get('size', 0)) for f in files if f.get('size'))
+            total_size_mb = total_size / (1024 * 1024)
+
+            logging.info(f"📊 TRASH STATISTICS:")
+            logging.info(f"   Files found: {files_count}")
+            logging.info(f"   Total size: {total_size_mb:.2f} MB ({total_size:,} bytes)")
+            print(f"\n📊 Found {files_count} files in Trash ({total_size_mb:.2f} MB)")
+
+            # Delete files one by one
+            deleted_count = 0
+            errors = []
+
+            logging.info(f"\n🔥 DELETING {files_count} FILES FROM TRASH...")
+            print(f"🔥 Deleting {files_count} files from Trash...")
+
+            for index, file in enumerate(files, 1):
+                file_id = file.get('id')
+                file_name = file.get('name', 'Unknown')
+                file_size = int(file.get('size', 0)) if file.get('size') else 0
+
+                try:
+                    # Permanently delete the file
+                    await self._delete_file_with_retry(file_id)
+                    deleted_count += 1
+
+                    # Log progress every 10 files or for first/last file
+                    if index == 1 or index == files_count or index % 10 == 0:
+                        logging.info(f"   ✓ [{index}/{files_count}] Deleted: {file_name} ({file_size:,} bytes)")
+                        print(f"   ✓ [{index}/{files_count}] Deleted: {file_name}")
+
+                except Exception as e:
+                    error_msg = f"Failed to delete {file_name} (ID: {file_id}): {str(e)}"
+                    logging.warning(f"   ✗ [{index}/{files_count}] {error_msg}")
+                    print(f"   ✗ [{index}/{files_count}] Failed: {file_name}")
+                    errors.append(error_msg)
+
+            # Final summary
+            elapsed = time.time() - start_time
+            success_rate = (deleted_count / files_count * 100) if files_count > 0 else 0
+
+            logging.info("")
+            logging.info(f"✅ TRASH CLEANUP COMPLETED")
+            logging.info(f"   Files deleted: {deleted_count}/{files_count} ({success_rate:.1f}%)")
+            logging.info(f"   Space freed: {total_size_mb:.2f} MB")
+            logging.info(f"   Failed deletions: {len(errors)}")
+            logging.info(f"⏱️  Total duration: {elapsed:.2f}s")
+            logging.info("=" * 80)
+
+            print(f"\n✅ TRASH CLEANUP COMPLETED:")
+            print(f"   Deleted: {deleted_count}/{files_count} files ({success_rate:.1f}%)")
+            print(f"   Space freed: {total_size_mb:.2f} MB")
+            if errors:
+                print(f"   ⚠️  Errors: {len(errors)}")
+            print(f"   Duration: {elapsed:.2f}s\n")
+
+            return {
+                'trash_was_empty': False,
+                'files_found': files_count,
+                'files_deleted': deleted_count,
+                'total_size_bytes': total_size,
+                'total_size_mb': round(total_size_mb, 2),
+                'errors': errors,
+                'duration_seconds': round(elapsed, 2),
+                'success_rate': round(success_rate, 1)
+            }
+
+        except Exception as e:
+            elapsed = time.time() - start_time
+            error_msg = f"Critical error during trash cleanup: {str(e)}"
+            logging.error(f"❌ {error_msg}")
+            logging.error(f"⏱️  Failed after {elapsed:.2f}s")
+            logging.error("=" * 80)
+            print(f"\n❌ TRASH CLEANUP FAILED: {str(e)}\n")
+            raise GoogleDriveError(error_msg, original_error=e)
 
     @handle_google_drive_exceptions("get file by ID")
     async def get_file_by_id(self, file_id: str) -> Dict[str, Any]:

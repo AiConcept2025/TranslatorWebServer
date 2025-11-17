@@ -239,8 +239,12 @@ class SubmitService:
             # Get completion counters
             completed_docs = transaction.get("completed_documents", 0)
             total_docs = transaction.get("total_documents", len(transaction.get("documents", [])))
+            batch_email_sent = transaction.get("batch_email_sent", False)
 
-            # Log email gate evaluation
+            # Enhanced email gate evaluation logging
+            logger.info("=" * 80)
+            logger.info("EMAIL BATCHING GATE CHECK")
+            logger.info("=" * 80)
             logger.info(
                 f"EMAIL GATE EVALUATION - Transaction {transaction_id}",
                 extra={
@@ -248,11 +252,16 @@ class SubmitService:
                     "file_name": file_name,
                     "completed_documents": completed_docs,
                     "total_documents": total_docs,
-                    "will_send_email": completed_docs >= total_docs,
+                    "all_complete": completed_docs >= total_docs,
+                    "batch_email_sent": batch_email_sent,
+                    "will_send_email": completed_docs >= total_docs and not batch_email_sent,
                     "documents_in_transaction": len(transaction.get("documents", [])),
                     "translated_documents_in_email": len(documents)
                 }
             )
+            logger.info(f"Documents complete: {completed_docs}/{total_docs}")
+            logger.info(f"Email already sent: {batch_email_sent}")
+            logger.info(f"Will send email: {completed_docs >= total_docs and not batch_email_sent}")
 
             # EMAIL GATE: Only send email if ALL documents are complete
             if completed_docs < total_docs:
@@ -337,6 +346,31 @@ class SubmitService:
                 }
             )
 
+            # Enhanced logging: Email content preview
+            logger.info("=" * 80)
+            logger.info("SENDING EMAIL - Content Preview")
+            logger.info("=" * 80)
+            logger.info(
+                "Email details",
+                extra={
+                    "recipient": user_email,
+                    "user_name": user_name,
+                    "company_name": company_name,
+                    "template": "individual_template.html" if company_name == "Ind" else "enterprise_template.html",
+                    "transaction_id": txn_id,
+                    "documents_count": len(documents)
+                }
+            )
+            logger.info(f"To: {user_email}")
+            logger.info(f"Name: {user_name}")
+            logger.info(f"Company: {company_name}")
+            logger.info(f"Transaction ID: {txn_id}")
+            logger.info(f"\nDocuments included in email ({len(documents)} total):")
+            for idx, doc in enumerate(documents, 1):
+                logger.info(f"  {idx}. {doc.document_name}")
+                logger.info(f"     Original: {doc.original_url[:60]}..." if len(doc.original_url) > 60 else f"     Original: {doc.original_url}")
+                logger.info(f"     Translated: {doc.translated_url[:60]}..." if doc.translated_url and len(doc.translated_url) > 60 else f"     Translated: {doc.translated_url}")
+
             email_result = email_service.send_translation_notification(
                 documents=documents,
                 user_name=user_name,
@@ -346,6 +380,24 @@ class SubmitService:
                 completed_at=completed_at,
                 total_documents=total_docs_count
             )
+
+            # Enhanced logging: Email send result
+            logger.info("=" * 80)
+            logger.info("EMAIL SEND RESULT")
+            logger.info("=" * 80)
+            logger.info(
+                "Email send status",
+                extra={
+                    "transaction_id": txn_id,
+                    "recipient": user_email,
+                    "send_successful": email_result.success,
+                    "error_message": email_result.error if not email_result.success else None
+                }
+            )
+            if email_result.success:
+                logger.info(f"✅ Email sent successfully to {user_email}")
+            else:
+                logger.error(f"❌ Email send failed: {email_result.error}")
 
             logger.debug(
                 f"Email service returned result",

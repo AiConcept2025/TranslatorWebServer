@@ -92,6 +92,76 @@ class CompanyUserCreate(BaseModel):
         }
 
 
+class CompanyUserUpdate(BaseModel):
+    """
+    Request model for updating a company user (partial update).
+
+    All fields are optional - only provided fields will be updated.
+    """
+    user_name: Optional[str] = Field(None, max_length=255, description="User's full name")
+    email: Optional[EmailStr] = Field(None, description="User's email address")
+    phone_number: Optional[str] = Field(None, max_length=50, description="User's phone number")
+    password: Optional[str] = Field(None, min_length=6, max_length=128, description="New password (will be hashed)")
+    permission_level: Optional[PermissionLevel] = Field(None, description="User's permission level")
+    status: Optional[UserStatus] = Field(None, description="User's account status")
+
+    @validator('user_name')
+    def validate_user_name(cls, v):
+        """Validate user name if provided."""
+        if v is not None:
+            if not v.strip():
+                raise ValueError("User name cannot be empty")
+            if len(v.strip()) > 255:
+                raise ValueError("User name cannot exceed 255 characters")
+            return v.strip()
+        return v
+
+    @validator('email')
+    def validate_email(cls, v):
+        """Validate and normalize email if provided."""
+        if v is not None:
+            if not v.strip():
+                raise ValueError("Email cannot be empty")
+            return v.lower().strip()
+        return v
+
+    @validator('phone_number')
+    def validate_phone_number(cls, v):
+        """Validate phone number if provided."""
+        if v is not None:
+            if len(v.strip()) > 50:
+                raise ValueError("Phone number cannot exceed 50 characters")
+            return v.strip() if v.strip() else None
+        return v
+
+    @validator('password')
+    def validate_password(cls, v):
+        """Validate password strength if provided."""
+        if v is not None:
+            if len(v) < 6:
+                raise ValueError("Password must be at least 6 characters")
+            if len(v) > 128:
+                raise ValueError("Password cannot exceed 128 characters")
+            if not re.search(r'[A-Za-z]', v):
+                raise ValueError("Password must contain at least one letter")
+            if not re.search(r'\d', v):
+                raise ValueError("Password must contain at least one number")
+            return v
+        return v
+
+    class Config:
+        """Pydantic configuration with example."""
+        json_schema_extra = {
+            "example": {
+                "user_name": "Jane Doe",
+                "email": "jane.doe@company.com",
+                "phone_number": "+1-555-9999",
+                "permission_level": "admin",
+                "status": "active"
+            }
+        }
+
+
 class CompanyUserResponse(BaseModel):
     """
     Response model for company user data.
@@ -127,5 +197,6 @@ class CompanyUserResponse(BaseModel):
 # Export all models
 __all__ = [
     "CompanyUserCreate",
+    "CompanyUserUpdate",
     "CompanyUserResponse"
 ]

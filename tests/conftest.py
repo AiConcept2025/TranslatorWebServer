@@ -4,6 +4,7 @@ Pytest configuration for integration tests.
 
 import pytest
 import uuid
+import httpx
 from datetime import datetime, timezone
 from typing import Dict, Any
 
@@ -21,6 +22,107 @@ def pytest_configure(config):
 # ============================================================================
 # Shared Test Fixtures
 # ============================================================================
+
+@pytest.fixture(scope="session")
+async def admin_session_token():
+    """
+    Create an admin user and get a valid session token for testing.
+
+    This is a session-scoped fixture that creates an admin user once
+    and returns a valid Bearer token for all tests.
+
+    Returns:
+        dict: {"Authorization": "Bearer {token}"}
+    """
+    import bcrypt
+    from app.services.auth_service import auth_service
+
+    await database.connect()
+
+    # Create test admin user
+    admin_email = "test-admin@example.com"
+    admin_password = "TestAdmin123!"
+
+    # Delete existing admin user if exists (for clean test state)
+    await database.company_users.delete_one({"email": admin_email})
+
+    # Always create fresh admin user for tests
+    if True:
+        # Create admin user directly in company_users collection
+        # Hash password with bcrypt (same method as auth_service)
+        password_bytes = admin_password.encode('utf-8')[:72]  # Truncate to 72 bytes (bcrypt limit)
+        password_hash = bcrypt.hashpw(password_bytes, bcrypt.gensalt()).decode('utf-8')
+
+        admin_doc = {
+            "email": admin_email,
+            "password_hash": password_hash,
+            "user_name": "Test Admin",
+            "company_name": "TEST-ADMIN-COMPANY",  # Admin needs a company
+            "permission_level": "admin",
+            "status": "active",  # User must be active to authenticate
+            "failed_login_attempts": 0,
+            "account_locked": False,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
+        }
+
+        # Also create the company
+        company_doc = {
+            "company_name": "TEST-ADMIN-COMPANY",
+            "description": "Test company for admin user",
+            "address": {
+                "address0": "123 Admin St",
+                "address1": "",
+                "postal_code": "00000",
+                "state": "TS",
+                "city": "Test City",
+                "country": "USA"
+            },
+            "contact_person": {
+                "name": "Test Admin",
+                "type": "Admin"
+            },
+            "phone_number": ["000-000-0000"],
+            "company_url": [],
+            "line_of_business": "Testing",
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
+        }
+
+        # Check if company exists
+        existing_company = await database.company.find_one({"company_name": "TEST-ADMIN-COMPANY"})
+        if not existing_company:
+            await database.company.insert_one(company_doc)
+
+        await database.company_users.insert_one(admin_doc)
+
+    # Authenticate to get session token
+    auth_result = await auth_service.authenticate_user(
+        company_name="TEST-ADMIN-COMPANY",
+        password=admin_password,
+        user_name="Test Admin",
+        email=admin_email
+    )
+
+    session_token = auth_result.get("session_token")
+    if not session_token:
+        raise ValueError("Failed to create admin session token")
+
+    return {"Authorization": f"Bearer {session_token}"}
+
+
+@pytest.fixture(scope="function")
+async def admin_headers(admin_session_token):
+    """
+    Get admin authentication headers for a test.
+
+    Uses the session-scoped admin_session_token fixture.
+
+    Returns:
+        dict: {"Authorization": "Bearer {token}"}
+    """
+    return admin_session_token
+
 
 @pytest.fixture(scope="function")
 async def test_transaction_with_nested_docs():
@@ -44,7 +146,6 @@ async def test_transaction_with_nested_docs():
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_id": "testuser@example.com",
-        "company_name": None,  # Individual customer
         "source_language": "en",
         "target_language": "fr",
         "units_count": 15,

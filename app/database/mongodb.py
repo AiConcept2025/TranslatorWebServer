@@ -299,6 +299,25 @@ class MongoDB:
             logger.warning(f"[MongoDB] Payments index creation failed: {e}")
             failed_count += 1
 
+        # Invoices collection indexes
+        try:
+            invoices_indexes = [
+                IndexModel([("invoice_number", ASCENDING)], unique=True, name="invoice_number_unique"),
+                IndexModel([("company_name", ASCENDING)], name="company_name_idx"),
+                IndexModel([("subscription_id", ASCENDING)], name="subscription_id_idx"),
+                IndexModel([("status", ASCENDING)], name="status_idx"),
+                IndexModel([("invoice_date", ASCENDING)], name="invoice_date_idx"),
+                IndexModel([("due_date", ASCENDING)], name="due_date_idx"),
+                IndexModel([("company_name", ASCENDING), ("status", ASCENDING)], name="company_status_idx"),
+                IndexModel([("created_at", ASCENDING)], name="created_at_asc")
+            ]
+            await self.db.invoices.create_indexes(invoices_indexes)
+            logger.info("[MongoDB] Invoices indexes created")
+            success_count += 1
+        except (OperationFailure, Exception) as e:
+            logger.warning(f"[MongoDB] Invoices index creation failed: {e}")
+            failed_count += 1
+
         logger.info(f"[MongoDB] Index creation completed: {success_count} collections successful, {failed_count} collections had issues")
 
     @property

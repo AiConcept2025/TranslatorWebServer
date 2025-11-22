@@ -57,6 +57,9 @@ python-multipart==0.0.6
 # Environment configuration
 python-dotenv==1.0.0
 
+# Date utilities
+python-dateutil==2.8.2
+
 # Template rendering
 jinja2==3.1.6
 

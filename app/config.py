@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     
     # Database Configuration
     database_url: str = "sqlite:///./translator.db"
-    mongodb_uri: str = "mongodb://iris:Sveta87201120@localhost:27017/translation?authSource=translation"
+    mongodb_uri: str  # Required - must be set in .env file (no hardcoded credentials)
     mongodb_database: str = "translation"
 
     # Redis Configuration
@@ -111,6 +111,23 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY must be set and not be the default value")
         if len(v) < 32:
             raise ValueError("SECRET_KEY must be at least 32 characters long")
+        return v
+
+    @validator('mongodb_uri')
+    def validate_mongodb_uri(cls, v):
+        if not v:
+            raise ValueError("MONGODB_URI must be set in .env file")
+        # Check for placeholder values
+        placeholder_values = ['user:password', 'your-', 'changeme', 'placeholder']
+        for placeholder in placeholder_values:
+            if placeholder in v.lower():
+                raise ValueError(
+                    f"MONGODB_URI contains placeholder value '{placeholder}'. "
+                    "Please set actual MongoDB credentials in .env file"
+                )
+        # Basic format validation
+        if not v.startswith(('mongodb://', 'mongodb+srv://')):
+            raise ValueError("MONGODB_URI must start with 'mongodb://' or 'mongodb+srv://'")
         return v
     
     @validator('allowed_file_types')

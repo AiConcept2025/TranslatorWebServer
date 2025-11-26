@@ -29,6 +29,7 @@ from app.exceptions.google_drive_exceptions import (
 )
 from app.services.google_drive_service import google_drive_service
 from app.utils.user_transaction_helper import create_user_transaction
+from app.services.pricing_service import pricing_service
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ class TranslateUserRequest(BaseModel):
     email: EmailStr
     userName: str  # Required for user transactions
     paymentIntentId: Optional[str] = None
+    complexity: str = "basic"  # Document complexity: basic, complex_formatted, human_translator, handwritten
 
 
 # ============================================================================
@@ -352,15 +354,30 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
     print(f"Target folder: {request.email}/Temp/ (ID: {folder_id})")
     print(f"Starting file uploads to Google Drive...")
 
-    # ✅ FIX: Generate ONE transaction ID for entire batch (not per file)
-    batch_square_tx_id = generate_square_transaction_id()
-    log_step("BATCH TRANSACTION ID", f"Generated batch Square ID: {batch_square_tx_id}")
-    print(f"Generated batch Square transaction ID: {batch_square_tx_id}")
-
     stored_files = []
-    all_documents = []  # ✅ FIX: Accumulate all documents for single transaction
     total_units = 0
-    cost_per_unit = 0.10  # Fixed pricing for individual users
+    square_transaction_ids = []
+
+    # First pass: estimate total pages for volume-based pricing
+    for file_info in request.files:
+        total_units += estimate_page_count(file_info.name, file_info.size)
+
+    # Calculate pricing using the pricing service (volume-based tiers)
+    pricing_result = pricing_service.get_price_for_individual(
+        page_count=total_units,
+        complexity=request.complexity
+    )
+    cost_per_unit = float(pricing_result.price_per_page)
+    volume_tier = pricing_result.volume_tier
+
+    log_step(
+        "PRICING CALCULATED",
+        f"Total pages: {total_units}, Tier: {volume_tier}, "
+        f"Complexity: {request.complexity}, Price: ${cost_per_unit}/page"
+    )
+
+    # Reset total_units for accurate per-file tracking
+    total_units = 0
 
     for i, file_info in enumerate(request.files, 1):
         try:
@@ -399,31 +416,31 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
             )
             log_step(f"FILE {i} GDRIVE UPLOADED", f"File ID: {file_result['file_id']}")
 
-            # Update file metadata (initial properties)
-            log_step(f"FILE {i} METADATA UPDATE", "Setting initial file properties")
-            initial_properties = {
-                "customer_email": request.email,
-                "user_name": request.userName,
-                "source_language": request.sourceLanguage,
-                "target_language": request.targetLanguage,
-                "page_count": str(page_count),
-                "unit_type": unit_type,
-                "status": "awaiting_payment",
-                "upload_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "original_filename": file_info.name,
-            }
+            # Update file metadata
+            log_step(f"FILE {i} METADATA UPDATE", "Setting file properties")
             await google_drive_service.update_file_properties(
                 file_id=file_result["file_id"],
-                properties=initial_properties,
+                properties={
+                    "customer_email": request.email,
+                    "user_name": request.userName,
+                    "source_language": request.sourceLanguage,
+                    "target_language": request.targetLanguage,
+                    "page_count": str(page_count),
+                    "unit_type": unit_type,
+                    "status": "awaiting_payment",
+                    "upload_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "original_filename": file_info.name,
+                },
             )
 
-            # Log all metadata values being set
-            print(f"   📋 File Metadata Set on Google Drive:")
-            for key, value in initial_properties.items():
-                print(f"      • {key}: {value}")
+            # Create user transaction record
+            square_tx_id = generate_square_transaction_id()
+            log_step(
+                f"FILE {i} TRANSACTION CREATE", f"Square ID: {square_tx_id}"
+            )
 
-            # ✅ FIX: Accumulate document in batch array (don't create transaction yet)
-            all_documents.append({
+            # Build documents array (single file per transaction)
+            documents = [{
                 "file_name": file_info.name,
                 "file_size": file_info.size,
                 "original_url": file_result.get("google_drive_url", ""),
@@ -434,8 +451,27 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
                 "translated_at": None,
                 "processing_started_at": None,
                 "processing_duration": None,
-            })
-            log_step(f"FILE {i} ADDED TO BATCH", f"Document added to batch transaction")
+            }]
+
+            tx_id = await create_user_transaction(
+                user_name=request.userName,
+                user_email=request.email,
+                documents=documents,
+                number_of_units=page_count,
+                unit_type=unit_type,
+                cost_per_unit=cost_per_unit,
+                source_language=request.sourceLanguage,
+                target_language=request.targetLanguage,
+                square_transaction_id=square_tx_id,
+                date=datetime.now(timezone.utc),
+                status="processing",
+            )
+
+            if tx_id:
+                square_transaction_ids.append(square_tx_id)
+                log_step(f"FILE {i} TRANSACTION CREATED", f"TX ID: {square_tx_id}")
+            else:
+                log_step(f"FILE {i} TRANSACTION FAILED", "Transaction creation failed")
 
             log_step(
                 f"FILE {i} COMPLETE",
@@ -451,13 +487,13 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
                     "unit_type": unit_type,
                     "size": file_info.size,
                     "google_drive_url": file_result.get("google_drive_url"),
-                    "square_transaction_id": batch_square_tx_id,  # ✅ FIX: Use batch ID
+                    "square_transaction_id": square_tx_id,
                 }
             )
             print(
                 f"   Successfully uploaded: '{file_info.name}' -> "
                 f"Google Drive ID: {file_result['file_id']}, "
-                f"{page_count} {unit_type}s"
+                f"{page_count} {unit_type}s, Square TX: {square_tx_id}"
             )
 
         except Exception as e:
@@ -476,68 +512,16 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
             )
 
     # ========================================================================
-    # CREATE BATCH TRANSACTION RECORD (ONCE for all files)
-    # ========================================================================
-    batch_transaction_id = None
-    if all_documents:  # Only create if we have successfully uploaded documents
-        log_step("BATCH TRANSACTION CREATE", f"Creating transaction with {len(all_documents)} documents")
-        print(f"\n💾 Creating batch transaction record...")
-        print(f"   Documents: {len(all_documents)}")
-        print(f"   Total units: {total_units}")
-        print(f"   Square TX ID: {batch_square_tx_id}")
-
-        try:
-            # Determine unit_type from first document (all should be same type)
-            first_file = stored_files[0] if stored_files else {}
-            unit_type = first_file.get("unit_type", "page")
-
-            batch_transaction_id = await create_user_transaction(
-                user_name=request.userName,
-                user_email=request.email,
-                documents=all_documents,  # ✅ FIX: All documents in one transaction
-                number_of_units=total_units,
-                unit_type=unit_type,
-                cost_per_unit=cost_per_unit,
-                source_language=request.sourceLanguage,
-                target_language=request.targetLanguage,
-                square_transaction_id=batch_square_tx_id,  # ✅ FIX: Single Square ID
-                date=datetime.now(timezone.utc),
-                status="processing",
-            )
-
-            if batch_transaction_id:
-                log_step("BATCH TRANSACTION CREATED", f"TX ID: {batch_transaction_id}")
-                print(f"   ✅ Batch transaction created: {batch_transaction_id}")
-
-                # Update all files' metadata with the same transaction_id
-                for file_info in stored_files:
-                    if file_info.get("status") == "stored" and file_info.get("file_id"):
-                        try:
-                            await google_drive_service.update_file_properties(
-                                file_id=file_info["file_id"],
-                                properties={"transaction_id": batch_transaction_id},
-                            )
-                            print(f"   ✅ Updated {file_info['filename']} with transaction_id")
-                        except Exception as e:
-                            print(f"   ⚠️  Failed to update {file_info['filename']} metadata: {e}")
-            else:
-                log_step("BATCH TRANSACTION FAILED", "Transaction creation returned None")
-                print(f"   ❌ Batch transaction creation failed")
-        except Exception as e:
-            log_step("BATCH TRANSACTION ERROR", f"Error: {str(e)}")
-            print(f"   ❌ Error creating batch transaction: {e}")
-
-    # ========================================================================
     # SUMMARY AND RESPONSE
     # ========================================================================
     successful_uploads = len([f for f in stored_files if f["status"] == "stored"])
     failed_uploads = len([f for f in stored_files if f["status"] == "failed"])
 
-    print(f"\nUPLOAD COMPLETE: {successful_uploads} successful, {failed_uploads} failed")
+    print(f"UPLOAD COMPLETE: {successful_uploads} successful, {failed_uploads} failed")
     print(f"Total units for pricing: {total_units}")
     print(f"Total amount: ${total_units * cost_per_unit:.2f}")
     print(f"Customer: {request.userName} ({request.email})")
-    print(f"Batch transaction ID: {batch_transaction_id}")
+    print(f"Square transaction IDs: {len(square_transaction_ids)}")
 
     total_amount = total_units * cost_per_unit
     amount_cents = int(total_amount * 100)
@@ -548,9 +532,6 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
         f"{total_units} units, ${total_amount:.2f}",
     )
 
-    # Extract file_ids for easy access by frontend (for payment confirmation)
-    uploaded_file_ids = [f["file_id"] for f in stored_files if f["status"] == "stored" and f["file_id"]]
-
     response_data = {
         "success": True,
         "data": {
@@ -558,8 +539,6 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
             "status": "stored",
             "progress": 100,
             "message": "Files uploaded successfully. Ready for payment.",
-            # File IDs for payment confirmation (frontend sends these to /confirm)
-            "uploaded_file_ids": uploaded_file_ids,
             # Pricing information (frontend expects these exact field names)
             "pricing": {
                 "total_pages": total_units,  # Changed from total_units to match frontend
@@ -567,7 +546,9 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
                 "total_amount": total_amount,
                 "currency": "usd",  # Lowercase to match frontend expectations
                 "customer_type": "individual",  # Added for frontend
-                "transaction_ids": [batch_transaction_id] if batch_transaction_id else [],  # ✅ Database transaction ID (USER######), not Square ID
+                "volume_tier": volume_tier,  # Volume tier used for pricing (small/medium/large)
+                "complexity": request.complexity,  # Complexity level used for pricing
+                "transaction_ids": square_transaction_ids,  # Moved from data level to pricing
             },
             # File information
             "files": {

@@ -17,7 +17,7 @@ import asyncio
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit, pricing
+from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities
@@ -122,7 +122,6 @@ app.include_router(orders.router)  # Orders management API
 app.include_router(auth.router)
 app.include_router(subscriptions.router)
 app.include_router(translate_user.router)
-app.include_router(pricing.router)  # Pricing API endpoints
 
 # Include test helper endpoints only in test/dev mode
 if settings.environment.lower() in ["test", "development"]:
@@ -130,7 +129,7 @@ if settings.environment.lower() in ["test", "development"]:
     print("⚠️  Test helper endpoints enabled (test/dev mode only)")
 
 # Import models for /translate endpoint
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional, Dict, Any
 
 class FileInfo(BaseModel):
@@ -152,7 +151,7 @@ class TranslateRequest(BaseModel):
 # Transaction Helper Function
 # ============================================================================
 async def create_transaction_record(
-    file_info: dict,
+    files_info: List[dict],
     user_data: dict,
     request_data: TranslateRequest,
     subscription: Optional[dict],
@@ -160,10 +159,15 @@ async def create_transaction_record(
     price_per_page: float
 ) -> Optional[str]:
     """
-    Create transaction record for a single file upload.
+    Create ONE transaction record for MULTIPLE file uploads.
+
+    IMPORTANT: This creates a SINGLE transaction with ALL files in the documents[] array.
+    This is the correct behavior - one transaction per upload request, not per file.
+
+    Uses nested documents[] array structure (TranslationDocumentEmbedded model).
 
     Args:
-        file_info: Dict with file_id, filename, size, page_count, google_drive_url
+        files_info: List of dicts, each with file_id, filename, size, page_count, google_drive_url
         user_data: Current authenticated user data
         request_data: Original TranslateRequest
         subscription: Enterprise subscription (or None for individual)
@@ -178,28 +182,68 @@ async def create_transaction_record(
     from datetime import datetime, timezone
     import uuid
 
+    if not files_info:
+        logging.warning("[TRANSACTION] No files provided - skipping transaction creation")
+        return None
+
     try:
         # Generate unique transaction ID
         transaction_id = f"TXN-{uuid.uuid4().hex[:10].upper()}"
 
-        # Build transaction document
+        # ====================================================================
+        # SINGLE TRANSACTION WITH MULTIPLE DOCUMENTS
+        # ====================================================================
+        logging.info(f"[TRANSACTION] ========== CREATING SINGLE TRANSACTION ==========")
+        logging.info(f"[TRANSACTION] Transaction ID: {transaction_id}")
+        logging.info(f"[TRANSACTION] Number of files: {len(files_info)}")
+        print(f"\n📦 [TRANSACTION] Creating SINGLE transaction {transaction_id} with {len(files_info)} document(s)")
+
+        # Build documents array with ALL files
+        documents = []
+        total_pages = 0
+        file_names = []
+
+        for idx, file_info in enumerate(files_info):
+            document_entry = {
+                "file_name": file_info.get("filename", ""),
+                "file_size": file_info.get("size", 0),
+                "original_url": file_info.get("google_drive_url", ""),
+                "translated_url": None,
+                "translated_name": None,
+                "status": "uploaded",
+                "uploaded_at": datetime.now(timezone.utc),
+                "translated_at": None,
+                "processing_started_at": None,
+                "processing_duration": None,
+                "file_id": file_info.get("file_id")  # Google Drive file ID for confirm endpoint
+            }
+            documents.append(document_entry)
+            total_pages += file_info.get("page_count", 1)
+            file_names.append(file_info.get("filename", f"file_{idx}"))
+
+            logging.info(f"[TRANSACTION]   Document {idx + 1}: {file_info.get('filename')} ({file_info.get('page_count', 1)} pages, file_id: {file_info.get('file_id')})")
+            print(f"   📄 Document {idx + 1}: {file_info.get('filename')} ({file_info.get('page_count', 1)} pages)")
+
+        # Build transaction document with nested documents[] array
         # IMPORTANT: Store actual email, not generated user_id
         transaction_doc = {
             "transaction_id": transaction_id,
             "user_id": request_data.email,  # Use actual email for folder lookup
-            "original_file_url": file_info.get("google_drive_url", ""),
-            "translated_file_url": "",  # Empty initially
             "source_language": request_data.sourceLanguage,
             "target_language": request_data.targetLanguage,
-            "file_name": file_info.get("filename", ""),
-            "file_size": file_info.get("size", 0),
-            "units_count": file_info.get("page_count", 1),
+            "units_count": total_pages,
             "price_per_unit": price_per_page,
-            "total_price": file_info.get("page_count", 1) * price_per_page,
+            "total_price": total_pages * price_per_page,
             "status": "started",
             "error_message": "",
             "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc)
+            "updated_at": datetime.now(timezone.utc),
+            # NESTED documents[] array - ALL files in ONE transaction
+            "documents": documents,
+            # Email batching counters
+            "total_documents": len(documents),
+            "completed_documents": 0,
+            "batch_email_sent": False
         }
 
         # Add enterprise-specific fields if applicable
@@ -207,22 +251,41 @@ async def create_transaction_record(
             transaction_doc["company_name"] = company_name  # Store company name for folder lookup
             transaction_doc["subscription_id"] = ObjectId(str(subscription["_id"]))
             transaction_doc["unit_type"] = subscription.get("subscription_unit", "page")
+            logging.info(f"[TRANSACTION] Enterprise: {company_name}, Subscription: {subscription.get('_id')}")
         else:
             # Individual customer (no company or subscription)
             transaction_doc["company_name"] = None
             transaction_doc["subscription_id"] = None
             transaction_doc["unit_type"] = "page"
+            logging.info(f"[TRANSACTION] Individual customer (no company)")
 
-        # Insert into database
-        await database.translation_transactions.insert_one(transaction_doc)
+        # Insert into appropriate collection based on user type
+        if company_name:
+            # Enterprise user -> translation_transactions collection
+            await database.translation_transactions.insert_one(transaction_doc)
+            logging.info(f"[TRANSACTION] 📝 Inserted into ENTERPRISE collection: translation_transactions")
+            print(f"   📝 Collection: translation_transactions (Enterprise)")
+        else:
+            # Individual user -> user_transactions collection
+            await database.user_transactions.insert_one(transaction_doc)
+            logging.info(f"[TRANSACTION] 📝 Inserted into INDIVIDUAL collection: user_transactions")
+            print(f"   📝 Collection: user_transactions (Individual)")
 
-        logging.info(f"[TRANSACTION] Created {transaction_id} for file: {file_info.get('filename')}")
-        print(f"[TRANSACTION] Created {transaction_id} for file: {file_info.get('filename')}")
+        logging.info(f"[TRANSACTION] ✅ SUCCESS: Created {transaction_id}")
+        logging.info(f"[TRANSACTION]   Total documents: {len(documents)}")
+        logging.info(f"[TRANSACTION]   Total pages: {total_pages}")
+        logging.info(f"[TRANSACTION]   Total price: ${total_pages * price_per_page:.2f}")
+        logging.info(f"[TRANSACTION]   Files: {', '.join(file_names)}")
+        logging.info(f"[TRANSACTION] =================================================")
+
+        print(f"   ✅ Transaction {transaction_id} created with {len(documents)} document(s), {total_pages} total pages")
+        print(f"   💰 Total price: ${total_pages * price_per_page:.2f}")
+
         return transaction_id
 
     except Exception as e:
-        logging.error(f"[TRANSACTION] Failed to create transaction for {file_info.get('filename')}: {e}")
-        print(f"[TRANSACTION] Failed to create transaction for {file_info.get('filename')}: {e}")
+        logging.error(f"[TRANSACTION] ❌ FAILED to create transaction: {e}")
+        print(f"   ❌ [TRANSACTION] Failed to create transaction: {e}")
         return None
 
 
@@ -636,11 +699,13 @@ async def translate_files(
                 print(f"\n⚠️  No active usage period for current date")
                 print(f"   Total usage periods: {len(usage_periods)}")
         else:
-            log_step("SUBSCRIPTION NOT FOUND", f"Using default pricing for company {company_name}")
-            logging.warning(f"[SUBSCRIPTION] ⚠ No active subscription found for company {company_name}, using default pricing")
-            print(f"\n⚠️  No active subscription found - will require payment")
-            # Set default values for when subscription doesn't exist
-            total_remaining = 0
+            # REJECT: Enterprise user must have an active subscription
+            log_step("VALIDATION FAILED", f"No active subscription for company: {company_name}")
+            logging.error(f"[SUBSCRIPTION] REJECTED: No active subscription found for company '{company_name}'")
+            raise HTTPException(
+                status_code=403,
+                detail=f"No active subscription found for company '{company_name}'. Enterprise users must have an active subscription to submit translations. Please contact your administrator."
+            )
 
     # Determine if payment is required based on enterprise subscription
     payment_required = True
@@ -670,26 +735,38 @@ async def translate_files(
         logging.info(f"[PAYMENT] Payment required for {'individual customer' if not is_enterprise else 'enterprise without subscription'}")
         print(f"\n💳 Payment required: {'Individual customer' if not is_enterprise else 'Enterprise without subscription'}")
 
-    # Create transaction records for ALL uploaded files (enterprise + individual)
+    # ========================================================================
+    # CREATE SINGLE TRANSACTION FOR ALL FILES
+    # ========================================================================
+    # IMPORTANT: One transaction per upload request, NOT one per file!
+    # All files are stored in the documents[] array of a single transaction.
     successful_stored_files = [f for f in stored_files if f["status"] == "stored"]
-    log_step("TRANSACTION CREATE START", f"Creating records for {len(successful_stored_files)} successful uploads")
 
-    for stored_file in stored_files:
-        if stored_file["status"] == "stored":
-            transaction_id = await create_transaction_record(
-                file_info=stored_file,
-                user_data=current_user,
-                request_data=request,
-                subscription=subscription if is_enterprise else None,
-                company_name=company_name if is_enterprise else None,
-                price_per_page=price_per_page
-            )
+    log_step("TRANSACTION CREATE START", f"Creating SINGLE transaction for {len(successful_stored_files)} file(s)")
+    logging.info(f"[TRANSLATE] ========== TRANSACTION CREATION ==========")
+    logging.info(f"[TRANSLATE] Creating ONE transaction with {len(successful_stored_files)} document(s)")
+    logging.info(f"[TRANSLATE] Files: {[f['filename'] for f in successful_stored_files]}")
 
-            if transaction_id:
-                transaction_ids.append(transaction_id)
-                log_step("TRANSACTION CREATED", f"ID: {transaction_id} for {stored_file['filename']}")
+    if successful_stored_files:
+        # Create a SINGLE transaction with ALL files in documents[] array
+        transaction_id = await create_transaction_record(
+            files_info=successful_stored_files,  # Pass ALL files at once
+            user_data=current_user,
+            request_data=request,
+            subscription=subscription if is_enterprise else None,
+            company_name=company_name if is_enterprise else None,
+            price_per_page=price_per_page
+        )
 
-    log_step("TRANSACTION CREATE COMPLETE", f"Created {len(transaction_ids)} transaction(s)")
+        if transaction_id:
+            transaction_ids = [transaction_id]  # Single transaction ID
+            log_step("TRANSACTION CREATED", f"SINGLE transaction {transaction_id} with {len(successful_stored_files)} document(s)")
+            logging.info(f"[TRANSLATE] ✅ SINGLE transaction created: {transaction_id}")
+        else:
+            logging.error(f"[TRANSLATE] ❌ Failed to create transaction")
+
+    logging.info(f"[TRANSLATE] ==============================================")
+    log_step("TRANSACTION CREATE COMPLETE", f"Created {len(transaction_ids)} transaction(s) with {len(successful_stored_files)} total document(s)")
 
     # Extract user information from JWT token (if authenticated)
     user_info = None
@@ -802,6 +879,20 @@ async def translate_files(
 # ============================================================================
 class TransactionActionRequest(BaseModel):
     transaction_ids: List[str]
+
+
+class EnterpriseConfirmRequest(BaseModel):
+    """Enterprise confirmation - uses transaction_id only, no file search"""
+    transaction_id: str = Field(..., description="Transaction ID from upload response")
+    status: bool = Field(default=True, description="True=confirm, False=cancel")
+
+
+class IndividualConfirmRequest(BaseModel):
+    """Individual confirmation - includes payment info and file_ids from upload"""
+    transaction_id: str = Field(..., description="Transaction ID from upload response")
+    square_transaction_id: Optional[str] = Field(None, description="Square payment transaction ID")
+    file_ids: List[str] = Field(..., description="File IDs from upload response - NO SEARCH")
+    status: bool = Field(default=True, description="True=confirm, False=cancel")
 
 
 # ============================================================================
@@ -1217,6 +1308,433 @@ async def decline_transactions(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to decline transactions: {str(e)}"
+        )
+
+
+# ============================================================================
+# Enterprise Transaction Confirmation Endpoint
+# ============================================================================
+@app.post("/api/transactions/confirm-enterprise", tags=["Transactions"])
+async def confirm_enterprise_transaction(
+    request: EnterpriseConfirmRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Confirm Enterprise transaction (no payment, no file search).
+
+    This endpoint:
+    - Validates user is Enterprise (has company_name in JWT)
+    - Finds transaction by transaction_id in translation_transactions collection
+    - Verifies transaction belongs to user's company
+    - Gets file_ids from transaction.documents field (NO SEARCH)
+    - If status=True: Moves files Temp → Inbox, updates transaction to 'processing'
+    - If status=False: Deletes files from Temp, updates transaction to 'cancelled'
+    """
+    import json
+    from app.database import database
+    from app.services.google_drive_service import google_drive_service
+    from datetime import datetime, timezone
+
+    logging.info(f"[CONFIRM-ENTERPRISE] Request received for transaction {request.transaction_id}")
+
+    # Extract user info from JWT
+    user_email = current_user.get("email")
+    company_name = current_user.get("company_name")
+
+    # Validate user is Enterprise
+    if not company_name:
+        logging.error(f"[CONFIRM-ENTERPRISE] User {user_email} is not Enterprise (no company_name)")
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is only for Enterprise users"
+        )
+
+    logging.info(f"[CONFIRM-ENTERPRISE] User {user_email}, Company {company_name}")
+
+    try:
+        # Find transaction by transaction_id
+        transaction = await database.translation_transactions.find_one({
+            "transaction_id": request.transaction_id
+        })
+
+        if not transaction:
+            logging.error(f"[CONFIRM-ENTERPRISE] Transaction {request.transaction_id} not found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Transaction {request.transaction_id} not found"
+            )
+
+        # Verify transaction belongs to user's company
+        if transaction.get("company_name") != company_name:
+            logging.error(
+                f"[CONFIRM-ENTERPRISE] Transaction {request.transaction_id} belongs to "
+                f"{transaction.get('company_name')}, not {company_name}"
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Transaction does not belong to your company"
+            )
+
+        # Get file_ids from transaction.documents (NO SEARCH)
+        documents = transaction.get("documents", [])
+
+        logging.info(f"[CONFIRM-ENTERPRISE] Transaction ID: {transaction.get('transaction_id')}, Status: {transaction.get('status')}")
+        logging.info(f"[CONFIRM-ENTERPRISE] Documents array: {json.dumps(documents, indent=2, default=str)}")
+
+        if not documents:
+            logging.error(f"[CONFIRM-ENTERPRISE] Transaction has no documents array")
+            logging.error(f"[CONFIRM-ENTERPRISE] Available keys: {list(transaction.keys())}")
+            raise HTTPException(
+                status_code=400,
+                detail="Transaction has no documents"
+            )
+
+        file_ids = [doc.get("file_id") for doc in documents if doc.get("file_id")]
+
+        logging.info(f"[CONFIRM-ENTERPRISE] Extracted file_ids: {file_ids}")
+        logging.info(f"[CONFIRM-ENTERPRISE] File_ids count: {len(file_ids)}")
+
+        if not file_ids:
+            logging.error(f"[CONFIRM-ENTERPRISE] No file_ids found in documents")
+            logging.error(f"[CONFIRM-ENTERPRISE] Documents structure: {json.dumps(documents, indent=2, default=str)}")
+            raise HTTPException(
+                status_code=400,
+                detail="Transaction documents have no file_ids"
+            )
+
+        logging.info(f"[CONFIRM-ENTERPRISE] Found {len(file_ids)} files in transaction")
+
+        # ========== SUCCESS FLOW: Confirm ==========
+        if request.status:
+            logging.info(f"[CONFIRM-ENTERPRISE] Confirming transaction {request.transaction_id}")
+
+            # Update transaction status to 'processing'
+            await database.translation_transactions.update_one(
+                {"transaction_id": request.transaction_id},
+                {
+                    "$set": {
+                        "status": "processing",
+                        "updated_at": datetime.now(timezone.utc)
+                    }
+                }
+            )
+            logging.info(f"[CONFIRM-ENTERPRISE] Updated transaction status to 'processing'")
+
+            # Update file metadata with transaction_id
+            for file_id in file_ids:
+                try:
+                    await google_drive_service.update_file_metadata(
+                        file_id=file_id,
+                        metadata={"transaction_id": request.transaction_id}
+                    )
+                    logging.info(f"[CONFIRM-ENTERPRISE] Updated metadata for file {file_id}")
+                except Exception as e:
+                    logging.error(f"[CONFIRM-ENTERPRISE] Failed to update metadata for {file_id}: {e}")
+
+            # Move files from Temp to Inbox
+            try:
+                customer_email = transaction.get("user_id")  # user_id contains the email address
+                move_result = await google_drive_service.move_files_to_inbox_on_payment_success(
+                    customer_email=customer_email,
+                    file_ids=file_ids,
+                    company_name=company_name
+                )
+
+                moved_count = move_result.get('moved_successfully', 0)
+                failed_count = move_result.get('failed_moves', 0)
+
+                logging.info(f"[CONFIRM-ENTERPRISE] Moved {moved_count}/{len(file_ids)} files successfully")
+
+                if failed_count > 0:
+                    logging.warning(f"[CONFIRM-ENTERPRISE] {failed_count} files failed to move")
+
+                # Update subscription usage
+                subscription_id = transaction.get("subscription_id")
+                units_count = transaction.get("units_count", 0)
+
+                if subscription_id and units_count > 0:
+                    from app.services.subscription_service import subscription_service
+                    from app.models.subscription import UsageUpdate
+
+                    try:
+                        usage_update = UsageUpdate(
+                            units_to_add=units_count,
+                            use_promotional_units=False
+                        )
+                        await subscription_service.record_usage(
+                            subscription_id=str(subscription_id),
+                            usage_data=usage_update
+                        )
+                        logging.info(f"[CONFIRM-ENTERPRISE] Updated subscription usage: +{units_count} units")
+                    except Exception as e:
+                        logging.error(f"[CONFIRM-ENTERPRISE] Subscription update failed: {e}")
+                        # Don't fail the entire operation if usage tracking fails
+                        # The files were moved successfully, so we should return success
+
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "success": True,
+                        "message": "Enterprise transaction confirmed successfully",
+                        "data": {
+                            "transaction_id": request.transaction_id,
+                            "moved_files": moved_count,
+                            "failed_files": failed_count,
+                            "total_files": len(file_ids),
+                            "company_name": company_name
+                        }
+                    }
+                )
+
+            except Exception as e:
+                logging.error(f"[CONFIRM-ENTERPRISE] File movement failed: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to move files: {str(e)}"
+                )
+
+        # ========== CANCEL FLOW: Delete files ==========
+        else:
+            logging.info(f"[CONFIRM-ENTERPRISE] Cancelling transaction {request.transaction_id}")
+
+            # Update transaction status to 'cancelled'
+            await database.translation_transactions.update_one(
+                {"transaction_id": request.transaction_id},
+                {
+                    "$set": {
+                        "status": "cancelled",
+                        "updated_at": datetime.now(timezone.utc)
+                    }
+                }
+            )
+            logging.info(f"[CONFIRM-ENTERPRISE] Updated transaction status to 'cancelled'")
+
+            # Delete files from Temp
+            deleted_count = 0
+            for file_id in file_ids:
+                try:
+                    await google_drive_service.delete_file(file_id)
+                    deleted_count += 1
+                    logging.info(f"[CONFIRM-ENTERPRISE] Deleted file {file_id}")
+                except Exception as e:
+                    logging.error(f"[CONFIRM-ENTERPRISE] Failed to delete file {file_id}: {e}")
+
+            logging.info(f"[CONFIRM-ENTERPRISE] Deleted {deleted_count}/{len(file_ids)} files")
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": "Enterprise transaction cancelled, files deleted",
+                    "data": {
+                        "transaction_id": request.transaction_id,
+                        "deleted_files": deleted_count,
+                        "total_files": len(file_ids),
+                        "company_name": company_name
+                    }
+                }
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"[CONFIRM-ENTERPRISE] Unexpected error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+# ============================================================================
+# Individual Transaction Confirmation Endpoint
+# ============================================================================
+@app.post("/api/transactions/confirm-individual", tags=["Transactions"])
+async def confirm_individual_transaction(
+    request: IndividualConfirmRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Confirm Individual transaction with payment (no file search).
+
+    This endpoint:
+    - Validates user is Individual (no company_name in JWT)
+    - Finds transaction by transaction_id in user_transactions collection
+    - Verifies transaction belongs to current user
+    - Uses file_ids from request (NO SEARCH)
+    - If status=True: Stores square_transaction_id, moves files Temp → Inbox, updates transaction to 'completed'
+    - If status=False: Deletes files from Temp, updates transaction to 'cancelled'
+    """
+    from app.database import database
+    from app.services.google_drive_service import google_drive_service
+    from datetime import datetime, timezone
+
+    logging.info(f"[CONFIRM-INDIVIDUAL] Request received for transaction {request.transaction_id}")
+
+    # Extract user info from JWT
+    user_email = current_user.get("email")
+    company_name = current_user.get("company_name")
+
+    # Validate user is Individual (no company_name)
+    if company_name:
+        logging.error(f"[CONFIRM-INDIVIDUAL] User {user_email} is Enterprise (has company_name: {company_name})")
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is only for Individual users"
+        )
+
+    logging.info(f"[CONFIRM-INDIVIDUAL] User {user_email}")
+
+    try:
+        # Find transaction by transaction_id
+        transaction = await database.user_transactions.find_one({
+            "transaction_id": request.transaction_id
+        })
+
+        if not transaction:
+            logging.error(f"[CONFIRM-INDIVIDUAL] Transaction {request.transaction_id} not found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Transaction {request.transaction_id} not found"
+            )
+
+        # Verify transaction belongs to current user
+        if transaction.get("user_email") != user_email:
+            logging.error(
+                f"[CONFIRM-INDIVIDUAL] Transaction {request.transaction_id} belongs to "
+                f"{transaction.get('user_email')}, not {user_email}"
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Transaction does not belong to your account"
+            )
+
+        # Use file_ids from request (NO SEARCH)
+        file_ids = request.file_ids
+        if not file_ids:
+            logging.error(f"[CONFIRM-INDIVIDUAL] No file_ids provided in request")
+            raise HTTPException(
+                status_code=400,
+                detail="file_ids are required"
+            )
+
+        logging.info(f"[CONFIRM-INDIVIDUAL] Processing {len(file_ids)} files from request")
+
+        # ========== SUCCESS FLOW: Confirm with payment ==========
+        if request.status:
+            logging.info(f"[CONFIRM-INDIVIDUAL] Confirming transaction {request.transaction_id}")
+
+            # Update transaction with square_transaction_id and status
+            update_data = {
+                "status": "completed",
+                "updated_at": datetime.now(timezone.utc)
+            }
+            if request.square_transaction_id:
+                update_data["square_transaction_id"] = request.square_transaction_id
+                logging.info(f"[CONFIRM-INDIVIDUAL] Storing Square transaction ID: {request.square_transaction_id}")
+
+            await database.user_transactions.update_one(
+                {"transaction_id": request.transaction_id},
+                {"$set": update_data}
+            )
+            logging.info(f"[CONFIRM-INDIVIDUAL] Updated transaction status to 'completed'")
+
+            # Update file metadata with transaction_id
+            for file_id in file_ids:
+                try:
+                    await google_drive_service.update_file_metadata(
+                        file_id=file_id,
+                        metadata={"transaction_id": request.transaction_id}
+                    )
+                    logging.info(f"[CONFIRM-INDIVIDUAL] Updated metadata for file {file_id}")
+                except Exception as e:
+                    logging.error(f"[CONFIRM-INDIVIDUAL] Failed to update metadata for {file_id}: {e}")
+
+            # Move files from Temp to Inbox
+            try:
+                move_result = await google_drive_service.move_files_to_inbox_on_payment_success(
+                    customer_email=user_email,
+                    file_ids=file_ids,
+                    company_name=None  # Individual users have no company
+                )
+
+                moved_count = move_result.get('moved_successfully', 0)
+                failed_count = move_result.get('failed_moves', 0)
+
+                logging.info(f"[CONFIRM-INDIVIDUAL] Moved {moved_count}/{len(file_ids)} files successfully")
+
+                if failed_count > 0:
+                    logging.warning(f"[CONFIRM-INDIVIDUAL] {failed_count} files failed to move")
+
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "success": True,
+                        "message": "Individual transaction confirmed successfully",
+                        "data": {
+                            "transaction_id": request.transaction_id,
+                            "square_transaction_id": request.square_transaction_id,
+                            "moved_files": moved_count,
+                            "failed_files": failed_count,
+                            "total_files": len(file_ids)
+                        }
+                    }
+                )
+
+            except Exception as e:
+                logging.error(f"[CONFIRM-INDIVIDUAL] File movement failed: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to move files: {str(e)}"
+                )
+
+        # ========== CANCEL FLOW: Delete files ==========
+        else:
+            logging.info(f"[CONFIRM-INDIVIDUAL] Cancelling transaction {request.transaction_id}")
+
+            # Update transaction status to 'cancelled'
+            await database.user_transactions.update_one(
+                {"transaction_id": request.transaction_id},
+                {
+                    "$set": {
+                        "status": "cancelled",
+                        "updated_at": datetime.now(timezone.utc)
+                    }
+                }
+            )
+            logging.info(f"[CONFIRM-INDIVIDUAL] Updated transaction status to 'cancelled'")
+
+            # Delete files from Temp
+            deleted_count = 0
+            for file_id in file_ids:
+                try:
+                    await google_drive_service.delete_file(file_id)
+                    deleted_count += 1
+                    logging.info(f"[CONFIRM-INDIVIDUAL] Deleted file {file_id}")
+                except Exception as e:
+                    logging.error(f"[CONFIRM-INDIVIDUAL] Failed to delete file {file_id}: {e}")
+
+            logging.info(f"[CONFIRM-INDIVIDUAL] Deleted {deleted_count}/{len(file_ids)} files")
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": "Individual transaction cancelled, files deleted",
+                    "data": {
+                        "transaction_id": request.transaction_id,
+                        "deleted_files": deleted_count,
+                        "total_files": len(file_ids)
+                    }
+                }
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"[CONFIRM-INDIVIDUAL] Unexpected error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
         )
 
 

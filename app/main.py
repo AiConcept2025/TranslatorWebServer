@@ -139,12 +139,15 @@ class FileInfo(BaseModel):
     type: str
     content: str  # Base64-encoded file content from client
 
+from app.mongodb_models import TranslationMode
+
 class TranslateRequest(BaseModel):
     files: List[FileInfo]
     sourceLanguage: str
     targetLanguage: str
     email: EmailStr
     paymentIntentId: Optional[str] = None
+    translation_mode: TranslationMode = TranslationMode.AUTOMATIC
 
 
 # ============================================================================
@@ -156,7 +159,8 @@ async def create_transaction_record(
     request_data: TranslateRequest,
     subscription: Optional[dict],
     company_name: Optional[str],
-    price_per_page: float
+    price_per_page: float,
+    translation_mode: TranslationMode = TranslationMode.AUTOMATIC
 ) -> Optional[str]:
     """
     Create ONE transaction record for MULTIPLE file uploads.
@@ -173,6 +177,7 @@ async def create_transaction_record(
         subscription: Enterprise subscription (or None for individual)
         company_name: Enterprise company name (or None for individual)
         price_per_page: Calculated pricing (subscription or default)
+        translation_mode: Translation mode (automatic, human, formats, handwriting)
 
     Returns:
         transaction_id if successful, None if failed
@@ -231,6 +236,7 @@ async def create_transaction_record(
             "user_id": request_data.email,  # Use actual email for folder lookup
             "source_language": request_data.sourceLanguage,
             "target_language": request_data.targetLanguage,
+            "translation_mode": translation_mode.value,  # Store translation mode
             "units_count": total_pages,
             "price_per_unit": price_per_page,
             "total_price": total_pages * price_per_page,
@@ -746,6 +752,7 @@ async def translate_files(
     logging.info(f"[TRANSLATE] ========== TRANSACTION CREATION ==========")
     logging.info(f"[TRANSLATE] Creating ONE transaction with {len(successful_stored_files)} document(s)")
     logging.info(f"[TRANSLATE] Files: {[f['filename'] for f in successful_stored_files]}")
+    logging.info(f"[TRANSLATE] Translation mode: {request.translation_mode.value}")
 
     if successful_stored_files:
         # Create a SINGLE transaction with ALL files in documents[] array
@@ -755,7 +762,8 @@ async def translate_files(
             request_data=request,
             subscription=subscription if is_enterprise else None,
             company_name=company_name if is_enterprise else None,
-            price_per_page=price_per_page
+            price_per_page=price_per_page,
+            translation_mode=request.translation_mode
         )
 
         if transaction_id:

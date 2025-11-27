@@ -87,6 +87,14 @@ class TransactionStatus(str, Enum):
     FAILED = "failed"
 
 
+class TranslationMode(str, Enum):
+    """Translation mode selection for translation workflow."""
+    AUTOMATIC = "automatic"
+    HUMAN = "human"
+    FORMATS = "formats"
+    HANDWRITING = "handwriting"
+
+
 # ==============================================================================
 # EMBEDDED DOCUMENT MODELS
 # ==============================================================================

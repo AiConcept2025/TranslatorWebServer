@@ -143,6 +143,7 @@ class TranslationDocumentEmbedded(BaseModel):
     processing_started_at: Optional[datetime] = None
     processing_duration: Optional[float] = None
     transaction_id: Optional[str] = None  # MongoDB _id for enterprise
+    translation_mode: TranslationMode = TranslationMode.AUTOMATIC  # Per-file translation mode
 
 
 class Address(BaseModel):

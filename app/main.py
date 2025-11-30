@@ -132,6 +132,8 @@ if settings.environment.lower() in ["test", "development"]:
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional, Dict, Any
 
+from app.mongodb_models import TranslationMode
+
 class FileInfo(BaseModel):
     id: str
     name: str
@@ -139,15 +141,18 @@ class FileInfo(BaseModel):
     type: str
     content: str  # Base64-encoded file content from client
 
-from app.mongodb_models import TranslationMode
+# Per-file translation mode info (for file-level mode selection)
+class FileTranslationModeInfo(BaseModel):
+    fileName: str
+    translationMode: TranslationMode = TranslationMode.AUTOMATIC
 
 class TranslateRequest(BaseModel):
     files: List[FileInfo]
+    fileTranslationModes: Optional[List[FileTranslationModeInfo]] = None  # Per-file translation modes
     sourceLanguage: str
     targetLanguage: str
     email: EmailStr
     paymentIntentId: Optional[str] = None
-    translation_mode: TranslationMode = TranslationMode.AUTOMATIC
 
 
 # ============================================================================
@@ -160,7 +165,7 @@ async def create_transaction_record(
     subscription: Optional[dict],
     company_name: Optional[str],
     price_per_page: float,
-    translation_mode: TranslationMode = TranslationMode.AUTOMATIC
+    file_translation_modes: Optional[Dict[str, TranslationMode]] = None  # Per-file translation modes (fileName -> mode)
 ) -> Optional[str]:
     """
     Create ONE transaction record for MULTIPLE file uploads.
@@ -177,7 +182,7 @@ async def create_transaction_record(
         subscription: Enterprise subscription (or None for individual)
         company_name: Enterprise company name (or None for individual)
         price_per_page: Calculated pricing (subscription or default)
-        translation_mode: Translation mode (automatic, human, formats, handwriting)
+        file_translation_modes: Dict mapping fileName to TranslationMode (per-file modes)
 
     Returns:
         transaction_id if successful, None if failed
@@ -209,8 +214,14 @@ async def create_transaction_record(
         file_names = []
 
         for idx, file_info in enumerate(files_info):
+            # Get translation mode for this specific file (default to automatic)
+            filename = file_info.get("filename", "")
+            file_mode = TranslationMode.AUTOMATIC
+            if file_translation_modes and filename in file_translation_modes:
+                file_mode = file_translation_modes[filename]
+
             document_entry = {
-                "file_name": file_info.get("filename", ""),
+                "file_name": filename,
                 "file_size": file_info.get("size", 0),
                 "original_url": file_info.get("google_drive_url", ""),
                 "translated_url": None,
@@ -220,23 +231,32 @@ async def create_transaction_record(
                 "translated_at": None,
                 "processing_started_at": None,
                 "processing_duration": None,
-                "file_id": file_info.get("file_id")  # Google Drive file ID for confirm endpoint
+                "file_id": file_info.get("file_id"),  # Google Drive file ID for confirm endpoint
+                "translation_mode": file_mode.value  # Per-file translation mode
             }
             documents.append(document_entry)
             total_pages += file_info.get("page_count", 1)
-            file_names.append(file_info.get("filename", f"file_{idx}"))
+            file_names.append(filename or f"file_{idx}")
 
-            logging.info(f"[TRANSACTION]   Document {idx + 1}: {file_info.get('filename')} ({file_info.get('page_count', 1)} pages, file_id: {file_info.get('file_id')})")
-            print(f"   📄 Document {idx + 1}: {file_info.get('filename')} ({file_info.get('page_count', 1)} pages)")
+            logging.info(f"[TRANSACTION]   Document {idx + 1}: {filename} ({file_info.get('page_count', 1)} pages, file_id: {file_info.get('file_id')}, mode: {file_mode.value})")
+            print(f"   📄 Document {idx + 1}: {filename} ({file_info.get('page_count', 1)} pages, mode: {file_mode.value})")
+
+        # Log transaction-level translation_mode summary
+        mode_summary = {}
+        for doc in documents:
+            mode = doc.get("translation_mode", "automatic")
+            mode_summary[mode] = mode_summary.get(mode, 0) + 1
+        logging.info(f"[TRANSACTION] Translation mode summary: {mode_summary}")
+        print(f"   🎯 Translation modes: {mode_summary}")
 
         # Build transaction document with nested documents[] array
         # IMPORTANT: Store actual email, not generated user_id
+        # NOTE: translation_mode is now per-file (stored in each document entry), not per-transaction
         transaction_doc = {
             "transaction_id": transaction_id,
             "user_id": request_data.email,  # Use actual email for folder lookup
             "source_language": request_data.sourceLanguage,
             "target_language": request_data.targetLanguage,
-            "translation_mode": translation_mode.value,  # Store translation mode
             "units_count": total_pages,
             "price_per_unit": price_per_page,
             "total_price": total_pages * price_per_page,
@@ -244,7 +264,7 @@ async def create_transaction_record(
             "error_message": "",
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
-            # NESTED documents[] array - ALL files in ONE transaction
+            # NESTED documents[] array - ALL files in ONE transaction (each with translation_mode)
             "documents": documents,
             # Email batching counters
             "total_documents": len(documents),
@@ -264,6 +284,36 @@ async def create_transaction_record(
             transaction_doc["subscription_id"] = None
             transaction_doc["unit_type"] = "page"
             logging.info(f"[TRANSACTION] Individual customer (no company)")
+
+        # Log the full transaction document before insertion
+        import json
+        logging.info(f"[TRANSACTION] ========== FULL TRANSACTION DOCUMENT ==========")
+        # Create a serializable copy for logging (handle datetime and ObjectId)
+        log_doc = {}
+        for key, value in transaction_doc.items():
+            if key == "documents":
+                # Log documents separately with translation_mode highlighted
+                log_doc["documents"] = []
+                for doc in value:
+                    doc_copy = {}
+                    for dk, dv in doc.items():
+                        if hasattr(dv, 'isoformat'):
+                            doc_copy[dk] = dv.isoformat()
+                        else:
+                            doc_copy[dk] = dv
+                    log_doc["documents"].append(doc_copy)
+            elif hasattr(value, 'isoformat'):
+                log_doc[key] = value.isoformat()
+            elif hasattr(value, '__str__') and 'ObjectId' in str(type(value)):
+                log_doc[key] = str(value)
+            else:
+                log_doc[key] = value
+
+        # Print formatted transaction document
+        print(f"\n   📋 FULL TRANSACTION DOCUMENT:")
+        print(f"   {json.dumps(log_doc, indent=6, default=str)}")
+        logging.info(f"[TRANSACTION] Document: {json.dumps(log_doc, default=str)}")
+        logging.info(f"[TRANSACTION] ================================================")
 
         # Insert into appropriate collection based on user type
         if company_name:
@@ -327,6 +377,12 @@ async def translate_files(
     print(f"[RAW INCOMING DATA]   - Target Language: {request.targetLanguage}")
     print(f"[RAW INCOMING DATA]   - Number of Files: {len(request.files)}")
     print(f"[RAW INCOMING DATA]   - Payment Intent ID: {request.paymentIntentId or 'None'}")
+    print(f"[RAW INCOMING DATA]   - File Translation Modes: {len(request.fileTranslationModes) if request.fileTranslationModes else 0} entries")
+    if request.fileTranslationModes:
+        for mode_info in request.fileTranslationModes:
+            print(f"[RAW INCOMING DATA]     - {mode_info.fileName}: {mode_info.translationMode.value}")
+    else:
+        print(f"[RAW INCOMING DATA]   ⚠️ NO fileTranslationModes received - will use default (automatic)")
     print(f"[RAW INCOMING DATA] Files Details:")
     for i, file_info in enumerate(request.files, 1):
         print(f"[RAW INCOMING DATA]   File {i}: '{file_info.name}' | {file_info.size:,} bytes | Type: {file_info.type} | ID: {file_info.id}")
@@ -527,6 +583,12 @@ async def translate_files(
     stored_files = []
     total_pages = 0
 
+    # Pre-build translation modes dict for file upload logging
+    upload_file_modes: Dict[str, str] = {}
+    if request.fileTranslationModes:
+        for mode_info in request.fileTranslationModes:
+            upload_file_modes[mode_info.fileName] = mode_info.translationMode.value
+
     for i, file_info in enumerate(request.files, 1):
         try:
             log_step(f"FILE {i} UPLOAD START", f"'{file_info.name}' ({file_info.size:,} bytes)")
@@ -564,20 +626,29 @@ async def translate_files(
             )
             log_step(f"FILE {i} GDRIVE UPLOADED", f"File ID: {file_result['file_id']}")
 
+            # Get translation_mode for this file BEFORE metadata update (default to automatic)
+            # Valid values: automatic, human, formats, handwriting
+            file_translation_mode = upload_file_modes.get(file_info.name, "automatic")
+            logging.info(f"[FILE {i}] Translation mode assignment: '{file_info.name}' -> '{file_translation_mode}'")
+
             # Update file with enhanced metadata for payment linking
-            log_step(f"FILE {i} METADATA UPDATE", "Setting file properties")
+            log_step(f"FILE {i} METADATA UPDATE", f"Setting file properties (translation_mode: {file_translation_mode})")
+            file_metadata = {
+                'customer_email': request.email,
+                'source_language': request.sourceLanguage,
+                'target_language': request.targetLanguage,
+                'page_count': str(page_count),
+                'status': 'awaiting_payment',
+                'upload_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'original_filename': file_info.name,
+                'translation_mode': file_translation_mode  # Added translation_mode to file metadata
+            }
+            logging.info(f"[FILE {i}] Metadata to be set: {file_metadata}")
             await google_drive_service.update_file_properties(
                 file_id=file_result['file_id'],
-                properties={
-                    'customer_email': request.email,
-                    'source_language': request.sourceLanguage,
-                    'target_language': request.targetLanguage,
-                    'page_count': str(page_count),
-                    'status': 'awaiting_payment',
-                    'upload_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                    'original_filename': file_info.name
-                }
+                properties=file_metadata
             )
+            logging.info(f"[FILE {i}] ✅ Metadata SET successfully with translation_mode='{file_translation_mode}'")
             log_step(f"FILE {i} COMPLETE", f"URL: {file_result.get('google_drive_url', 'N/A')}")
 
             stored_files.append({
@@ -586,20 +657,24 @@ async def translate_files(
                 "status": "stored",
                 "page_count": page_count,
                 "size": file_info.size,
-                "google_drive_url": file_result.get('google_drive_url')
+                "google_drive_url": file_result.get('google_drive_url'),
+                "translation_mode": file_translation_mode
             })
-            print(f"   Successfully uploaded: '{file_info.name}' -> Google Drive ID: {file_result['file_id']}, Pages: {page_count}")
+            print(f"   Successfully uploaded: '{file_info.name}' -> Google Drive ID: {file_result['file_id']}, Pages: {page_count}, Mode: {file_translation_mode}")
 
         except Exception as e:
             log_step(f"FILE {i} FAILED", f"Error: {str(e)}")
             print(f"   Failed to upload '{file_info.name}': {e}")
+            # Get translation_mode for failed file too (for logging consistency)
+            file_translation_mode = upload_file_modes.get(file_info.name, "automatic")
             stored_files.append({
                 "file_id": None,
                 "filename": file_info.name,
                 "status": "failed",
                 "page_count": 0,
                 "size": file_info.size,
-                "error": str(e)
+                "error": str(e),
+                "translation_mode": file_translation_mode
             })
 
     # Summary of operation
@@ -752,7 +827,15 @@ async def translate_files(
     logging.info(f"[TRANSLATE] ========== TRANSACTION CREATION ==========")
     logging.info(f"[TRANSLATE] Creating ONE transaction with {len(successful_stored_files)} document(s)")
     logging.info(f"[TRANSLATE] Files: {[f['filename'] for f in successful_stored_files]}")
-    logging.info(f"[TRANSLATE] Translation mode: {request.translation_mode.value}")
+
+    # Build file-level translation modes dict from request
+    file_translation_modes: Dict[str, TranslationMode] = {}
+    if request.fileTranslationModes:
+        for mode_info in request.fileTranslationModes:
+            file_translation_modes[mode_info.fileName] = mode_info.translationMode
+        logging.info(f"[TRANSLATE] Per-file translation modes: {[(k, v.value) for k, v in file_translation_modes.items()]}")
+    else:
+        logging.info(f"[TRANSLATE] No per-file modes specified, using default (automatic)")
 
     if successful_stored_files:
         # Create a SINGLE transaction with ALL files in documents[] array
@@ -763,7 +846,7 @@ async def translate_files(
             subscription=subscription if is_enterprise else None,
             company_name=company_name if is_enterprise else None,
             price_per_page=price_per_page,
-            translation_mode=request.translation_mode
+            file_translation_modes=file_translation_modes if file_translation_modes else None
         )
 
         if transaction_id:
@@ -869,7 +952,7 @@ async def translate_files(
     print(f"[RAW OUTGOING DATA]   - Successful: {response_data['data']['files']['successful_uploads']}")
     print(f"[RAW OUTGOING DATA]   - Failed: {response_data['data']['files']['failed_uploads']}")
     for i, file in enumerate(response_data['data']['files']['stored_files'], 1):
-        print(f"[RAW OUTGOING DATA]   File {i}: '{file['filename']}' | Status: {file['status']} | Pages: {file['page_count']} | GDrive: {file.get('google_drive_url', 'N/A')[:50]}...")
+        print(f"[RAW OUTGOING DATA]   File {i}: '{file['filename']}' | Status: {file['status']} | Pages: {file['page_count']} | Mode: {file.get('translation_mode', 'automatic')} | GDrive: {file.get('google_drive_url', 'N/A')[:50]}...")
     print(f"[RAW OUTGOING DATA] Customer: {response_data['data']['customer']['email']}")
     print(f"[RAW OUTGOING DATA] Payment Required: {response_data['data']['payment']['required']}")
     print(f"[RAW OUTGOING DATA] Payment Amount (cents): {response_data['data']['payment']['amount_cents']}")
@@ -1460,6 +1543,8 @@ async def confirm_enterprise_transaction(
                 subscription_id = transaction.get("subscription_id")
                 units_count = transaction.get("units_count", 0)
 
+                logging.info(f"[CONFIRM-ENTERPRISE] Subscription tracking - ID: {subscription_id}, Units: {units_count}")
+
                 if subscription_id and units_count > 0:
                     from app.services.subscription_service import subscription_service
                     from app.models.subscription import UsageUpdate
@@ -1478,6 +1563,11 @@ async def confirm_enterprise_transaction(
                         logging.error(f"[CONFIRM-ENTERPRISE] Subscription update failed: {e}")
                         # Don't fail the entire operation if usage tracking fails
                         # The files were moved successfully, so we should return success
+                else:
+                    logging.warning(
+                        f"[CONFIRM-ENTERPRISE] Skipping subscription update - "
+                        f"subscription_id: {subscription_id}, units_count: {units_count}"
+                    )
 
                 return JSONResponse(
                     status_code=200,

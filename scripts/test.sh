@@ -21,6 +21,38 @@ if [ -f ".venv/bin/activate" ]; then
     source .venv/bin/activate
 fi
 
+# =============================================================================
+# DATABASE_MODE AUTO-SWITCHING
+# =============================================================================
+# Save original DATABASE_MODE and switch to test mode
+ENV_FILE=".env"
+ORIGINAL_DB_MODE=""
+
+if [ -f "$ENV_FILE" ]; then
+    ORIGINAL_DB_MODE=$(grep "^DATABASE_MODE=" "$ENV_FILE" | cut -d'=' -f2)
+
+    if [ "$ORIGINAL_DB_MODE" != "test" ]; then
+        echo -e "${YELLOW}🔄 Switching DATABASE_MODE: $ORIGINAL_DB_MODE → test${NC}"
+        sed -i.bak "s/^DATABASE_MODE=.*/DATABASE_MODE=test/" "$ENV_FILE"
+    else
+        echo -e "${GREEN}✅ DATABASE_MODE already set to test${NC}"
+    fi
+else
+    echo -e "${RED}⚠️  .env file not found!${NC}"
+fi
+
+# Cleanup function to restore original DATABASE_MODE
+cleanup() {
+    if [ -n "$ORIGINAL_DB_MODE" ] && [ "$ORIGINAL_DB_MODE" != "test" ] && [ -f "$ENV_FILE" ]; then
+        echo -e "\n${YELLOW}🔄 Restoring DATABASE_MODE: test → $ORIGINAL_DB_MODE${NC}"
+        sed -i.bak "s/^DATABASE_MODE=.*/DATABASE_MODE=$ORIGINAL_DB_MODE/" "$ENV_FILE"
+        rm -f "${ENV_FILE}.bak"
+    fi
+}
+
+# Register cleanup to run on script exit (success or failure)
+trap cleanup EXIT
+
 # Function to run tests
 run_tests() {
     local test_path=$1

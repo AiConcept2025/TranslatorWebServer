@@ -1,0 +1,43 @@
+[
+  {
+    "_id": {
+      "$oid": "690023c8eb2bceb90e274136"
+    },
+    "user_id": "user_28d341717dbb4b62",
+    "user_name": "Manager User",
+    "email": "danishevsky@gmail.com",
+    "company_name": "Iris Trading",
+    "password_hash": "$2b$12$gmsMpEut.HIeBoMpVHzIMeEbEYSLizYS0QigkydmPph6.E8TLsz.C",
+    "permission_level": "admin",
+    "status": "active",
+    "created_at": {
+      "$date": "2025-10-28T02:00:40.041Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-29T22:42:44.451116Z"
+    },
+    "last_login": {
+      "$date": "2025-10-28T02:00:40.041Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "690383839a58ddce811fcd21"
+    },
+    "user_id": "user_eba63eb0f1b7427a",
+    "company_name": "Iris Trading",
+    "user_name": "Sam Danishevsky",
+    "email": "sam.danishevsky@gmail.com",
+    "phone_number": "12679870000",
+    "permission_level": "user",
+    "status": "active",
+    "password_hash": "$2b$12$0fX9DmLbG.USDLo/d/NoQ.CYoHW25S./X3q6JlfgwE5wIU4fsndE2",
+    "last_login": null,
+    "created_at": {
+      "$date": "2025-10-30T15:25:55.959Z"
+    },
+    "updated_at": {
+      "$date": "2025-10-30T15:25:55.959Z"
+    }
+  }
+]

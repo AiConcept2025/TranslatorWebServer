@@ -11,15 +11,13 @@ Tests verify:
 - Multiple webhook submissions (POST /submit) all succeed with same transaction_id
 
 Database: translation_test (separate from production)
-Uses: Real MongoDB connection via Motor + Real HTTP API calls
+Uses: Real MongoDB connection via test_db fixture + Real HTTP API calls
 """
 
 import pytest
 import httpx
 import uuid
 from datetime import datetime, timezone
-
-from app.database.mongodb import database
 
 
 # ============================================================================
@@ -34,6 +32,12 @@ API_BASE_URL = "http://localhost:8000"
 # ============================================================================
 
 @pytest.fixture(scope="function")
+async def db(test_db):
+    """Get test database via conftest fixture."""
+    yield test_db
+
+
+@pytest.fixture(scope="function")
 async def http_client():
     """HTTP client for making real API calls to running server."""
     async_client = httpx.AsyncClient(base_url=API_BASE_URL, timeout=30.0)
@@ -42,7 +46,7 @@ async def http_client():
 
 
 @pytest.fixture(scope="function")
-async def cleanup_batch_transactions():
+async def cleanup_batch_transactions(db):
     """
     Cleanup function that runs after each test to remove batch test transactions.
     Matches transactions by BATCH-TEST- prefix in transaction_id.
@@ -50,8 +54,7 @@ async def cleanup_batch_transactions():
     yield
 
     # Cleanup after test
-    await database.connect()
-    collection = database.translation_transactions
+    collection = db.translation_transactions
 
     # SAFE: Only delete test records with BATCH-TEST- prefix
     result = await collection.delete_many({
@@ -59,7 +62,7 @@ async def cleanup_batch_transactions():
     })
 
     if result.deleted_count > 0:
-        print(f"Cleaned up {result.deleted_count} batch test transaction(s)")
+        print(f"\n  Cleaned up {result.deleted_count} batch test transaction(s)")
 
 
 # ============================================================================
@@ -69,6 +72,7 @@ async def cleanup_batch_transactions():
 @pytest.mark.asyncio
 async def test_batch_transaction_multiple_files(
     http_client: httpx.AsyncClient,
+    db,
     cleanup_batch_transactions
 ):
     """
@@ -79,8 +83,7 @@ async def test_batch_transaction_multiple_files(
     - Transaction contains all 3 files in documents[] array
     - total_documents = 3
     """
-    await database.connect()
-    collection = database.translation_transactions
+    collection = db.translation_transactions
 
     transaction_id = f"TXN-BATCH-TEST-{uuid.uuid4().hex[:8].upper()}"
 
@@ -155,6 +158,7 @@ async def test_batch_transaction_multiple_files(
 @pytest.mark.asyncio
 async def test_all_files_same_transaction_id(
     http_client: httpx.AsyncClient,
+    db,
     cleanup_batch_transactions
 ):
     """
@@ -167,8 +171,7 @@ async def test_all_files_same_transaction_id(
     - All 3 files should be updated with transaction_id=TXN-BATCH-XXXXX
     - Not transaction_ids[0], transaction_ids[1], transaction_ids[2]
     """
-    await database.connect()
-    collection = database.translation_transactions
+    collection = db.translation_transactions
 
     transaction_id = f"TXN-BATCH-TEST-SAME-ID-{uuid.uuid4().hex[:8].upper()}"
 
@@ -219,6 +222,7 @@ async def test_all_files_same_transaction_id(
 @pytest.mark.asyncio
 async def test_multiple_webhooks_same_transaction_id(
     http_client: httpx.AsyncClient,
+    db,
     cleanup_batch_transactions
 ):
     """
@@ -232,8 +236,7 @@ async def test_multiple_webhooks_same_transaction_id(
     - Each updates a different document in the documents[] array
     - No 422 validation errors
     """
-    await database.connect()
-    collection = database.translation_transactions
+    collection = db.translation_transactions
 
     transaction_id = f"TXN-BATCH-TEST-WEBHOOK-{uuid.uuid4().hex[:8].upper()}"
 
@@ -342,7 +345,7 @@ async def test_multiple_webhooks_same_transaction_id(
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_batch_prevents_index_errors(cleanup_batch_transactions):
+async def test_batch_prevents_index_errors(db, cleanup_batch_transactions):
     """
     Test that the batch transaction fix prevents IndexError.
 

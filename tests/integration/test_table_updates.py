@@ -11,6 +11,7 @@ NO MOCKS - Full end-to-end testing.
 """
 
 import pytest
+import pytest_asyncio
 import httpx
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
@@ -31,71 +32,32 @@ TEST_PREFIX = "TEST_UPDATE_"
 TEST_COMPANY = f"{TEST_PREFIX}TestCorp"
 TEST_USER_EMAIL = f"{TEST_PREFIX}user@testcorp.com"
 
-@pytest.fixture(scope="function")
-async def db():
-    """Connect to REAL test database."""
-    client = AsyncIOMotorClient(MONGODB_URI)
-    database = client[DATABASE_NAME]
-    yield database
-    client.close()
+@pytest_asyncio.fixture(scope="function")
+async def db(test_db):
+    """
+    Connect to REAL test database.
 
-@pytest.fixture(scope="function")
-async def http_client(db):
-    """HTTP client for REAL API calls with authentication."""
+    Uses test_db fixture from conftest.py to ensure translation_test is used.
+    """
+    yield test_db
+
+@pytest_asyncio.fixture(scope="function")
+async def http_client():
+    """HTTP client for REAL API calls."""
     async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=30.0) as client:
-        # Create a test admin user with known password
-        # Note: Admins are stored in PRODUCTION database, not test database
-        import bcrypt
-        test_admin_email = f"{TEST_PREFIX}admin@test.com"
-        test_password = "TestAdmin123"
-
-        # Hash password
-        password_bytes = test_password.encode('utf-8')
-        salt = bcrypt.gensalt(12)
-        password_hash = bcrypt.hashpw(password_bytes, salt).decode('utf-8')
-
-        # Connect to production database for admin creation
-        prod_client = AsyncIOMotorClient(MONGODB_URI_PROD)
-        prod_db = prod_client[DATABASE_NAME_PROD]
-
-        # Create admin in PRODUCTION database (where auth service looks)
-        await prod_db['iris-admins'].delete_many({"user_email": test_admin_email})
-        await prod_db['iris-admins'].insert_one({
-            "user_name": "Test Admin",
-            "user_email": test_admin_email,
-            "password": password_hash,
-            "permission_level": "admin",
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc)
-        })
-        print(f"✅ Created test admin in PRODUCTION db: {test_admin_email}")
-
-        # Login with test admin
-        login_response = await client.post(
-            "/login/admin",
-            json={
-                "email": test_admin_email,
-                "password": test_password
-            }
-        )
-
-        if login_response.status_code == 200:
-            data = login_response.json()
-            if data.get("success") and "data" in data:
-                token = data["data"]["authToken"]
-                # Add Authorization header to all subsequent requests
-                client.headers["Authorization"] = f"Bearer {token}"
-                print(f"✅ Authenticated successfully with admin token")
-        else:
-            print(f"❌ Login failed: {login_response.status_code} - {login_response.text}")
-
         yield client
 
-        # Cleanup test admin from production database
-        await prod_db['iris-admins'].delete_many({"user_email": test_admin_email})
-        prod_client.close()
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
+async def authenticated_http_client(admin_headers):
+    """HTTP client with admin authentication from conftest.py."""
+    async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=30.0) as client:
+        # Add admin auth headers from conftest fixture
+        client.headers.update(admin_headers)
+        print(f"✅ Using admin auth from conftest fixture")
+        yield client
+
+@pytest_asyncio.fixture(scope="function")
 async def cleanup_test_data(db):
     """Cleanup test data before and after tests."""
     # Cleanup before test
@@ -120,7 +82,7 @@ async def cleanup_test_data(db):
 class TestSubscriptionUpdates:
     """Test UPDATE operations on subscriptions table."""
 
-    async def test_update_subscription_status(self, http_client, db, cleanup_test_data):
+    async def test_update_subscription_status(self, authenticated_http_client, db, cleanup_test_data):
         """Test updating subscription status from active to inactive."""
 
         # 1. CREATE test subscription in database
@@ -129,6 +91,7 @@ class TestSubscriptionUpdates:
             "subscription_unit": "page",
             "units_per_subscription": 1000,
             "price_per_unit": 0.05,
+            "subscription_price": 50.00,  # Required by schema validation
             "promotional_units": 100,
             "discount": 1.0,
             "start_date": datetime.now(timezone.utc),
@@ -151,7 +114,7 @@ class TestSubscriptionUpdates:
 
         # 3. UPDATE via API - change status to inactive
         update_data = {"status": "inactive"}
-        response = await http_client.patch(
+        response = await authenticated_http_client.patch(
             f"/api/subscriptions/{subscription_id}",
             json=update_data
         )
@@ -169,7 +132,7 @@ class TestSubscriptionUpdates:
         assert after["status"] != before["status"]
         print(f"✅ Database verified: status changed from '{before['status']}' to '{after['status']}'")
 
-    async def test_update_subscription_units_and_price(self, http_client, db, cleanup_test_data):
+    async def test_update_subscription_units_and_price(self, authenticated_http_client, db, cleanup_test_data):
         """Test updating units_per_subscription and price_per_unit."""
 
         # CREATE test subscription
@@ -178,6 +141,7 @@ class TestSubscriptionUpdates:
             "subscription_unit": "word",
             "units_per_subscription": 5000,
             "price_per_unit": 0.03,
+            "subscription_price": 150.00,  # Required by schema validation
             "promotional_units": 0,
             "discount": 1.0,
             "start_date": datetime.now(timezone.utc),
@@ -202,7 +166,7 @@ class TestSubscriptionUpdates:
             "units_per_subscription": 10000,
             "price_per_unit": 0.04
         }
-        response = await http_client.patch(f"/api/subscriptions/{sub_id}", json=update_data)
+        response = await authenticated_http_client.patch(f"/api/subscriptions/{sub_id}", json=update_data)
 
         # VERIFY response
         assert response.status_code == 200
@@ -223,7 +187,7 @@ class TestSubscriptionUpdates:
 class TestCompanyUserUpdates:
     """Test UPDATE operations on company_users table."""
 
-    async def test_create_company_user(self, http_client, db, cleanup_test_data):
+    async def test_create_company_user(self, authenticated_http_client, db, cleanup_test_data):
         """Test creating a new company user via API."""
 
         # 1. CREATE company first in BOTH collections (the API checks 'company' collection)
@@ -256,7 +220,7 @@ class TestCompanyUserUpdates:
             "status": "active"
         }
 
-        response = await http_client.post(
+        response = await authenticated_http_client.post(
             f"/api/company-users?company_name={TEST_COMPANY}",
             json=user_data
         )
@@ -266,9 +230,14 @@ class TestCompanyUserUpdates:
         data = response.json()
         print(f"✅ API response: {data}")
 
-        # 4. VERIFY database
-        user = await db.company_users.find_one({"email": TEST_USER_EMAIL})
-        assert user is not None
+        # 4. VERIFY database - email is lowercased by the API
+        # Use case-insensitive search since the API lowercases emails
+        user = await db.company_users.find_one({"email": {"$regex": f"^{TEST_USER_EMAIL}$", "$options": "i"}})
+        if user is None:
+            # Also check with the email returned in response
+            response_email = data.get("email")
+            user = await db.company_users.find_one({"email": response_email})
+        assert user is not None, f"User not found. Response: {data}"
         assert user["user_name"] == "Test User"
         assert user["company_name"] == TEST_COMPANY
         assert user["permission_level"] == "user"
@@ -283,19 +252,19 @@ class TestCompanyUserUpdates:
 class TestCompanyUpdates:
     """Test UPDATE operations on companies table."""
 
-    async def test_get_companies(self, http_client, db, cleanup_test_data):
+    async def test_get_companies(self, authenticated_http_client, db, cleanup_test_data):
         """Test getting companies list (GET endpoint exists)."""
 
-        # CREATE test companies
+        # CREATE test companies in 'company' collection (what the API queries)
         test_companies = [
             {"company_name": f"{TEST_PREFIX}Alpha", "status": "active", "created_at": datetime.now(timezone.utc)},
             {"company_name": f"{TEST_PREFIX}Beta", "status": "active", "created_at": datetime.now(timezone.utc)}
         ]
-        await db.companies.insert_many(test_companies)
-        print(f"✅ Created {len(test_companies)} test companies")
+        await db.company.insert_many(test_companies)
+        print(f"✅ Created {len(test_companies)} test companies in 'company' collection")
 
         # GET via API
-        response = await http_client.get("/api/v1/companies")
+        response = await authenticated_http_client.get("/api/v1/companies")
 
         # VERIFY response
         assert response.status_code == 200

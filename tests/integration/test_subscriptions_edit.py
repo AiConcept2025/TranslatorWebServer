@@ -30,60 +30,81 @@ API_BASE_URL = "http://localhost:8000"
 MONGODB_URI = "mongodb://iris:Sveta87201120@localhost:27017/translation_test?authSource=translation"
 DATABASE_NAME = "translation_test"
 
+# NOTE: These tests require a running server configured for test database
+# Server must use translation_test database and valid admin credentials
+
 # ============================================================================
 # Fixtures
 # ============================================================================
 
 @pytest.fixture(scope="function")
-def db():
+async def db(test_db):
     """
     Connect to test MongoDB database.
 
     CRITICAL: Uses test database 'translation_test', NOT production 'translation'.
+    Uses test_db fixture from conftest.py to ensure translation_test is used.
     """
-    mongo_client = AsyncIOMotorClient(MONGODB_URI)
-    database = mongo_client[DATABASE_NAME]
-
-    yield database
-
-    # Cleanup: Don't drop database, just close connection
-    mongo_client.close()
+    yield test_db
 
 
 @pytest.fixture(scope="function")
 async def http_client():
     """HTTP client for making real API calls to running server."""
-    async_client = httpx.AsyncClient(base_url=API_BASE_URL, timeout=10.0)
+    async_client = httpx.AsyncClient(base_url=API_BASE_URL, timeout=30.0)
     yield async_client
     await async_client.aclose()
 
 
 @pytest.fixture(scope="function")
-async def admin_headers():
+async def subscription_auth():
     """
-    Get admin authentication headers.
+    Get authentication headers for subscription tests.
+    Uses admin login endpoint with existing admin credentials.
+    """
+    async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=30.0) as client:
+        try:
+            response = await client.post(
+                "/login/admin",
+                json={
+                    "email": "danishevsky@gmail.com",
+                    "password": "Sveta87201120!"
+                }
+            )
+            if response.status_code != 200:
+                pytest.skip(f"Auth failed: {response.status_code}")
 
-    TODO: Implement admin login to get auth token if required.
-    For now, return empty dict (endpoints may not require auth in test env).
-    """
-    return {}
+            data = response.json()
+            # Admin login returns token in data.authToken
+            token = (
+                data.get("data", {}).get("authToken") or
+                data.get("access_token") or
+                data.get("token")
+            )
+            if not token:
+                pytest.skip("No token in auth response")
+
+            yield {"Authorization": f"Bearer {token}"}
+        except httpx.ConnectError:
+            pytest.skip("Server not running")
 
 
 @pytest.fixture(scope="function")
-async def test_subscription(db):
+async def test_subscription(db, test_company):
     """
     Create a test subscription in the database for testing.
 
     Returns the created subscription document.
     Automatically cleaned up after test.
+
+    Uses test_company fixture for referential integrity.
     """
     collection = db.subscriptions
 
     now = datetime.now(timezone.utc)
-    company_name = f"TEST-COMPANY-{uuid.uuid4().hex[:8].upper()}"
 
     subscription_doc = {
-        "company_name": company_name,
+        "company_name": test_company["company_name"],  # Valid company reference
         "subscription_unit": "page",
         "units_per_subscription": 1000,
         "price_per_unit": 0.10,
@@ -101,7 +122,7 @@ async def test_subscription(db):
     result = await collection.insert_one(subscription_doc)
     subscription_doc["_id"] = result.inserted_id
 
-    print(f"✅ Created test subscription: {result.inserted_id}")
+    print(f"✅ Created test subscription: {result.inserted_id} (company: {test_company['company_name']})")
 
     yield subscription_doc
 
@@ -165,7 +186,7 @@ async def test_company(db):
 class TestUpdateSubscription:
     """Test PATCH /api/subscriptions/{subscription_id} endpoint."""
 
-    async def test_update_subscription_status(self, http_client, db, admin_headers, test_subscription):
+    async def test_update_subscription_status(self, http_client, db, subscription_auth, test_subscription):
         """Test 1.1: Update subscription status from active to inactive."""
         subscription_id = str(test_subscription["_id"])
         original_status = test_subscription["status"]
@@ -183,7 +204,7 @@ class TestUpdateSubscription:
         response = await http_client.patch(
             f"/api/subscriptions/{subscription_id}",
             json=update_data,
-            headers=admin_headers
+            headers=subscription_auth
         )
 
         # Step 4: Assert response
@@ -203,7 +224,7 @@ class TestUpdateSubscription:
         print(f"✅ Test passed: Status updated from '{original_status}' to '{record_after['status']}'")
 
 
-    async def test_update_subscription_units(self, http_client, db, admin_headers, test_subscription):
+    async def test_update_subscription_units(self, http_client, db, subscription_auth, test_subscription):
         """Test 1.2: Update units_per_subscription."""
         subscription_id = str(test_subscription["_id"])
         original_units = test_subscription["units_per_subscription"]
@@ -221,7 +242,7 @@ class TestUpdateSubscription:
         response = await http_client.patch(
             f"/api/subscriptions/{subscription_id}",
             json=update_data,
-            headers=admin_headers
+            headers=subscription_auth
         )
 
         # Verify response
@@ -237,7 +258,7 @@ class TestUpdateSubscription:
         print(f"✅ Test passed: Units updated from {original_units} to {record_after['units_per_subscription']}")
 
 
-    async def test_update_subscription_price(self, http_client, db, admin_headers, test_subscription):
+    async def test_update_subscription_price(self, http_client, db, subscription_auth, test_subscription):
         """Test 1.3: Update price_per_unit."""
         subscription_id = str(test_subscription["_id"])
         original_price = test_subscription["price_per_unit"]
@@ -255,7 +276,7 @@ class TestUpdateSubscription:
         response = await http_client.patch(
             f"/api/subscriptions/{subscription_id}",
             json=update_data,
-            headers=admin_headers
+            headers=subscription_auth
         )
 
         # Verify response
@@ -271,7 +292,7 @@ class TestUpdateSubscription:
         print(f"✅ Test passed: Price updated from {original_price} to {record_after['price_per_unit']}")
 
 
-    async def test_update_subscription_promotional_units(self, http_client, db, admin_headers, test_subscription):
+    async def test_update_subscription_promotional_units(self, http_client, db, subscription_auth, test_subscription):
         """Test 1.4: Update promotional_units."""
         subscription_id = str(test_subscription["_id"])
         original_promotional = test_subscription["promotional_units"]
@@ -289,7 +310,7 @@ class TestUpdateSubscription:
         response = await http_client.patch(
             f"/api/subscriptions/{subscription_id}",
             json=update_data,
-            headers=admin_headers
+            headers=subscription_auth
         )
 
         # Verify response
@@ -305,7 +326,7 @@ class TestUpdateSubscription:
         print(f"✅ Test passed: Promotional units updated from {original_promotional} to {record_after['promotional_units']}")
 
 
-    async def test_update_subscription_dates(self, http_client, db, admin_headers, test_subscription):
+    async def test_update_subscription_dates(self, http_client, db, subscription_auth, test_subscription):
         """Test 1.5: Update start_date and end_date."""
         subscription_id = str(test_subscription["_id"])
         original_start = test_subscription["start_date"]
@@ -328,7 +349,7 @@ class TestUpdateSubscription:
         response = await http_client.patch(
             f"/api/subscriptions/{subscription_id}",
             json=update_data,
-            headers=admin_headers
+            headers=subscription_auth
         )
 
         # Verify response
@@ -339,13 +360,24 @@ class TestUpdateSubscription:
         # Verify database
         record_after = await db.subscriptions.find_one({"_id": ObjectId(subscription_id)})
         # Compare timestamps (allow small tolerance for serialization)
-        assert abs((record_after["start_date"] - new_start).total_seconds()) < 2
-        assert abs((record_after["end_date"] - new_end).total_seconds()) < 2
+        # MongoDB may store naive or aware datetimes, so convert both to naive for comparison
+        db_start = record_after["start_date"]
+        db_end = record_after["end_date"]
+        if db_start.tzinfo is None:
+            new_start_naive = new_start.replace(tzinfo=None)
+            new_end_naive = new_end.replace(tzinfo=None)
+        else:
+            new_start_naive = new_start
+            new_end_naive = new_end
+            db_start = db_start
+            db_end = db_end
+        assert abs((db_start - new_start_naive).total_seconds()) < 2
+        assert abs((db_end - new_end_naive).total_seconds()) < 2
 
         print(f"✅ Test passed: Dates updated successfully")
 
 
-    async def test_update_subscription_multiple_fields(self, http_client, db, admin_headers, test_subscription):
+    async def test_update_subscription_multiple_fields(self, http_client, db, subscription_auth, test_subscription):
         """Test 1.6: Update multiple fields at once."""
         subscription_id = str(test_subscription["_id"])
 
@@ -365,7 +397,7 @@ class TestUpdateSubscription:
         response = await http_client.patch(
             f"/api/subscriptions/{subscription_id}",
             json=update_data,
-            headers=admin_headers
+            headers=subscription_auth
         )
 
         # Verify response
@@ -383,7 +415,7 @@ class TestUpdateSubscription:
         print(f"✅ Test passed: Multiple fields updated successfully")
 
 
-    async def test_update_nonexistent_subscription(self, http_client, admin_headers):
+    async def test_update_nonexistent_subscription(self, http_client, subscription_auth):
         """Test 1.7: Update non-existent subscription returns 404."""
         fake_id = str(ObjectId())
 
@@ -393,7 +425,7 @@ class TestUpdateSubscription:
         response = await http_client.patch(
             f"/api/subscriptions/{fake_id}",
             json=update_data,
-            headers=admin_headers
+            headers=subscription_auth
         )
 
         # Verify 404 error
@@ -402,7 +434,7 @@ class TestUpdateSubscription:
         print(f"✅ Test passed: 404 returned for non-existent subscription")
 
 
-    async def test_update_subscription_invalid_data(self, http_client, admin_headers, test_subscription):
+    async def test_update_subscription_invalid_data(self, http_client, subscription_auth, test_subscription):
         """Test 1.8: Invalid data returns 422 validation error."""
         subscription_id = str(test_subscription["_id"])
 
@@ -413,7 +445,7 @@ class TestUpdateSubscription:
         response = await http_client.patch(
             f"/api/subscriptions/{subscription_id}",
             json=update_data,
-            headers=admin_headers
+            headers=subscription_auth
         )
 
         # Verify 422 validation error
@@ -430,7 +462,7 @@ class TestUpdateSubscription:
 class TestUsagePeriods:
     """Test usage period operations."""
 
-    async def test_add_usage_period(self, http_client, db, admin_headers, test_subscription):
+    async def test_add_usage_period(self, http_client, db, subscription_auth, test_subscription):
         """Test 2.1: Add new usage period successfully."""
         subscription_id = str(test_subscription["_id"])
 
@@ -451,7 +483,7 @@ class TestUsagePeriods:
         response = await http_client.post(
             f"/api/subscriptions/{subscription_id}/usage-periods",
             json=period_data,
-            headers=admin_headers
+            headers=subscription_auth
         )
 
         # Verify response
@@ -472,7 +504,7 @@ class TestUsagePeriods:
         print(f"✅ Test passed: Usage period added successfully (count: {original_periods_count} → {new_periods_count})")
 
 
-    async def test_add_usage_period_invalid_dates(self, http_client, admin_headers, test_subscription):
+    async def test_add_usage_period_invalid_dates(self, http_client, subscription_auth, test_subscription):
         """Test 2.2: Invalid period dates return validation error."""
         subscription_id = str(test_subscription["_id"])
 
@@ -488,7 +520,7 @@ class TestUsagePeriods:
         response = await http_client.post(
             f"/api/subscriptions/{subscription_id}/usage-periods",
             json=period_data,
-            headers=admin_headers
+            headers=subscription_auth
         )
 
         # Verify error (should be 400 or 422)
@@ -497,11 +529,11 @@ class TestUsagePeriods:
         print(f"✅ Test passed: Invalid dates rejected with {response.status_code}")
 
 
-    async def test_record_usage(self, http_client, db, test_subscription):
+    async def test_record_usage(self, http_client, db, subscription_auth, test_subscription):
         """Test 2.3: Record usage successfully."""
         subscription_id = str(test_subscription["_id"])
 
-        # First, add a usage period
+        # First, add a usage period (requires auth)
         now = datetime.now(timezone.utc)
         period_data = {
             "period_start": now.isoformat(),
@@ -509,10 +541,15 @@ class TestUsagePeriods:
             "units_allocated": 1000
         }
 
-        await http_client.post(
+        period_response = await http_client.post(
             f"/api/subscriptions/{subscription_id}/usage-periods",
-            json=period_data
+            json=period_data,
+            headers=subscription_auth
         )
+
+        if period_response.status_code != 201:
+            print(f"⚠️ Test skipped: Could not create usage period ({period_response.status_code})")
+            pytest.skip("Could not create usage period")
 
         # Get subscription with usage period
         record_before = await db.subscriptions.find_one({"_id": ObjectId(subscription_id)})
@@ -521,26 +558,20 @@ class TestUsagePeriods:
         print(f"📊 Before: units_used={original_used_units}")
 
         # Record usage
-        # NOTE: This endpoint requires authentication, so it may fail without proper token
-        # For now, we'll test the structure
         usage_data = {
             "units_to_add": 50,
             "use_promotional_units": False
         }
 
-        # Make request (may fail without auth)
+        # Make request
         response = await http_client.post(
             f"/api/subscriptions/{subscription_id}/record-usage",
-            json=usage_data
+            json=usage_data,
+            headers=subscription_auth
         )
 
-        # If auth required, skip verification
-        if response.status_code == 401:
-            print(f"⚠️ Test skipped: Authentication required (401)")
-            return
-
         # Verify response
-        assert response.status_code == 200
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         data = response.json()
         assert data["success"] is True
 

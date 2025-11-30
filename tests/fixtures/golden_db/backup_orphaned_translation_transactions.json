@@ -1,0 +1,4108 @@
+[
+  {
+    "_id": {
+      "$oid": "6916363ac5b0a110038d9c33"
+    },
+    "transaction_id": "TXN-305602A592",
+    "user_id": "danishevsky@yahoo.com",
+    "documents": [
+      {
+        "file_name": "\u043c\u043e\u0435\u0308 \u0441\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e \u043e \u0440\u043e\u0436\u0434\u0435\u043d\u0438\u0438 (2).pdf",
+        "file_size": 307697,
+        "original_url": "https://drive.google.com/file/d/1rMvp-wp2dgjgoqZ_EDPh7gqUB4D01oqW/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:19Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "article &reference.pdf",
+        "file_size": 299409,
+        "original_url": "https://drive.google.com/file/d/1-5mxtOYSWUcN4gqytSQWiagWSkNrQ2iA/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:16Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Konnova.pdf",
+        "file_size": 624872,
+        "original_url": "https://drive.google.com/file/d/13P4JyfFxdENAbfh1b4KsB3eOnqmgjULr/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:12Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "diploma suppl.pdf",
+        "file_size": 146465,
+        "original_url": "https://drive.google.com/file/d/1nHLEouwFMmJY_IV9qCvco0n0rYQw6C4u/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:09Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0414\u0438\u043f\u043b\u043e\u043c \u041c\u0418\u0418\u0422.pdf",
+        "file_size": 3998158,
+        "original_url": "https://drive.google.com/file/d/1ffQWKusiZtIkQsK6_EqY2HWV-9NvJxVX/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:07Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0434\u0438\u043f\u043b\u043e\u0438 \u0421\u0438\u0431\u0413\u0422\u0423 (2).pdf",
+        "file_size": 1635382,
+        "original_url": "https://drive.google.com/file/d/1Kale_Dfne8j9BGcM82p1UY7VaPKKN_4q/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:05Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0411\u0420\u0410\u0427\u041d\u041e\u0415 \u0421\u041e\u0413\u041b\u0410\u0428\u0415\u041d\u0418\u0415.pdf",
+        "file_size": 397716,
+        "original_url": "https://drive.google.com/file/d/1jqD-USFHQDyGnGCYlDEYswh3OpnEoN5Q/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "GitHub_Access_on_Mac_translated.docx",
+        "file_size": 28369,
+        "original_url": "https://docs.google.com/document/d/1DyyZdKgpRjoewDG8Y3vwn6bEd-jUueGF/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T09:16:27Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan_translated.docx",
+        "file_size": 27859,
+        "original_url": "https://docs.google.com/document/d/15Xh2w3mw2AW-4qsDVBo5w_6x8-IgOG3q/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T09:16:30Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/1jcCoJjMur4fpeXAMtWPTF_XAQ21kJJ69/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T09:16:30Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "GitHub_Access_on_Mac.docx",
+        "file_size": 31021,
+        "original_url": "https://docs.google.com/document/d/1eywUTGuGsTGrK07ZlIGQLg-eTbLyQEYa/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T09:16:27Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cable_Management_Changes_PRD.docx",
+        "file_size": 28009,
+        "original_url": "https://docs.google.com/document/d/1h34SOFpIwkaFryxHHvDxln4h7p0kkFkf/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T22:12:13Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81] (1).docx",
+        "file_size": 28185,
+        "original_url": "https://docs.google.com/document/d/1g8ZsvJ642F8c75TDshuAweo8jONkCu6B/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T22:12:11Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "svn_commit_history_20251028_160652.docx",
+        "file_size": 31542,
+        "original_url": "https://docs.google.com/document/d/1crcs0Of-ZOU_uXe9WHiH8p57tyZ6aG0I/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T22:09:33Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "EOL_EOS_Functional_Capability_Matrix_with_Cisco_CSPC.docx",
+        "file_size": 32841,
+        "original_url": "https://docs.google.com/document/d/1SGNFnpPkZoC7oiV15gtpCgqiaEilgKug/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T22:09:31Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith_translated.docx",
+        "file_size": 14182,
+        "original_url": "https://docs.google.com/document/d/18pFvDucwmNDfuiKH7C_S5cLmZ5Y43hAK/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T15:10:10Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1v7r3dqmId4b0le0cAkpQWfifr9w8NXnU/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T15:10:14Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1AWJ0qX3k_nwnuuewhSeJCk4GYyBrBEfP/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T15:10:14Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith.docx",
+        "file_size": 16260,
+        "original_url": "https://docs.google.com/document/d/1nW07VKw0O38IvjEkfN79hNguEqCYsu8z/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T15:10:10Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1yMQ99B9ZkHgUrGM3_IN5LXmjfDGkCnQE/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T14:31:12Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith.docx",
+        "file_size": 16260,
+        "original_url": "https://docs.google.com/document/d/1aXCNbOwrs68YAu9DdUMY9WaNmzTn1mtE/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T14:31:09Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81].docx",
+        "file_size": 17682,
+        "original_url": "https://docs.google.com/document/d/1x4vWgMGYer_D_YWahb6olWP5nTzPOJrW/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T14:03:57Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1T7oHkrEpkxsylqh8YVQ_3XKFLBnoqUGq/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T14:03:55Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Copy of critical role_ Anastasia Lykova letter.docx",
+        "file_size": 17743,
+        "original_url": "https://docs.google.com/document/d/1DXZxAsJh2h8_IrLWVUiAOF-_0omVjE36/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T12:08:04Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81].docx",
+        "file_size": 17682,
+        "original_url": "https://docs.google.com/document/d/1_Wno2jzkUWUf0VkX3E3-M1qfpXDcC2qu/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T12:08:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81].docx",
+        "file_size": 17682,
+        "original_url": "https://docs.google.com/document/d/1TasUe5lne_9-38QkhsdW8uD3IHAURxm7/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T09:36:12Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1E5_G-yiDxQkGAE7egtDG4lIRofDHuXDw/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T09:36:10Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith.docx",
+        "file_size": 16260,
+        "original_url": "https://docs.google.com/document/d/1tr-2c7t8U6_wVPHUxzr0tGq69VWKKZxY/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T09:36:07Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan_translated.docx",
+        "file_size": 27859,
+        "original_url": "https://docs.google.com/document/d/1jQFXxReUMrH1UFFEKbWdeIOY8eURgZt-/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:47:50Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "GitHub_Access_on_Mac_translated.docx",
+        "file_size": 28369,
+        "original_url": "https://docs.google.com/document/d/1UqoRLMUL4s7PajPKXkAhwORyjMkIcfmu/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:47:52Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "GitHub_Access_on_Mac.docx",
+        "file_size": 31021,
+        "original_url": "https://docs.google.com/document/d/1S6qIpL1z5-ZzCUcmZphNyVn6wla9yPo3/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:47:52Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/1J5GO12qqWWRZAvlMFnBxfnn9E96n01Yh/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:47:50Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/1dY3yRrHYeNPLTU4IXu_V-C6DDPOXdBtF/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:45:16Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "GitHub_Access_on_Mac.docx",
+        "file_size": 31021,
+        "original_url": "https://docs.google.com/document/d/1z0PqV-Th7nNCMZLrKBRn_-g3I622c9OD/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:45:19Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Proposal_Oracle_to_OnPrem_translated.docx",
+        "file_size": 38391,
+        "original_url": "https://docs.google.com/document/d/1CC6B_7rHmhvO0KRG5x03WXHhiST1dYlE/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:38:14Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Comparison_translated.docx",
+        "file_size": 38215,
+        "original_url": "https://docs.google.com/document/d/1XDvzfqIRTy-7Ks_HCRS915ZHC_cig9DL/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:38:18Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Comparison.docx",
+        "file_size": 37968,
+        "original_url": "https://docs.google.com/document/d/1WgW0nzVT56OuBAUXykPkXXoeKruSI_5I/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:38:18Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Proposal_Oracle_to_OnPrem.docx",
+        "file_size": 38132,
+        "original_url": "https://docs.google.com/document/d/1aQbsnUHb-iXDP2XdCuczPaytIVnvmLkV/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:38:14Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cable_Management_Changes_PRD_translated.docx",
+        "file_size": 25089,
+        "original_url": "https://docs.google.com/document/d/1YO4e9QBdZxXIQp8mliUHl6IB9szGl4YJ/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:17:27Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81] (1)_translated.docx",
+        "file_size": 19295,
+        "original_url": "https://docs.google.com/document/d/1U8GB8UlxeKIQblKefAYgMhL_pKsub7On/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:17:31Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81] (1).docx",
+        "file_size": 28185,
+        "original_url": "https://docs.google.com/document/d/1GQS5muG4FWMrgf9q1UB2On3kDPpqVeIJ/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:17:31Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cable_Management_Changes_PRD.docx",
+        "file_size": 28009,
+        "original_url": "https://docs.google.com/document/d/1X_jTQaCrqkkj4pH-lkUraAMKVDxNBCsb/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:17:27Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cable_Management_Changes_PRD.docx",
+        "file_size": 28009,
+        "original_url": "https://docs.google.com/document/d/1qAYcWZPfryTm2XPIYnnh4mM_4xP9lG9A/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:14:34Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith_translated.docx",
+        "file_size": 14182,
+        "original_url": "https://docs.google.com/document/d/13UJlwISblygI_RUCXee-x-k949Tfi_N9/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T21:42:52Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1bByICTruqny5FuwwrzzAss0sJ9aS3SKS/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T21:42:57Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1qi2QFXY2Ptru-Mmzt5INGFzXZ65u4mga/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T21:42:57Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith.docx",
+        "file_size": 16260,
+        "original_url": "https://docs.google.com/document/d/1bPznqdNYAL65dNn9_LmViaafm0nDun6-/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T21:42:52Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report_translated.docx",
+        "file_size": 52447,
+        "original_url": "https://docs.google.com/document/d/1LOPrTO8TBRqGQ-3xeJ9vYBrTW2231HyF/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:39Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan_translated.docx",
+        "file_size": 27859,
+        "original_url": "https://docs.google.com/document/d/1zwcB3F-9KuzBmVK-MFrqAlDGJPJ5sCLU/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:43Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report_translated.docx",
+        "file_size": 44651,
+        "original_url": "https://docs.google.com/document/d/1yMeREG5vna_ii83M62FL7UkBck1savr8/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:48Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.pdf",
+        "file_size": 61056,
+        "original_url": "https://drive.google.com/file/d/1fkwpZWUPbkLTemJmwNXSIekC8y6VHUjr/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:48Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/17Z_RAhJM7NVbf7SD9E9apkwmsAGm9RbN/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:43Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.docx",
+        "file_size": 61119,
+        "original_url": "https://docs.google.com/document/d/1fEYP65rEWyYKloLvJyRUjhKPZqmDbLT0/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:39Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.pdf",
+        "file_size": 61056,
+        "original_url": "https://drive.google.com/file/d/1oB7DQVtNweWvcJqNNY-aJJgc1zOca6VH/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T13:35:50Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/1cYgyM4wNOYLutFPzHYc0Y6bsWWov9pfs/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T13:35:46Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.docx",
+        "file_size": 61119,
+        "original_url": "https://docs.google.com/document/d/14trDMweTIFoug9K5itIxPI-QWSMbmy1v/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T13:35:41Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovations_Full_Referenced.docx",
+        "file_size": 30647,
+        "original_url": "https://docs.google.com/document/d/1JgGdoaoXe68pzEkHT2eSL_ySxUk_mEVW/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T13:04:23Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovations_Enhanced.docx",
+        "file_size": 39514,
+        "original_url": "https://docs.google.com/document/d/1E1S_4E6NQDYHcQKGQmjv5IP9w76y-B3s/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T13:04:19Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovations.docx",
+        "file_size": 38966,
+        "original_url": "https://docs.google.com/document/d/1mFPE-LusxBNHVI4qmQyqzivT7jJVPtDN/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T13:04:16Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1aCBGK5hsIRQRuI1dSV4Z7mlswZgiFsLR/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1EoAm64PcQHj9r9MLyzTC2MY5hviWy0Xq/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovation_Comparison_translated.docx",
+        "file_size": 37886,
+        "original_url": "https://docs.google.com/document/d/16WW_XSPJmm5iFnpN3yvvcb0IlL0l0VwH/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:04:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovation_Comparison_translated_translated.docx",
+        "file_size": 37874,
+        "original_url": "https://docs.google.com/document/d/1qxLB4pa4j3NVuthN5x2f5eqrkYFRhUtW/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:04:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated_translated_translated.docx",
+        "file_size": 14887,
+        "original_url": "https://docs.google.com/document/d/1FnWXxwEF6DEWDkvckEonIXpkQmlkSzIP/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1uKtVxE-oVsPo_UUhzMUUMEs2W778doi8/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report_translated.docx",
+        "file_size": 44279,
+        "original_url": "https://docs.google.com/document/d/1x5fabinc1UcyyUBgdO5uN7VOFCswSg5q/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:50Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report_translated.docx",
+        "file_size": 51816,
+        "original_url": "https://docs.google.com/document/d/1n5SniV1V__ao7K__dtzkg-ftKcPiAO3H/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:54Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan_translated.docx",
+        "file_size": 27713,
+        "original_url": "https://docs.google.com/document/d/1iYbozbHBx1-LQi6xOq1gwhRbSSMuFctZ/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:59Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan_translated_translated.docx",
+        "file_size": 27711,
+        "original_url": "https://docs.google.com/document/d/1CNT3a9VFvNcGr67PzbcOrnr_Z5sS9Vzb/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:59Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report_translated_translated.docx",
+        "file_size": 51844,
+        "original_url": "https://docs.google.com/document/d/1uCwN076zyx5WALUs0WLql63a5IH7Ubb1/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:54Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report_translated_translated.docx",
+        "file_size": 44287,
+        "original_url": "https://docs.google.com/document/d/1wtLDVxqSO18l09BoezpYnwME7fY2UpvE/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:50Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated_translated_translated.docx",
+        "file_size": 14887,
+        "original_url": "https://docs.google.com/document/d/1urwkDXDv5a0XRJGhNx0mSdI01GGxnfeI/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated_translated_translated_translated.docx",
+        "file_size": 14891,
+        "original_url": "https://docs.google.com/document/d/1lj5hfqrauEas5EpNBhV5RZt5mS0EHNLQ/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovation_Comparison_translated_translated_translated.docx",
+        "file_size": 37874,
+        "original_url": "https://docs.google.com/document/d/11B1lBhL0_22zEi3Zjx6_LeSAHM7q5363/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:04:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovation_Comparison_translated_translated.docx",
+        "file_size": 37873,
+        "original_url": "https://docs.google.com/document/d/1RFyMyIw1dihSAPWOrxnfN9tot-g5EKcO/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:04:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated_translated_translated.docx",
+        "file_size": 14887,
+        "original_url": "https://docs.google.com/document/d/1tTeJHFeIb-WDzKaqCrYnHz6C9ITLHqZh/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1oR1orTe1pP81z0gFrnX5nBaI_aDGYTX2/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Lab Management Engineer_translated.docx",
+        "file_size": 42124,
+        "original_url": "https://docs.google.com/document/d/1d1caxm6bnXVWOYcF3FLIWZ8RRzMqX2Cv/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:51:17Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Comparison_Short_translated.docx",
+        "file_size": 37796,
+        "original_url": "https://docs.google.com/document/d/1ugDuHGOfvgL_PGtlKs1QNvEAR503Z2Y5/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:51:22Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovation_Comparison_translated.docx",
+        "file_size": 37877,
+        "original_url": "https://docs.google.com/document/d/1xl8AGgfxAMZkbFroxZZLH9jylnQKOROB/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:51:27Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovation_Comparison.docx",
+        "file_size": 37756,
+        "original_url": "https://docs.google.com/document/d/1KkpF1hmJgg3woNSGX-vW4BpXa21cUmIQ/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:51:27Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Comparison_Short.docx",
+        "file_size": 37682,
+        "original_url": "https://docs.google.com/document/d/1uLe0FYnO10XQ7AXuX3ZxWVst4Cj438wj/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:51:22Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Lab Management Engineer.docx",
+        "file_size": 46143,
+        "original_url": "https://docs.google.com/document/d/1z7Uft140QNNX6Hxh2flwd5-ZTSvHzjZs/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:51:17Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/18QMX_EPoh1-6awjX--FuyQo-AshCdbcd/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1OFczS4o8h0BcPdUZc5NQPL9mzKbcjkGP/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovation_Comparison_translated.docx",
+        "file_size": 37883,
+        "original_url": "https://docs.google.com/document/d/1LBK095BR5OSBJfXQFjpAp6qGDfDR_F2U/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:04:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovation_Comparison_translated_translated.docx",
+        "file_size": 37874,
+        "original_url": "https://docs.google.com/document/d/1_-az1uqQV65rk0fzHKss6riE0HuKPbCL/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:04:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated_translated_translated.docx",
+        "file_size": 14887,
+        "original_url": "https://docs.google.com/document/d/1A9P8VWj5JKNkekVJkC-wmZsef_oaNiLx/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/10Yo6A_wZSFg4Lsv5Tz68U4Uu7VSyiJh8/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report_translated.docx",
+        "file_size": 44279,
+        "original_url": "https://docs.google.com/document/d/1RE0wAvFtcRVN-t3owk_ogrlTUuCDc0v4/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:50Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report_translated.docx",
+        "file_size": 51825,
+        "original_url": "https://docs.google.com/document/d/1Iw1Az7WkfhV437m__G_JW-UzDjbLaZiN/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:54Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan_translated.docx",
+        "file_size": 27714,
+        "original_url": "https://docs.google.com/document/d/13vQ5Jt0TkQaS_BT8fHXAxRvXRyFXafha/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:59Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/1PhCKMSqrwQRJY4flyZOj0ai3X5cxqPOI/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:59Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.docx",
+        "file_size": 61119,
+        "original_url": "https://docs.google.com/document/d/1s3isbi5U15mGDDFyX3H8LW0H5iX4G30S/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:54Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.pdf",
+        "file_size": 61056,
+        "original_url": "https://drive.google.com/file/d/1sBTIkzCMh4WMj8mf4tmDkSn6aRuVuPt3/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:19:50Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1w2aGVvO_afLwWPxuMYgUk73CS96U_czT/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1M6iykzVHS8nYBdiMbEwqBqLqyUHUH3mf/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovation_Comparison_translated.docx",
+        "file_size": 37886,
+        "original_url": "https://docs.google.com/document/d/11ilqytJ0oy5HRrKpDtrR__uKl6XFRCe7/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:04:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovation_Comparison.docx",
+        "file_size": 37756,
+        "original_url": "https://docs.google.com/document/d/1mRZ-ryWMCQVrXIkegda7Q8ejv7spfHHP/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T12:04:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1x7yuuVLAuQAQVZUvIAebR7N33T2078Xx/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T11:47:37Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "source_language": "ru",
+    "target_language": "en",
+    "units_count": 243,
+    "price_per_unit": 0.01,
+    "total_price": 2.43,
+    "status": "pending_confirmation",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-13T19:49:14.640Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-13T19:49:14.640Z"
+    },
+    "company_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69168c2eac49f5f3fab1ea69"
+    },
+    "transaction_id": "TXN-687B78AADC",
+    "user_id": "danishevsky@yahoo.com",
+    "documents": [
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovations.docx",
+        "file_size": 38966,
+        "original_url": "https://docs.google.com/document/d/1Up5Yis_JjX34PzaSxS7vvOTStzbhyv0f/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T20:47:41Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "nuVIZ_Cable_Answers_Final.docx",
+        "file_size": 42451,
+        "original_url": "https://docs.google.com/document/d/1NbywF3PNH-2ipD5CgzQSg3V622L9Ro0q/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T20:47:43Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 2,
+    "price_per_unit": 0.01,
+    "total_price": 0.02,
+    "status": "pending_confirmation",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-14T01:55:58.675Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-14T01:55:58.675Z"
+    },
+    "company_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6916919dc0fe8f12af86817d"
+    },
+    "transaction_id": "TXN-4EDEB69E8C",
+    "user_id": "danishevsky@yahoo.com",
+    "documents": [
+      {
+        "file_name": "nuDOC API Role-Based Access Control (RBAC) & Security Audit1.docx",
+        "file_size": 28471,
+        "original_url": "https://docs.google.com/document/d/1c-av3QCHJn-FP99iT2HtP-At6zvKox73/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T21:18:05Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_GruveAI_Executive_Proposal_Full.docx",
+        "file_size": 33489,
+        "original_url": "https://docs.google.com/document/d/1VZMz-H-faZVKcERgnAu1d0pw5Uv1HwTq/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T21:18:07Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "source_language": "en",
+    "target_language": "pt",
+    "units_count": 2,
+    "price_per_unit": 0.01,
+    "total_price": 0.02,
+    "status": "pending_confirmation",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-14T02:19:09.460Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-14T02:19:09.460Z"
+    },
+    "company_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691a3aab2da9ab9df6f9774c"
+    },
+    "transaction_id": "TXN-09B5F425ED",
+    "user_id": "danishevsky@yahoo.com",
+    "documents": [
+      {
+        "file_name": "Device_Connection_Issues_Executive_Summary.docx",
+        "file_size": 37457,
+        "original_url": "https://docs.google.com/document/d/1Gxxrg5UyVbRv7MHRRuQA1pJ-Ka2pBO7g/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T15:56:22Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "SVN_to_PRD_Mapping_Report.docx",
+        "file_size": 37430,
+        "original_url": "https://docs.google.com/document/d/19EwilG5QJ5JwFLMLK5y1XOdya9I4Jowx/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T15:56:26Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 2,
+    "price_per_unit": 0.01,
+    "total_price": 0.02,
+    "status": "pending_confirmation",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-16T20:57:15.329Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T20:57:15.329Z"
+    },
+    "company_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691a44422da9ab9df6f9774f"
+    },
+    "transaction_id": "TXN-2972024083",
+    "user_id": "danishevsky@yahoo.com",
+    "documents": [
+      {
+        "file_name": "Sopieva Rashida High School Diploma.pdf",
+        "file_size": 112562,
+        "original_url": "https://drive.google.com/file/d/1Z9Q_3f6q4m4PoLAziKvW3z-DLsevQ2sd/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:36:55Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "diploma suppl.pdf",
+        "file_size": 146465,
+        "original_url": "https://drive.google.com/file/d/1YivCL-LaOlgtgIfLwK8OmdPpfJklbFCS/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:36:57Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Hunarmand ID.pdf",
+        "file_size": 164454,
+        "original_url": "https://drive.google.com/file/d/14uJ8iOLka6-c6p2Qr0_nzVZRxGbiqE3p/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:00Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Scan.pdf4.pdf",
+        "file_size": 190206,
+        "original_url": "https://drive.google.com/file/d/1sw2r_IwjMykfA3oMdxqrx60y0sQIvrL5/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "article &reference.pdf",
+        "file_size": 299409,
+        "original_url": "https://drive.google.com/file/d/1BcjYgVl14bKE_3W3CMcU3C-JSNxgxTOt/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:05Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u043c\u043e\u0435\u0308 \u0441\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e \u043e \u0440\u043e\u0436\u0434\u0435\u043d\u0438\u0438 (2).pdf",
+        "file_size": 307697,
+        "original_url": "https://drive.google.com/file/d/1Ui75qtZebhXa2XJz6BUDrVKM6En5lhJA/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:07Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0411\u0420\u0410\u0427\u041d\u041e\u0415 \u0421\u041e\u0413\u041b\u0410\u0428\u0415\u041d\u0418\u0415.pdf",
+        "file_size": 397716,
+        "original_url": "https://drive.google.com/file/d/11jGuJOPNYkzv4KcIWSTO2NzYiGqBjAwf/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:10Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Konnova.pdf",
+        "file_size": 624872,
+        "original_url": "https://drive.google.com/file/d/1KMRs-6jv8lztM6XwkCQmFiNKPVGkp0vV/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:12Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "source_language": "ru",
+    "target_language": "en",
+    "units_count": 40,
+    "price_per_unit": 0.01,
+    "total_price": 0.4,
+    "status": "pending_confirmation",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-16T21:38:10.125Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T21:38:10.125Z"
+    },
+    "company_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691a4bf42da9ab9df6f97752"
+    },
+    "transaction_id": "TXN-DA25AE4DE3",
+    "user_id": "danishevsky@yahoo.com",
+    "documents": [
+      {
+        "file_name": "Sopieva Rashida High School Diploma.pdf",
+        "file_size": 112562,
+        "original_url": "https://drive.google.com/file/d/1Ve9dLiOMqdHCxebLnEnofK7WKcB4yODk/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T17:10:14Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "diploma suppl.pdf",
+        "file_size": 146465,
+        "original_url": "https://drive.google.com/file/d/1gGmwweb2lGqJTHPbFvx-JZI38-QFRcQn/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T17:10:16Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Scan.pdf4.pdf",
+        "file_size": 190206,
+        "original_url": "https://drive.google.com/file/d/1lh7fKL16BdpeQ-ZkHcgSpbIJFJrqAwHp/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T17:10:18Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "source_language": "ru",
+    "target_language": "en",
+    "units_count": 7,
+    "price_per_unit": 0.01,
+    "total_price": 0.07,
+    "status": "pending_confirmation",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-16T22:11:00.453Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T22:11:00.453Z"
+    },
+    "company_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6922014cb1bbce5cffcf05f7"
+    },
+    "transaction_id": "TXN-5A36D9FB11",
+    "user_id": "danishevsky@yahoo.com",
+    "documents": [
+      {
+        "file_name": "LangGraph flowchart - category analysis.drawio.pdf",
+        "file_size": 35634,
+        "original_url": "https://drive.google.com/file/d/1OKneKqssA92XJGFZvTmf1W2IZ_cgsg9f/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-22T13:29:33Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "nuDOC API Role-Based Access Control (RBAC) & Security Audit1.docx",
+        "file_size": 36150,
+        "original_url": "https://docs.google.com/document/d/1cNFIBCrN8nUOhjIQQ2mE9MCouu3ivizE/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-22T13:29:30Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Sopieva Rashida High School Diploma_translated.docx",
+        "file_size": 37423,
+        "original_url": "https://docs.google.com/document/d/105bUe7xyYz3xxg0DemlGoj8aWKI-iS4p/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T17:10:14Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "diploma suppl_translated.docx",
+        "file_size": 38213,
+        "original_url": "https://docs.google.com/document/d/1g0Y7IBdtAW5WFm99-La8_K-YBe-hH4wm/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T17:10:16Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Scan.pdf4_translated.docx",
+        "file_size": 37344,
+        "original_url": "https://docs.google.com/document/d/12ifpE6X1YxsL-RaktXPxC8GU0Z-wV5R9/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T17:10:18Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Scan.pdf4.pdf",
+        "file_size": 190206,
+        "original_url": "https://drive.google.com/file/d/1lh7fKL16BdpeQ-ZkHcgSpbIJFJrqAwHp/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T17:10:18Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "diploma suppl.pdf",
+        "file_size": 146465,
+        "original_url": "https://drive.google.com/file/d/1gGmwweb2lGqJTHPbFvx-JZI38-QFRcQn/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T17:10:16Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Sopieva Rashida High School Diploma.pdf",
+        "file_size": 112562,
+        "original_url": "https://drive.google.com/file/d/1Ve9dLiOMqdHCxebLnEnofK7WKcB4yODk/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T17:10:14Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Sopieva Rashida High School Diploma_translated.docx",
+        "file_size": 37423,
+        "original_url": "https://docs.google.com/document/d/1dX9Oha4hpHopr1O6MBlgHG4jLN3FJIdU/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:36:55Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "diploma suppl_translated.docx",
+        "file_size": 38213,
+        "original_url": "https://docs.google.com/document/d/1N3JMGr2-hbx_10ryZ0t1Ztyid72JQLcp/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:36:57Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Hunarmand ID_translated.docx",
+        "file_size": 36950,
+        "original_url": "https://docs.google.com/document/d/19Bn9s_dFnT0AFJGeg8LRdRx4jWoz4MUL/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:00Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Scan.pdf4_translated.docx",
+        "file_size": 37344,
+        "original_url": "https://docs.google.com/document/d/1JNxw4qwZQR5ZarnaBxtQrdA3C4efw7qd/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "article &reference_translated.docx",
+        "file_size": 39164,
+        "original_url": "https://docs.google.com/document/d/15hnLDVc7T3KocWhKe5sDsSDBKa4bpluE/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:05Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u043c\u043e\u0435\u0308 \u0441\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e \u043e \u0440\u043e\u0436\u0434\u0435\u043d\u0438\u0438 (2)_translated.docx",
+        "file_size": 36700,
+        "original_url": "https://docs.google.com/document/d/1F0BtbKPJeQvWj6o244CrwGH4NOvdQuzw/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:07Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0411\u0420\u0410\u0427\u041d\u041e\u0415 \u0421\u041e\u0413\u041b\u0410\u0428\u0415\u041d\u0418\u0415_translated.docx",
+        "file_size": 57532,
+        "original_url": "https://docs.google.com/document/d/1mOyknp3z3J-5eNtQ8lld5kUfHAPDt-7k/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:10Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Konnova_translated.docx",
+        "file_size": 38044,
+        "original_url": "https://docs.google.com/document/d/1Jp_k96PvBMiOFmXPjJdd7U4P7H7O5c1j/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:12Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Konnova.pdf",
+        "file_size": 624872,
+        "original_url": "https://drive.google.com/file/d/1KMRs-6jv8lztM6XwkCQmFiNKPVGkp0vV/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:12Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0411\u0420\u0410\u0427\u041d\u041e\u0415 \u0421\u041e\u0413\u041b\u0410\u0428\u0415\u041d\u0418\u0415.pdf",
+        "file_size": 397716,
+        "original_url": "https://drive.google.com/file/d/11jGuJOPNYkzv4KcIWSTO2NzYiGqBjAwf/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:10Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u043c\u043e\u0435\u0308 \u0441\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e \u043e \u0440\u043e\u0436\u0434\u0435\u043d\u0438\u0438 (2).pdf",
+        "file_size": 307697,
+        "original_url": "https://drive.google.com/file/d/1Ui75qtZebhXa2XJz6BUDrVKM6En5lhJA/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:07Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "article &reference.pdf",
+        "file_size": 299409,
+        "original_url": "https://drive.google.com/file/d/1BcjYgVl14bKE_3W3CMcU3C-JSNxgxTOt/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:05Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Scan.pdf4.pdf",
+        "file_size": 190206,
+        "original_url": "https://drive.google.com/file/d/1sw2r_IwjMykfA3oMdxqrx60y0sQIvrL5/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Hunarmand ID.pdf",
+        "file_size": 164454,
+        "original_url": "https://drive.google.com/file/d/14uJ8iOLka6-c6p2Qr0_nzVZRxGbiqE3p/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:37:00Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "diploma suppl.pdf",
+        "file_size": 146465,
+        "original_url": "https://drive.google.com/file/d/1YivCL-LaOlgtgIfLwK8OmdPpfJklbFCS/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:36:57Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Sopieva Rashida High School Diploma.pdf",
+        "file_size": 112562,
+        "original_url": "https://drive.google.com/file/d/1Z9Q_3f6q4m4PoLAziKvW3z-DLsevQ2sd/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T16:36:55Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Device_Connection_Issues_Executive_Summary_translated.docx",
+        "file_size": 37700,
+        "original_url": "https://docs.google.com/document/d/14vbFzl93VOlIXr8bxowmd6YOM4Nmngfw/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T15:56:22Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "SVN_to_PRD_Mapping_Report_translated.docx",
+        "file_size": 37550,
+        "original_url": "https://docs.google.com/document/d/1yxMafCKHAxLiPmdBtAffTgUWRTMfd6Df/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T15:56:26Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "SVN_to_PRD_Mapping_Report.docx",
+        "file_size": 37430,
+        "original_url": "https://docs.google.com/document/d/19EwilG5QJ5JwFLMLK5y1XOdya9I4Jowx/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T15:56:26Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Device_Connection_Issues_Executive_Summary.docx",
+        "file_size": 37457,
+        "original_url": "https://docs.google.com/document/d/1Gxxrg5UyVbRv7MHRRuQA1pJ-Ka2pBO7g/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-16T15:56:22Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "nuDOC API Role-Based Access Control (RBAC) & Security Audit1_translated.docx",
+        "file_size": 25854,
+        "original_url": "https://docs.google.com/document/d/1Dn6Vc2EgMjajSBkOBgBycGdO3w5mmN_d/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T21:18:05Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_GruveAI_Executive_Proposal_Full_translated.docx",
+        "file_size": 30320,
+        "original_url": "https://docs.google.com/document/d/1VJspJqVDHcsvM15qUX4e28mJe7hHk68o/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T21:18:07Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_GruveAI_Executive_Proposal_Full.docx",
+        "file_size": 33489,
+        "original_url": "https://docs.google.com/document/d/1VZMz-H-faZVKcERgnAu1d0pw5Uv1HwTq/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T21:18:07Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "nuDOC API Role-Based Access Control (RBAC) & Security Audit1.docx",
+        "file_size": 28471,
+        "original_url": "https://docs.google.com/document/d/1c-av3QCHJn-FP99iT2HtP-At6zvKox73/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T21:18:05Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovations_translated.docx",
+        "file_size": 39373,
+        "original_url": "https://docs.google.com/document/d/17353A194rJTnKPwjdNyJB1GQO_T4l_9K/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T20:47:41Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "nuVIZ_Cable_Answers_Final_translated.docx",
+        "file_size": 43397,
+        "original_url": "https://docs.google.com/document/d/1SzMzmlISwzoSVhVivVSGu9f1_TU9qX5W/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T20:47:43Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "nuVIZ_Cable_Answers_Final.docx",
+        "file_size": 42451,
+        "original_url": "https://docs.google.com/document/d/1NbywF3PNH-2ipD5CgzQSg3V622L9Ro0q/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T20:47:43Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovations.docx",
+        "file_size": 38966,
+        "original_url": "https://docs.google.com/document/d/1Up5Yis_JjX34PzaSxS7vvOTStzbhyv0f/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T20:47:41Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0411\u0420\u0410\u0427\u041d\u041e\u0415 \u0421\u041e\u0413\u041b\u0410\u0428\u0415\u041d\u0418\u0415_translated.docx",
+        "file_size": 57527,
+        "original_url": "https://docs.google.com/document/d/1R6C2aOLSWZjTKkavMnK1-qpcRyPsq88m/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0434\u0438\u043f\u043b\u043e\u0438 \u0421\u0438\u0431\u0413\u0422\u0423 (2)_translated.docx",
+        "file_size": 39214,
+        "original_url": "https://docs.google.com/document/d/1mtc6_eAP-1vYDmwYY87QNrQLAOi6TwVk/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:05Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0414\u0438\u043f\u043b\u043e\u043c \u041c\u0418\u0418\u0422_translated.docx",
+        "file_size": 38885,
+        "original_url": "https://docs.google.com/document/d/1qytJeFPSY5YfzHsiNu4J9Bxt8XBcwxV4/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:07Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "diploma suppl_translated.docx",
+        "file_size": 38213,
+        "original_url": "https://docs.google.com/document/d/1gwXkzjcJ8m4X3imIAd9p1WkmWc7x684x/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:09Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Konnova_translated.docx",
+        "file_size": 38044,
+        "original_url": "https://docs.google.com/document/d/1dYpEUSuThUZ-6IYqPXa5iVrXTKk8m170/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:12Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "article &reference_translated.docx",
+        "file_size": 39164,
+        "original_url": "https://docs.google.com/document/d/1geZVHR5uJcGDWW56aK5yV1z5l84cz5MK/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:16Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u043c\u043e\u0435\u0308 \u0441\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e \u043e \u0440\u043e\u0436\u0434\u0435\u043d\u0438\u0438 (2)_translated.docx",
+        "file_size": 36700,
+        "original_url": "https://docs.google.com/document/d/1jSvXw2IVubpWl2MHJtl69xv-80fStvaG/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:19Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u043c\u043e\u0435\u0308 \u0441\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e \u043e \u0440\u043e\u0436\u0434\u0435\u043d\u0438\u0438 (2).pdf",
+        "file_size": 307697,
+        "original_url": "https://drive.google.com/file/d/1rMvp-wp2dgjgoqZ_EDPh7gqUB4D01oqW/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:19Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "article &reference.pdf",
+        "file_size": 299409,
+        "original_url": "https://drive.google.com/file/d/1-5mxtOYSWUcN4gqytSQWiagWSkNrQ2iA/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:16Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Konnova.pdf",
+        "file_size": 624872,
+        "original_url": "https://drive.google.com/file/d/13P4JyfFxdENAbfh1b4KsB3eOnqmgjULr/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:12Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "diploma suppl.pdf",
+        "file_size": 146465,
+        "original_url": "https://drive.google.com/file/d/1nHLEouwFMmJY_IV9qCvco0n0rYQw6C4u/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:09Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0414\u0438\u043f\u043b\u043e\u043c \u041c\u0418\u0418\u0422.pdf",
+        "file_size": 3998158,
+        "original_url": "https://drive.google.com/file/d/1ffQWKusiZtIkQsK6_EqY2HWV-9NvJxVX/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:07Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0434\u0438\u043f\u043b\u043e\u0438 \u0421\u0438\u0431\u0413\u0422\u0423 (2).pdf",
+        "file_size": 1635382,
+        "original_url": "https://drive.google.com/file/d/1Kale_Dfne8j9BGcM82p1UY7VaPKKN_4q/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:05Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "\u0411\u0420\u0410\u0427\u041d\u041e\u0415 \u0421\u041e\u0413\u041b\u0410\u0428\u0415\u041d\u0418\u0415.pdf",
+        "file_size": 397716,
+        "original_url": "https://drive.google.com/file/d/1jqD-USFHQDyGnGCYlDEYswh3OpnEoN5Q/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T14:47:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "GitHub_Access_on_Mac_translated.docx",
+        "file_size": 28369,
+        "original_url": "https://docs.google.com/document/d/1DyyZdKgpRjoewDG8Y3vwn6bEd-jUueGF/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T09:16:27Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan_translated.docx",
+        "file_size": 27859,
+        "original_url": "https://docs.google.com/document/d/15Xh2w3mw2AW-4qsDVBo5w_6x8-IgOG3q/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T09:16:30Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/1jcCoJjMur4fpeXAMtWPTF_XAQ21kJJ69/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T09:16:30Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "GitHub_Access_on_Mac.docx",
+        "file_size": 31021,
+        "original_url": "https://docs.google.com/document/d/1eywUTGuGsTGrK07ZlIGQLg-eTbLyQEYa/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-13T09:16:27Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cable_Management_Changes_PRD.docx",
+        "file_size": 28009,
+        "original_url": "https://docs.google.com/document/d/1h34SOFpIwkaFryxHHvDxln4h7p0kkFkf/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T22:12:13Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81] (1).docx",
+        "file_size": 28185,
+        "original_url": "https://docs.google.com/document/d/1g8ZsvJ642F8c75TDshuAweo8jONkCu6B/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T22:12:11Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "svn_commit_history_20251028_160652.docx",
+        "file_size": 31542,
+        "original_url": "https://docs.google.com/document/d/1crcs0Of-ZOU_uXe9WHiH8p57tyZ6aG0I/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T22:09:33Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "EOL_EOS_Functional_Capability_Matrix_with_Cisco_CSPC.docx",
+        "file_size": 32841,
+        "original_url": "https://docs.google.com/document/d/1SGNFnpPkZoC7oiV15gtpCgqiaEilgKug/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T22:09:31Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith_translated.docx",
+        "file_size": 14182,
+        "original_url": "https://docs.google.com/document/d/18pFvDucwmNDfuiKH7C_S5cLmZ5Y43hAK/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T15:10:10Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1v7r3dqmId4b0le0cAkpQWfifr9w8NXnU/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T15:10:14Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1AWJ0qX3k_nwnuuewhSeJCk4GYyBrBEfP/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T15:10:14Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith.docx",
+        "file_size": 16260,
+        "original_url": "https://docs.google.com/document/d/1nW07VKw0O38IvjEkfN79hNguEqCYsu8z/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T15:10:10Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1yMQ99B9ZkHgUrGM3_IN5LXmjfDGkCnQE/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T14:31:12Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith.docx",
+        "file_size": 16260,
+        "original_url": "https://docs.google.com/document/d/1aXCNbOwrs68YAu9DdUMY9WaNmzTn1mtE/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T14:31:09Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81].docx",
+        "file_size": 17682,
+        "original_url": "https://docs.google.com/document/d/1x4vWgMGYer_D_YWahb6olWP5nTzPOJrW/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T14:03:57Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1T7oHkrEpkxsylqh8YVQ_3XKFLBnoqUGq/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T14:03:55Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Copy of critical role_ Anastasia Lykova letter.docx",
+        "file_size": 17743,
+        "original_url": "https://docs.google.com/document/d/1DXZxAsJh2h8_IrLWVUiAOF-_0omVjE36/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T12:08:04Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81].docx",
+        "file_size": 17682,
+        "original_url": "https://docs.google.com/document/d/1_Wno2jzkUWUf0VkX3E3-M1qfpXDcC2qu/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T12:08:02Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81].docx",
+        "file_size": 17682,
+        "original_url": "https://docs.google.com/document/d/1TasUe5lne_9-38QkhsdW8uD3IHAURxm7/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T09:36:12Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1E5_G-yiDxQkGAE7egtDG4lIRofDHuXDw/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T09:36:10Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith.docx",
+        "file_size": 16260,
+        "original_url": "https://docs.google.com/document/d/1tr-2c7t8U6_wVPHUxzr0tGq69VWKKZxY/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T09:36:07Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan_translated.docx",
+        "file_size": 27859,
+        "original_url": "https://docs.google.com/document/d/1jQFXxReUMrH1UFFEKbWdeIOY8eURgZt-/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:47:50Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "GitHub_Access_on_Mac_translated.docx",
+        "file_size": 28369,
+        "original_url": "https://docs.google.com/document/d/1UqoRLMUL4s7PajPKXkAhwORyjMkIcfmu/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:47:52Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "GitHub_Access_on_Mac.docx",
+        "file_size": 31021,
+        "original_url": "https://docs.google.com/document/d/1S6qIpL1z5-ZzCUcmZphNyVn6wla9yPo3/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:47:52Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/1J5GO12qqWWRZAvlMFnBxfnn9E96n01Yh/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:47:50Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/1dY3yRrHYeNPLTU4IXu_V-C6DDPOXdBtF/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:45:16Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "GitHub_Access_on_Mac.docx",
+        "file_size": 31021,
+        "original_url": "https://docs.google.com/document/d/1z0PqV-Th7nNCMZLrKBRn_-g3I622c9OD/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T08:45:19Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Proposal_Oracle_to_OnPrem_translated.docx",
+        "file_size": 38391,
+        "original_url": "https://docs.google.com/document/d/1CC6B_7rHmhvO0KRG5x03WXHhiST1dYlE/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:38:14Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Comparison_translated.docx",
+        "file_size": 38215,
+        "original_url": "https://docs.google.com/document/d/1XDvzfqIRTy-7Ks_HCRS915ZHC_cig9DL/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:38:18Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Comparison.docx",
+        "file_size": 37968,
+        "original_url": "https://docs.google.com/document/d/1WgW0nzVT56OuBAUXykPkXXoeKruSI_5I/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:38:18Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Proposal_Oracle_to_OnPrem.docx",
+        "file_size": 38132,
+        "original_url": "https://docs.google.com/document/d/1aQbsnUHb-iXDP2XdCuczPaytIVnvmLkV/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:38:14Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cable_Management_Changes_PRD_translated.docx",
+        "file_size": 25089,
+        "original_url": "https://docs.google.com/document/d/1YO4e9QBdZxXIQp8mliUHl6IB9szGl4YJ/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:17:27Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81] (1)_translated.docx",
+        "file_size": 19295,
+        "original_url": "https://docs.google.com/document/d/1U8GB8UlxeKIQblKefAYgMhL_pKsub7On/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:17:31Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Kevin questions[81] (1).docx",
+        "file_size": 28185,
+        "original_url": "https://docs.google.com/document/d/1GQS5muG4FWMrgf9q1UB2On3kDPpqVeIJ/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:17:31Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cable_Management_Changes_PRD.docx",
+        "file_size": 28009,
+        "original_url": "https://docs.google.com/document/d/1X_jTQaCrqkkj4pH-lkUraAMKVDxNBCsb/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:17:27Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cable_Management_Changes_PRD.docx",
+        "file_size": 28009,
+        "original_url": "https://docs.google.com/document/d/1qAYcWZPfryTm2XPIYnnh4mM_4xP9lG9A/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-12T07:14:34Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith_translated.docx",
+        "file_size": 14182,
+        "original_url": "https://docs.google.com/document/d/13UJlwISblygI_RUCXee-x-k949Tfi_N9/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T21:42:52Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25_translated.docx",
+        "file_size": 14886,
+        "original_url": "https://docs.google.com/document/d/1bByICTruqny5FuwwrzzAss0sJ9aS3SKS/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T21:42:57Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1qi2QFXY2Ptru-Mmzt5INGFzXZ65u4mga/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T21:42:57Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "Cloudsmith.docx",
+        "file_size": 16260,
+        "original_url": "https://docs.google.com/document/d/1bPznqdNYAL65dNn9_LmViaafm0nDun6-/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T21:42:52Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report_translated.docx",
+        "file_size": 52447,
+        "original_url": "https://docs.google.com/document/d/1LOPrTO8TBRqGQ-3xeJ9vYBrTW2231HyF/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:39Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan_translated.docx",
+        "file_size": 27859,
+        "original_url": "https://docs.google.com/document/d/1zwcB3F-9KuzBmVK-MFrqAlDGJPJ5sCLU/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:43Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report_translated.docx",
+        "file_size": 44651,
+        "original_url": "https://docs.google.com/document/d/1yMeREG5vna_ii83M62FL7UkBck1savr8/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:48Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.pdf",
+        "file_size": 61056,
+        "original_url": "https://drive.google.com/file/d/1fkwpZWUPbkLTemJmwNXSIekC8y6VHUjr/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:48Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/17Z_RAhJM7NVbf7SD9E9apkwmsAGm9RbN/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:43Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.docx",
+        "file_size": 61119,
+        "original_url": "https://docs.google.com/document/d/1fEYP65rEWyYKloLvJyRUjhKPZqmDbLT0/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T14:58:39Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.pdf",
+        "file_size": 61056,
+        "original_url": "https://drive.google.com/file/d/1oB7DQVtNweWvcJqNNY-aJJgc1zOca6VH/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T13:35:50Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/1cYgyM4wNOYLutFPzHYc0Y6bsWWov9pfs/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T13:35:46Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.docx",
+        "file_size": 61119,
+        "original_url": "https://docs.google.com/document/d/14trDMweTIFoug9K5itIxPI-QWSMbmy1v/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T13:35:41Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_Cable_Management_Innovations_Full_Referenced.docx",
+        "file_size": 30647,
+        "original_url": "https://docs.google.com/document/d/1JgGdoaoXe68pzEkHT2eSL_ySxUk_mEVW/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-11T13:04:23Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 447,
+    "price_per_unit": 0.01,
+    "total_price": 4.47,
+    "status": "pending_confirmation",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-22T18:30:36.320Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-22T18:30:36.320Z"
+    },
+    "company_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "692768e7efd47c4acc656c11"
+    },
+    "transaction_id": "TXN-95EB17EE47",
+    "user_id": "danishevsky@yahoo.com",
+    "documents": [
+      {
+        "file_name": "How NuVIZ Grows Gruve.docx",
+        "file_size": 18876,
+        "original_url": "https://docs.google.com/document/d/1V4W3rUXoIW4NVXRGHzeoe2QC_BP8T6jG/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-26T15:52:56Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_name": "NuVIZ_GruveAI_Executive_Proposal_Full.docx",
+        "file_size": 33489,
+        "original_url": "https://docs.google.com/document/d/1Ev3143QIx-H99q7pq14GMRiBz6O0Hplj/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-26T15:52:58Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 2,
+    "price_per_unit": 0.01,
+    "total_price": 0.02,
+    "status": "pending_confirmation",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T20:53:59.582Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T20:53:59.582Z"
+    },
+    "company_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6918ebfde2728f2e684a8f27"
+    },
+    "transaction_id": "TXN-68049DE605",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T21:09:17.432Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T21:09:17.432Z"
+    },
+    "documents": [
+      {
+        "file_id": "13PESKM2GYT_-qX9YcEmq_mcF1TwanXnF",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/13PESKM2GYT_-qX9YcEmq_mcF1TwanXnF/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T21:09:17.432814+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6918ec01e2728f2e684a8f28"
+    },
+    "transaction_id": "TXN-E80539F37F",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T21:09:21.403Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T21:09:21.403Z"
+    },
+    "documents": [
+      {
+        "file_id": "1SdSI2HuKeNBsOUfm48XpWE-P2KAle3uc",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1SdSI2HuKeNBsOUfm48XpWE-P2KAle3uc/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T21:09:21.403966+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6918ec04e2728f2e684a8f29"
+    },
+    "transaction_id": "TXN-9D5FCBFE59",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1048,
+    "price_per_unit": 0.1,
+    "total_price": 104.80000000000001,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T21:09:24.927Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T21:09:24.927Z"
+    },
+    "documents": [
+      {
+        "file_id": "1tAL0-rxhmfM6M_qwqWWLBEchAQp2PO8d",
+        "file_name": "large-document.pdf",
+        "file_size": 52428800,
+        "original_url": "https://drive.google.com/file/d/1tAL0-rxhmfM6M_qwqWWLBEchAQp2PO8d/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T21:09:24.927610+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6918ec09e2728f2e684a8f2a"
+    },
+    "transaction_id": "TXN-DF9EAEEC4A",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T21:09:29.730Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T21:09:29.730Z"
+    },
+    "documents": [
+      {
+        "file_id": "1j_KS6-B70eELHxiybx2SzzAxhswfYfE9",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1j_KS6-B70eELHxiybx2SzzAxhswfYfE9/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T21:09:29.730237+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6918ec0de2728f2e684a8f2b"
+    },
+    "transaction_id": "TXN-75937335BD",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T21:09:33.396Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T21:09:33.396Z"
+    },
+    "documents": [
+      {
+        "file_id": "1L49ewdumzfHW-V9UNfzeFdWXRcITNOit",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1L49ewdumzfHW-V9UNfzeFdWXRcITNOit/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T21:09:33.396697+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691901e9e2728f2e684a8f92"
+    },
+    "transaction_id": "TXN-4A531C43B1",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T22:42:49.739Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T22:42:49.739Z"
+    },
+    "documents": [
+      {
+        "file_id": "108TepVbC75py0JWJ4vd_7XzqLn8JBX06",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/108TepVbC75py0JWJ4vd_7XzqLn8JBX06/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T22:42:49.739238+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691901ede2728f2e684a8f93"
+    },
+    "transaction_id": "TXN-56CC47A960",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T22:42:53.525Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T22:42:53.525Z"
+    },
+    "documents": [
+      {
+        "file_id": "1qOXtD5T9Oxz5N4nYlIOf7Jqmu_LlOxsN",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1qOXtD5T9Oxz5N4nYlIOf7Jqmu_LlOxsN/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T22:42:53.525037+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691901f0e2728f2e684a8f94"
+    },
+    "transaction_id": "TXN-BCDA5480E1",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1048,
+    "price_per_unit": 0.1,
+    "total_price": 104.80000000000001,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T22:42:56.726Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T22:42:56.726Z"
+    },
+    "documents": [
+      {
+        "file_id": "1qr8LhoqU9bx6ZtwIHcM7RQWm4ROPCyrD",
+        "file_name": "large-document.pdf",
+        "file_size": 52428800,
+        "original_url": "https://drive.google.com/file/d/1qr8LhoqU9bx6ZtwIHcM7RQWm4ROPCyrD/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T22:42:56.726407+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691901f4e2728f2e684a8f95"
+    },
+    "transaction_id": "TXN-F7824700BB",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T22:43:00.158Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T22:43:00.158Z"
+    },
+    "documents": [
+      {
+        "file_id": "1mGTHzphuJXfjrlDyiZ__ikdQfWFVH4nr",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1mGTHzphuJXfjrlDyiZ__ikdQfWFVH4nr/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T22:43:00.158189+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691901f6e2728f2e684a8f96"
+    },
+    "transaction_id": "TXN-2605A73671",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T22:43:02.928Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T22:43:02.928Z"
+    },
+    "documents": [
+      {
+        "file_id": "1rT-ln0ZaFK74CFWpjASFJJbpJCP72Lr-",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1rT-ln0ZaFK74CFWpjASFJJbpJCP72Lr-/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T22:43:02.928094+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69191152e2728f2e684a8f98"
+    },
+    "transaction_id": "TXN-654083A53B",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T23:48:34.628Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T23:48:34.628Z"
+    },
+    "documents": [
+      {
+        "file_id": "1Ok_b-7FXw96FC9w5WsUXGqBhtdSQtRxS",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1Ok_b-7FXw96FC9w5WsUXGqBhtdSQtRxS/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T23:48:34.628667+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69191156e2728f2e684a8f99"
+    },
+    "transaction_id": "TXN-D7065AF2D1",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T23:48:38.501Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T23:48:38.501Z"
+    },
+    "documents": [
+      {
+        "file_id": "1ewc9raWiYRaMSut1wmlSW62ecZHBSrmd",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1ewc9raWiYRaMSut1wmlSW62ecZHBSrmd/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T23:48:38.501103+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69191159e2728f2e684a8f9a"
+    },
+    "transaction_id": "TXN-CA0C2EA793",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1048,
+    "price_per_unit": 0.1,
+    "total_price": 104.80000000000001,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T23:48:41.526Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T23:48:41.526Z"
+    },
+    "documents": [
+      {
+        "file_id": "19jg2BQmU36mwTGDir_6DQjWrJbaCl09B",
+        "file_name": "large-document.pdf",
+        "file_size": 52428800,
+        "original_url": "https://drive.google.com/file/d/19jg2BQmU36mwTGDir_6DQjWrJbaCl09B/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T23:48:41.526177+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6919115de2728f2e684a8f9b"
+    },
+    "transaction_id": "TXN-5F1C0B28A4",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T23:48:45.332Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T23:48:45.332Z"
+    },
+    "documents": [
+      {
+        "file_id": "1ZlqUSelk2F3rEyd4mT2o_jPjdbhmO98w",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1ZlqUSelk2F3rEyd4mT2o_jPjdbhmO98w/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T23:48:45.332825+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69191160e2728f2e684a8f9c"
+    },
+    "transaction_id": "TXN-3FF09EB6F8",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T23:48:48.093Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T23:48:48.093Z"
+    },
+    "documents": [
+      {
+        "file_id": "1gd3uZu2pNLXvzkWARIUIXNlLVhq4zKaW",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1gd3uZu2pNLXvzkWARIUIXNlLVhq4zKaW/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T23:48:48.093791+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691911f8e2728f2e684a8f9d"
+    },
+    "transaction_id": "TXN-1385F2591D",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T23:51:20.366Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T23:51:20.366Z"
+    },
+    "documents": [
+      {
+        "file_id": "1hpWlXkwh-pa6SvSHJg02FKV_ExdIPl5x",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1hpWlXkwh-pa6SvSHJg02FKV_ExdIPl5x/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T23:51:20.366367+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691911fbe2728f2e684a8f9e"
+    },
+    "transaction_id": "TXN-B9B5ACD02D",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T23:51:23.788Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T23:51:23.788Z"
+    },
+    "documents": [
+      {
+        "file_id": "1c1MDZ0mhQtnGW41YVb1bQJJDPCowyQiB",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1c1MDZ0mhQtnGW41YVb1bQJJDPCowyQiB/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T23:51:23.788184+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691911fee2728f2e684a8f9f"
+    },
+    "transaction_id": "TXN-A4D17340B7",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1048,
+    "price_per_unit": 0.1,
+    "total_price": 104.80000000000001,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T23:51:26.621Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T23:51:26.621Z"
+    },
+    "documents": [
+      {
+        "file_id": "1_cftyl-i3cqb0bDi9EPUliKu4PzoABkL",
+        "file_name": "large-document.pdf",
+        "file_size": 52428800,
+        "original_url": "https://drive.google.com/file/d/1_cftyl-i3cqb0bDi9EPUliKu4PzoABkL/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T23:51:26.621663+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69191202e2728f2e684a8fa0"
+    },
+    "transaction_id": "TXN-4CD471B07A",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T23:51:30.685Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T23:51:30.685Z"
+    },
+    "documents": [
+      {
+        "file_id": "1MQEpHn0wmUo6TTLshDDdcdp4eGioG4Bi",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1MQEpHn0wmUo6TTLshDDdcdp4eGioG4Bi/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T23:51:30.685285+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69191205e2728f2e684a8fa1"
+    },
+    "transaction_id": "TXN-98ABF9ECFE",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "es",
+    "units_count": 1,
+    "price_per_unit": 0.1,
+    "total_price": 0.1,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-15T23:51:33.517Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-15T23:51:33.517Z"
+    },
+    "documents": [
+      {
+        "file_id": "1gRe2emnm7hdIF8DeObqkRxbXI6RkNn2R",
+        "file_name": "test-document.pdf",
+        "file_size": 1179,
+        "original_url": "https://drive.google.com/file/d/1gRe2emnm7hdIF8DeObqkRxbXI6RkNn2R/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-15T23:51:33.517273+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": null,
+    "user_name": null,
+    "subscription_id": null,
+    "unit_type": "page"
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "_id": {
+      "$oid": "692b1c7a5a18797943f4b273"
+    },
+    "user_name": "Sam Danishevsky",
+    "user_email": "sam.danishevsky@iris-translation.com",
+    "password": "$2b$12$.QJmq3PDuCv/8TVcdSEHAu1d2wmrx7O8wA.nqgwU8uKJGooOQtYEW",
+    "created_at": {
+      "$date": "2025-11-29T16:16:58.334Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-29T16:16:58.334Z"
+    },
+    "last_login": null
+  }
+]

@@ -1,0 +1,1324 @@
+[
+  {
+    "_id": {
+      "$oid": "6916043ec5b0a110038d9c30"
+    },
+    "transaction_id": "TXN-44A2E59FDF",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 3,
+    "price_per_unit": 0.1,
+    "total_price": 0.30000000000000004,
+    "status": "completed",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-13T16:15:58.411Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-13T16:17:28.163Z"
+    },
+    "documents": [
+      {
+        "file_id": "17SyaVGraN7SK__dE3x-Twsguoizl2PUQ",
+        "file_name": "iOS_Signing_Provisioning_Manual.docx",
+        "file_size": 28797,
+        "original_url": "https://docs.google.com/document/d/17SyaVGraN7SK__dE3x-Twsguoizl2PUQ/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/1J0VnC01i1lV_W9Sl6r7SjHceg9_xcvVT/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "iOS_Signing_Provisioning_Manual_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-13T16:15:58.411890+00:00",
+        "translated_at": {
+          "$date": "2025-11-13T16:17:28.158Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1GlqVuxZG8SdWa97dWhAtA3PHAlTLlXl5",
+        "file_name": "nuDOC_nuVIZ_TCG1100_SSH_Tracker_PRD_Enhanced.docx",
+        "file_size": 29632,
+        "original_url": "https://docs.google.com/document/d/1GlqVuxZG8SdWa97dWhAtA3PHAlTLlXl5/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/1eBC4H9XKJZhsHLHWeg_zxw5uKNY2teje/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "nuDOC_nuVIZ_TCG1100_SSH_Tracker_PRD_Enhanced_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-13T16:15:58.411938+00:00",
+        "translated_at": {
+          "$date": "2025-11-13T16:17:18.921Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1DwmljYH3IgPZUd11QsxltMlWQBi-Aam4",
+        "file_name": "NuVIZ_Cable_Management_Innovations_Full_Referenced.docx",
+        "file_size": 30647,
+        "original_url": "https://docs.google.com/document/d/1DwmljYH3IgPZUd11QsxltMlWQBi-Aam4/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/1Y9CiVC50tiumNv6SaR0ZZE8P7Wnpprfb/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "NuVIZ_Cable_Management_Innovations_Full_Referenced_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-13T16:15:58.411983+00:00",
+        "translated_at": {
+          "$date": "2025-11-13T16:17:04.767Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 3,
+    "completed_documents": 3,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "user_name": null,
+    "subscription_id": {
+      "$oid": "690023c7eb2bceb90e274134"
+    },
+    "unit_type": "page",
+    "completed_at": {
+      "$date": "2025-11-13T16:17:28.163Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "691694f0c0fe8f12af86817e"
+    },
+    "transaction_id": "TXN-9483311A06",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 4,
+    "price_per_unit": 0.1,
+    "total_price": 0.4,
+    "status": "completed",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-14T02:33:20.865Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-14T02:34:50.557Z"
+    },
+    "documents": [
+      {
+        "file_id": "1D8j6gwqIz4V4udwX2d_fy1Y7avJu6pQS",
+        "file_name": "nuDOC API Role-Based Access Control (RBAC) & Security Audit1.docx",
+        "file_size": 28471,
+        "original_url": "https://docs.google.com/document/d/1D8j6gwqIz4V4udwX2d_fy1Y7avJu6pQS/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/1JFBbM_naLju76wV03nE8ttitZOtoCf2p/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "nuDOC API Role-Based Access Control (RBAC) & Security Audit1_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-14T02:33:20.865161+00:00",
+        "translated_at": {
+          "$date": "2025-11-14T02:34:50.550Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1Cu50eMb5uo8aOPH56W_CUgzghBZiKiVU",
+        "file_name": "NuVIZ_GruveAI_Executive_Proposal_Full.docx",
+        "file_size": 33489,
+        "original_url": "https://docs.google.com/document/d/1Cu50eMb5uo8aOPH56W_CUgzghBZiKiVU/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/1ZwJsoi9szhaz7w1wjamuV_MrN9bQoA0e/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "NuVIZ_GruveAI_Executive_Proposal_Full_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-14T02:33:20.865247+00:00",
+        "translated_at": {
+          "$date": "2025-11-14T02:34:30.894Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1LfpToHc0PWuSuKKRi63OeLzEkkmMe4LV",
+        "file_name": "NuVIZ_GruveAI_Executive_Proposal.docx",
+        "file_size": 38098,
+        "original_url": "https://docs.google.com/document/d/1LfpToHc0PWuSuKKRi63OeLzEkkmMe4LV/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/1wNW92tdreXYVFWDjc6gXSqD-byYCJS2o/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "NuVIZ_GruveAI_Executive_Proposal_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-14T02:33:20.865293+00:00",
+        "translated_at": {
+          "$date": "2025-11-14T02:34:17.718Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1kDGE0cQOsmEUnf9Qkq2HXuYFby8tdeKf",
+        "file_name": "Panduit.docx",
+        "file_size": 24805,
+        "original_url": "https://docs.google.com/document/d/1kDGE0cQOsmEUnf9Qkq2HXuYFby8tdeKf/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/16a7US82K0shkPaQVI380ZTFOK6sJFSO-/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "Panduit_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-14T02:33:20.865397+00:00",
+        "translated_at": {
+          "$date": "2025-11-14T02:34:11.704Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 4,
+    "completed_documents": 4,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "user_name": null,
+    "subscription_id": {
+      "$oid": "690023c7eb2bceb90e274134"
+    },
+    "unit_type": "page",
+    "completed_at": {
+      "$date": "2025-11-14T02:34:50.557Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6919ec0328f456a8c0ecb893"
+    },
+    "transaction_id": "TXN-4DD633970C",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 2,
+    "price_per_unit": 0.12,
+    "total_price": 0.24,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-16T15:21:39.987Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T15:21:39.987Z"
+    },
+    "documents": [
+      {
+        "file_id": "1eqkwgiaFgp5FbtfTMMdC3kguq_UnjJdD",
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/1eqkwgiaFgp5FbtfTMMdC3kguq_UnjJdD/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-16T15:21:39.987266+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1-jsLSir4WA9WQ1Eav0BSWt2OO0QL6HgG",
+        "file_name": "GitHub_Access_on_Mac.docx",
+        "file_size": 31021,
+        "original_url": "https://docs.google.com/document/d/1-jsLSir4WA9WQ1Eav0BSWt2OO0QL6HgG/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-16T15:21:39.987389+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 2,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "user_name": null,
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6919f2d8cb77af09bae6efc3"
+    },
+    "transaction_id": "TXN-F0C8A06ED9",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 2,
+    "price_per_unit": 0.12,
+    "total_price": 0.24,
+    "status": "completed",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-16T15:50:48.137Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T21:23:34.066Z"
+    },
+    "documents": [
+      {
+        "file_id": "1kF3HVElKzWFwA2c7HYBLREe31I2O1vCx",
+        "file_name": "Kevin questions[81].docx",
+        "file_size": 17682,
+        "original_url": "https://docs.google.com/document/d/1kF3HVElKzWFwA2c7HYBLREe31I2O1vCx/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/1nBlbLoCM5mtOFOBF08EPtJjrszXqH25n/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "Kevin questions[81]_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-16T15:50:48.136931+00:00",
+        "translated_at": {
+          "$date": "2025-11-16T21:23:34.063Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1DlyaXt1JJN4TJk0DyvFg4n4matbD2pRL",
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1DlyaXt1JJN4TJk0DyvFg4n4matbD2pRL/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/1IvFUIe4_OADe073SZ4fRIEQNvxbQXL9d/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "Comments on Program11-03-25_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-16T15:50:48.137070+00:00",
+        "translated_at": {
+          "$date": "2025-11-16T21:23:26.227Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 2,
+    "completed_documents": 2,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "user_name": null,
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page",
+    "completed_at": {
+      "$date": "2025-11-16T21:23:34.066Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "691a0891e423c60b2281e275"
+    },
+    "transaction_id": "TXN-9F02219B6C",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 2,
+    "price_per_unit": 0.12,
+    "total_price": 0.24,
+    "status": "completed",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-16T17:23:29.105Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T21:23:15.484Z"
+    },
+    "documents": [
+      {
+        "file_id": "120EBnhcj0EOpzb6zOopLK2dx6480UCNP",
+        "file_name": "Cloudsmith.docx",
+        "file_size": 16260,
+        "original_url": "https://docs.google.com/document/d/120EBnhcj0EOpzb6zOopLK2dx6480UCNP/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/1PkuEXm_gBB-gAaIWz49iyrfmleFA5wNV/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "Cloudsmith_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-16T17:23:29.105032+00:00",
+        "translated_at": {
+          "$date": "2025-11-16T21:23:15.472Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1W6lFd--5jm02ckOirwlWgxGMRVM6UU8N",
+        "file_name": "Comments on Program11-03-25.docx",
+        "file_size": 17128,
+        "original_url": "https://docs.google.com/document/d/1W6lFd--5jm02ckOirwlWgxGMRVM6UU8N/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/16RG68JaiETrrkzK3W_Ypj7bjlG7hWSU5/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "Comments on Program11-03-25_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-16T17:23:29.105088+00:00",
+        "translated_at": {
+          "$date": "2025-11-16T21:23:07.722Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 2,
+    "completed_documents": 2,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "user_name": null,
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page",
+    "completed_at": {
+      "$date": "2025-11-16T21:23:15.484Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "691a0b2c2da9ab9df6f97748"
+    },
+    "transaction_id": "TXN-E74942A763",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 2,
+    "price_per_unit": 0.12,
+    "total_price": 0.24,
+    "status": "processing",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-16T17:34:36.899Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T21:22:43.079Z"
+    },
+    "documents": [
+      {
+        "file_id": "1QFjYsRuWPCCUfC62YKs81cwQVq2cXUoi",
+        "file_name": "Script for Steve Onderdonk Testing Session.docx",
+        "file_size": 22691,
+        "original_url": "https://docs.google.com/document/d/1QFjYsRuWPCCUfC62YKs81cwQVq2cXUoi/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-16T17:34:36.899686+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1L1pfWEKMqwcC2v_O3rINJDctYwMtoQ4A",
+        "file_name": "nuDOC implementation with nuVIZ heritage[92].docx",
+        "file_size": 22944,
+        "original_url": "https://docs.google.com/document/d/1L1pfWEKMqwcC2v_O3rINJDctYwMtoQ4A/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": "https://docs.google.com/document/d/1xSavI6jgMXf47NQ_Mn4a9l3ElC9-gEU8/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_name": "nuDOC implementation with nuVIZ heritage[92]_translated_translated.docx",
+        "status": "completed",
+        "uploaded_at": "2025-11-16T17:34:36.899778+00:00",
+        "translated_at": {
+          "$date": "2025-11-16T21:22:43.079Z"
+        },
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 2,
+    "completed_documents": 1,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "user_name": null,
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "691a6a852da9ab9df6f97753"
+    },
+    "transaction_id": "TXN-5A73B3CDF8",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 16,
+    "price_per_unit": 0.12,
+    "total_price": 1.92,
+    "status": "declined",
+    "error_message": "User declined the transaction",
+    "created_at": {
+      "$date": "2025-11-17T00:21:25.673Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-17T00:21:39.330Z"
+    },
+    "documents": [
+      {
+        "file_id": "1tLmJeqoxCqHC8JUnMQXpm_XHQGH5PbN5",
+        "file_name": "nuDOC API Role-Based Access Control (RBAC) & Security Audit1.docx",
+        "file_size": 36150,
+        "original_url": "https://docs.google.com/document/d/1tLmJeqoxCqHC8JUnMQXpm_XHQGH5PbN5/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-17T00:21:25.673135+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1fqMwScpNHs_y7ZQN6CyM54yTGh_1TA_r",
+        "file_name": "NuVIZ_GruveAI_Executive_Proposal_Full.docx",
+        "file_size": 33489,
+        "original_url": "https://docs.google.com/document/d/1fqMwScpNHs_y7ZQN6CyM54yTGh_1TA_r/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-17T00:21:25.673202+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1aeRxfq7B5TVfc1gkK-MicHF-ZivvzrQh",
+        "file_name": "NuVIZ_GruveAI_Executive_Proposal.docx",
+        "file_size": 38098,
+        "original_url": "https://docs.google.com/document/d/1aeRxfq7B5TVfc1gkK-MicHF-ZivvzrQh/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-17T00:21:25.673263+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1WAZ6hdlxLtyB_n8pK0rOuieacKqHj3Wa",
+        "file_name": "Panduit.docx",
+        "file_size": 24805,
+        "original_url": "https://docs.google.com/document/d/1WAZ6hdlxLtyB_n8pK0rOuieacKqHj3Wa/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-17T00:21:25.673301+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1rEsASEJuW6BjRA6lla-OJGRgjvwFnUJf",
+        "file_name": "Device_Connection_Issues_Executive_Summary.docx",
+        "file_size": 37457,
+        "original_url": "https://docs.google.com/document/d/1rEsASEJuW6BjRA6lla-OJGRgjvwFnUJf/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-17T00:21:25.673362+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1xLaJ6rx866wHc-2aa1I8pe9TGgaLt-Ei",
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.docx",
+        "file_size": 61119,
+        "original_url": "https://docs.google.com/document/d/1xLaJ6rx866wHc-2aa1I8pe9TGgaLt-Ei/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-17T00:21:25.673401+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1QWPPxKvolG2CNarvpcuXDIJR5tfwlPDN",
+        "file_name": "NuDOC_API_Role_Enforcement_Project_Plan.docx",
+        "file_size": 30717,
+        "original_url": "https://docs.google.com/document/d/1QWPPxKvolG2CNarvpcuXDIJR5tfwlPDN/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-17T00:21:25.673436+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1qBkzxIVTVYaliDhJg5qIwfvSJP_IWQn1",
+        "file_name": "NuVIZ_Cable_Management_Market_Comparison_Report.pdf",
+        "file_size": 61056,
+        "original_url": "https://drive.google.com/file/d/1qBkzxIVTVYaliDhJg5qIwfvSJP_IWQn1/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-17T00:21:25.673473+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1XRswlUBdzWxQ0osOyy19-nT0PIP3aAmb",
+        "file_name": "nuVIZ Data Center Solution Suite Detailed Description.pdf",
+        "file_size": 364329,
+        "original_url": "https://drive.google.com/file/d/1XRswlUBdzWxQ0osOyy19-nT0PIP3aAmb/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-17T00:21:25.673549+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 9,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "user_name": null,
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6921296680e4aa96c1101287"
+    },
+    "transaction_id": "TXN-FF5E698718",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "ru",
+    "target_language": "en",
+    "units_count": 7,
+    "price_per_unit": 0.12,
+    "total_price": 0.84,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-22T03:09:26.971Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-22T03:09:26.971Z"
+    },
+    "documents": [
+      {
+        "file_id": "1c2DfQSP3_fdzMLacv4sCuFWycxqOIoB9",
+        "file_name": "\u043c\u043e\u0435\u0308 \u0441\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e \u043e \u0440\u043e\u0436\u0434\u0435\u043d\u0438\u0438 (2).pdf",
+        "file_size": 307697,
+        "original_url": "https://drive.google.com/file/d/1c2DfQSP3_fdzMLacv4sCuFWycxqOIoB9/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-22T03:09:26.971675+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1w2Yir2z2CeODp5PL5NwkVMBejd3yeJCh",
+        "file_name": "\u043c\u043e\u0435\u0308 \u0441\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e \u043e \u0440\u043e\u0436\u0434\u0435\u043d\u0438\u0438 (2)_ocr_ocr_verification.docx",
+        "file_size": 37461,
+        "original_url": "https://docs.google.com/document/d/1w2Yir2z2CeODp5PL5NwkVMBejd3yeJCh/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-22T03:09:26.971728+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 2,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "user_name": null,
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69212d5980e4aa96c1101288"
+    },
+    "transaction_id": "TXN-527BACAA06",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 2,
+    "price_per_unit": 0.12,
+    "total_price": 0.24,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-22T03:26:17.539Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-22T03:26:17.539Z"
+    },
+    "documents": [
+      {
+        "file_id": "1Fqc1tG9KSbcjgsjJMcmcvbrt4Barm2t9",
+        "file_name": "nuVIZ vs PANDUIT.docx",
+        "file_size": 20784,
+        "original_url": "https://docs.google.com/document/d/1Fqc1tG9KSbcjgsjJMcmcvbrt4Barm2t9/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-22T03:26:17.539125+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1oIQqbXFpxoLL4P8scY9Z_5nfrW-oH3yE",
+        "file_name": "nuVIZ_vs_Panduit_Consolidated.docx",
+        "file_size": 39220,
+        "original_url": "https://docs.google.com/document/d/1oIQqbXFpxoLL4P8scY9Z_5nfrW-oH3yE/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-22T03:26:17.539173+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 2,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "user_name": null,
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69212f5c80e4aa96c1101289"
+    },
+    "transaction_id": "TXN-DD75915E59",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 8,
+    "price_per_unit": 0.12,
+    "total_price": 0.96,
+    "status": "processing",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-22T03:34:52.105Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-22T03:34:55.265Z"
+    },
+    "documents": [
+      {
+        "file_id": "1V4rQD-KGRmFumJ-9vUbEICpzlrsHRggt",
+        "file_name": "PAnduit-NuVIZ.docx",
+        "file_size": 26744,
+        "original_url": "https://docs.google.com/document/d/1V4rQD-KGRmFumJ-9vUbEICpzlrsHRggt/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-22T03:34:52.105502+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      },
+      {
+        "file_id": "1DBiC0hm-_VgGJBtQSF74tfJvZUHq1b4B",
+        "file_name": "nuVIZ Data Center Solution Suite Detailed Description.pdf",
+        "file_size": 364329,
+        "original_url": "https://drive.google.com/file/d/1DBiC0hm-_VgGJBtQSF74tfJvZUHq1b4B/view?usp=drivesdk",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": "2025-11-22T03:34:52.105596+00:00",
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null
+      }
+    ],
+    "total_documents": 2,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "user_name": null,
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "692666654d0b42c383ba25af"
+    },
+    "transaction_id": "TXN-7E5EC3809D",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1jOZSWqbg20ePP3rPTIBiJmCgr7-60y6z/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "nuVIZ_vs_Panduit_Consolidated.docx",
+    "file_size": 39220,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T02:31:01.098Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T02:31:01.098Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6926666f4d0b42c383ba25b0"
+    },
+    "transaction_id": "TXN-32C6E9342C",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1NQEhtI-sjzvb5T3-GvBegvTrfcExheww/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "nuVIZ_vs_Panduit_Consolidated.docx",
+    "file_size": 39220,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T02:31:11.257Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T02:31:11.257Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6926666f4d0b42c383ba25b1"
+    },
+    "transaction_id": "TXN-16E90FA321",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1GA8G9JVnFnABO1ZSRtxIvDjW1MO9fDwx/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "nuVIZ vs PANDUIT.docx",
+    "file_size": 20784,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T02:31:11.258Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T02:31:11.258Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69266a3e4d0b42c383ba25b2"
+    },
+    "transaction_id": "TXN-0F722E1CDF",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1YTect3NAakBJLUtzyq_AkuMCy_eUcYik/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "NuVIZ_GruveAI_Executive_Proposal.docx",
+    "file_size": 38098,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T02:47:26.284Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T02:47:26.284Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6927545542237e682d47249c"
+    },
+    "transaction_id": "TXN-C31B5CC427",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1wtFW8YZLibamTugbF3_rhhmesN5dkt_-/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "nuVIZ_vs_Panduit_Consolidated.docx",
+    "file_size": 39220,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T19:26:13.070Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T19:26:13.070Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6927545542237e682d47249d"
+    },
+    "transaction_id": "TXN-7C00E37FBE",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1HrEmRydPpg0eHzLJuXS5fuc-sAmJRgKk/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "nuVIZ vs PANDUIT.docx",
+    "file_size": 20784,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T19:26:13.077Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T19:26:13.077Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6927576ce91e634231168d72"
+    },
+    "transaction_id": "TXN-CAF42C873C",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/148NC81tiOg7p7_g4_3NMq6pntiW7n9mj/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "NuVIZ_GruveAI_Executive_Proposal_Full.docx",
+    "file_size": 33489,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T19:39:24.460Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T19:39:24.460Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6927576ce91e634231168d73"
+    },
+    "transaction_id": "TXN-E0803EEC5E",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1C3Da3uFbGod6JuqqMgIhdV0RlhMojePs/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "How NuVIZ Grows Gruve.docx",
+    "file_size": 18876,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T19:39:24.467Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T19:39:24.467Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "692758d197f78b83c0055fc4"
+    },
+    "transaction_id": "TXN-371426692D",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1fSFtNe38m8v0xNTSSmyjJq_Gel-ygPAZ/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "nuVIZ_vs_Panduit_Digital_Twin_Comparison  - Copy.docx",
+    "file_size": 54416,
+    "units_count": 2,
+    "price_per_unit": 0.12,
+    "total_price": 0.24,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T19:45:21.471Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T19:45:21.471Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "692758d197f78b83c0055fc5"
+    },
+    "transaction_id": "TXN-FDA24D6894",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1PBXKK2NQtVYS1u6tHr4dSbaCpOLcR3pq/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "nuVIZ_vs_Panduit_Consolidated.docx",
+    "file_size": 39220,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T19:45:21.473Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T19:45:21.473Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69275a2f274521f2a367f026"
+    },
+    "transaction_id": "TXN-C17F2C4768",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1pcht_rGWCUwac-600KUZqQY92YR2CFdo/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "nuVIZ_vs_Panduit_Consolidated.docx",
+    "file_size": 39220,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T19:51:11.351Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T19:51:11.351Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69275a2f274521f2a367f027"
+    },
+    "transaction_id": "TXN-2D94C8E64B",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1UTy8A5NHqWXCIldls1LncKk1xtuEXJCx/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "nuVIZ vs PANDUIT.docx",
+    "file_size": 20784,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T19:51:11.355Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T19:51:11.355Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69275d29160fa445c5f86569"
+    },
+    "transaction_id": "TXN-56E5ACB304",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1Vj62JVGHvOCQcVKDXw7Dx17ya7BWRjhx/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "nuVIZ_vs_Panduit_Consolidated.docx",
+    "file_size": 39220,
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T20:03:53.426Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T20:03:53.426Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "69275d29160fa445c5f8656a"
+    },
+    "transaction_id": "TXN-73BE2DD3F8",
+    "user_id": "danishevsky@gmail.com",
+    "original_file_url": "https://docs.google.com/document/d/1Z04MfG5oamso12dU0_z2JF_Tp66oS4Hb/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+    "translated_file_url": "",
+    "source_language": "en",
+    "target_language": "fr",
+    "file_name": "nuVIZ_vs_Panduit_Digital_Twin_Comparison  - Copy.docx",
+    "file_size": 54416,
+    "units_count": 2,
+    "price_per_unit": 0.12,
+    "total_price": 0.24,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T20:03:53.428Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T20:03:53.428Z"
+    },
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6927662defd47c4acc656c0c"
+    },
+    "transaction_id": "TXN-FB4DABC4E5",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "processing",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T20:42:21.504Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T20:42:26.603Z"
+    },
+    "documents": [
+      {
+        "file_name": "NuVIZ_GruveAI_Executive_Proposal_Full.docx",
+        "file_size": 33489,
+        "original_url": "https://docs.google.com/document/d/1IVwYrXWADzRvDFfKZavQ2kx0MrWMR8ta/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-26T20:42:21.504Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null,
+        "file_id": "1IVwYrXWADzRvDFfKZavQ2kx0MrWMR8ta"
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6927662defd47c4acc656c0d"
+    },
+    "transaction_id": "TXN-2C225CDEEA",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-26T20:42:21.506Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-26T20:42:21.506Z"
+    },
+    "documents": [
+      {
+        "file_name": "How NuVIZ Grows Gruve.docx",
+        "file_size": 18876,
+        "original_url": "https://docs.google.com/document/d/1tRA1HiEesyvs4iaoLDZR-oHBXfGLXl_B/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-26T20:42:21.506Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null,
+        "file_id": "1tRA1HiEesyvs4iaoLDZR-oHBXfGLXl_B"
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6927bab1a0214ea545392051"
+    },
+    "transaction_id": "TXN-382F9FBE14",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "processing",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-27T02:42:57.701Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-27T02:43:02.485Z"
+    },
+    "documents": [
+      {
+        "file_name": "NuVIZ_Web_Migration_Management_Report.docx",
+        "file_size": 41743,
+        "original_url": "https://docs.google.com/document/d/1CqFeTcTeqieuFHOtge10Hm9lHC6qJngZ/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-27T02:42:57.701Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null,
+        "file_id": "1CqFeTcTeqieuFHOtge10Hm9lHC6qJngZ"
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  },
+  {
+    "_id": {
+      "$oid": "6927bab1a0214ea545392052"
+    },
+    "transaction_id": "TXN-EED4A61487",
+    "user_id": "danishevsky@gmail.com",
+    "source_language": "en",
+    "target_language": "fr",
+    "units_count": 1,
+    "price_per_unit": 0.12,
+    "total_price": 0.12,
+    "status": "started",
+    "error_message": "",
+    "created_at": {
+      "$date": "2025-11-27T02:42:57.704Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-27T02:42:57.704Z"
+    },
+    "documents": [
+      {
+        "file_name": "1-Page-Lease-Agreement-Template.doc",
+        "file_size": 28672,
+        "original_url": "https://docs.google.com/document/d/1eUvp26FwqZNiYKZpyJl_XK8X_kermFM7/edit?usp=drivesdk&ouid=108218023669794979538&rtpof=true&sd=true",
+        "translated_url": null,
+        "translated_name": null,
+        "status": "uploaded",
+        "uploaded_at": {
+          "$date": "2025-11-27T02:42:57.704Z"
+        },
+        "translated_at": null,
+        "processing_started_at": null,
+        "processing_duration": null,
+        "file_id": "1eUvp26FwqZNiYKZpyJl_XK8X_kermFM7"
+      }
+    ],
+    "total_documents": 1,
+    "completed_documents": 0,
+    "batch_email_sent": false,
+    "company_name": "Iris Trading",
+    "subscription_id": {
+      "$oid": "6918fc93e2728f2e684a8f89"
+    },
+    "unit_type": "page"
+  }
+]

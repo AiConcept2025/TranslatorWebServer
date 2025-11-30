@@ -226,11 +226,12 @@ class TestSubscriptionCompanyValidation:
         data = response.json()
 
         # Verify error message contains company name
-        error_detail = data.get("detail", "")
-        assert nonexistent_company in error_detail, f"Error message should contain company name: {error_detail}"
-        assert "does not exist" in error_detail.lower(), f"Error should mention company doesn't exist: {error_detail}"
+        # API returns {"error": {"message": "..."}} format, not {"detail": "..."}
+        error_message = data.get("error", {}).get("message", "") or data.get("detail", "")
+        assert nonexistent_company in error_message, f"Error message should contain company name: {error_message}"
+        assert "does not exist" in error_message.lower(), f"Error should mention company doesn't exist: {error_message}"
 
-        print(f"✅ Error message: {error_detail}")
+        print(f"✅ Error message: {error_message}")
 
         # Verify subscription was NOT created in database
         subscription_in_db = await db.subscriptions.find_one({"company_name": nonexistent_company})
@@ -282,10 +283,13 @@ class TestSubscriptionCompanyValidation:
         assert response.status_code == 400
 
         # Verify error structure
+        # API returns {"error": {"message": "..."}} format, not {"detail": "..."}
         data = response.json()
-        assert "detail" in data, "Response should contain 'detail' field"
+        has_error_field = "error" in data and "message" in data.get("error", {})
+        has_detail_field = "detail" in data
+        assert has_error_field or has_detail_field, f"Response should contain 'error.message' or 'detail' field: {data}"
 
-        error_detail = data["detail"]
+        error_detail = data.get("error", {}).get("message", "") or data.get("detail", "")
 
         # Verify error message contains:
         # 1. The phrase "Cannot create subscription"
@@ -356,26 +360,29 @@ class TestSubscriptionCompanyValidation:
             f"Expected 400 for case-mismatch, got {response.status_code}: {response.text}"
 
         data = response.json()
-        error_detail = data.get("detail", "")
+        # API returns {"error": {"message": "..."}} format, not {"detail": "..."}
+        error_detail = data.get("error", {}).get("message", "") or data.get("detail", "")
         assert lowercase_name in error_detail, f"Error should contain attempted company name: {error_detail}"
 
         print(f"✅ Test passed: Company name matching is case-sensitive")
 
 
-    async def test_create_multiple_subscriptions_same_company(
+    async def test_create_duplicate_subscription_fails(
         self, http_client, db, admin_headers, test_company
     ):
         """
-        Test 1.5: Can create multiple subscriptions for same company.
+        Test 1.5: Creating duplicate subscription for same company FAILS.
+
+        Business Rule: One subscription per company (company_name_unique index).
 
         Scenario:
         - Company exists
         - Create first subscription - SUCCESS
-        - Create second subscription for same company - SUCCESS
-        - Expected: Both subscriptions exist in database
+        - Create second subscription for same company - FAIL (409 Conflict)
+        - Expected: Only one subscription exists in database
         """
         company_name = test_company["company_name"]
-        subscription_ids = []
+        subscription_id_1 = None
 
         try:
             # Create first subscription
@@ -401,13 +408,12 @@ class TestSubscriptionCompanyValidation:
 
             assert response_1.status_code == 201
             subscription_id_1 = response_1.json()["data"]["subscription_id"]
-            subscription_ids.append(subscription_id_1)
             print(f"✅ Created subscription 1: {subscription_id_1}")
 
-            # Create second subscription for same company
+            # Try to create second subscription for same company - should FAIL
             subscription_data_2 = {
                 "company_name": company_name,
-                "subscription_unit": "word",  # Different unit
+                "subscription_unit": "word",  # Different unit, but same company
                 "units_per_subscription": 5000,
                 "price_per_unit": 0.02,
                 "promotional_units": 500,
@@ -424,22 +430,27 @@ class TestSubscriptionCompanyValidation:
                 headers=admin_headers
             )
 
-            assert response_2.status_code == 201
-            subscription_id_2 = response_2.json()["data"]["subscription_id"]
-            subscription_ids.append(subscription_id_2)
-            print(f"✅ Created subscription 2: {subscription_id_2}")
+            # Business rule: One subscription per company - second should fail with 409 Conflict
+            assert response_2.status_code == 409, \
+                f"Expected 409 Conflict for duplicate subscription, got {response_2.status_code}: {response_2.text}"
 
-            # Verify both subscriptions exist in database
+            # Verify error message - API returns {error: {message: "..."}} format
+            data = response_2.json()
+            error_message = data.get("error", {}).get("message", "") or data.get("detail", "")
+            assert "already exists" in error_message.lower(), f"Error should mention subscription already exists: {data}"
+            print(f"✅ Second subscription rejected with 409 Conflict as expected")
+
+            # Verify only one subscription exists in database
             count = await db.subscriptions.count_documents({"company_name": company_name})
-            assert count >= 2, f"Should have at least 2 subscriptions for {company_name}"
+            assert count == 1, f"Should have exactly 1 subscription for {company_name}, got {count}"
 
-            print(f"✅ Test passed: Multiple subscriptions created for same company")
+            print(f"✅ Test passed: Only one subscription per company allowed")
 
         finally:
-            # Cleanup: Delete test subscriptions
-            for sub_id in subscription_ids:
-                await db.subscriptions.delete_one({"_id": ObjectId(sub_id)})
-                print(f"🗑️ Cleaned up subscription: {sub_id}")
+            # Cleanup: Delete test subscription
+            if subscription_id_1:
+                await db.subscriptions.delete_one({"_id": ObjectId(subscription_id_1)})
+                print(f"🗑️ Cleaned up subscription: {subscription_id_1}")
 
 
 # ============================================================================

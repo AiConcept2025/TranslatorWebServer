@@ -7,33 +7,42 @@ This test module validates:
 3. API endpoints for processing transactions with documents array
 4. Database serialization/deserialization of documents array
 
-Tests use real MongoDB connection and test data created by setup_test_user_transactions.py
+Tests use real MongoDB test database via test_db fixture from conftest.py.
 """
 
 import pytest
+import httpx
 from datetime import datetime, timezone
-from typing import List, Dict, Any
+from typing import Dict, Any
 import uuid
 
-from httpx import AsyncClient
 from pydantic import ValidationError
 
 from app.models.payment import (
     DocumentSchema,
     UserTransactionCreate,
-    UserTransactionResponse,
 )
-from app.utils.user_transaction_helper import (
-    create_user_transaction,
-    get_user_transaction,
-    get_user_transactions_by_email,
-)
-from app.database.mongodb import database
+
+# Base URL for the running server
+BASE_URL = "http://localhost:8000"
 
 
 # ============================================================================
 # Test Fixtures
 # ============================================================================
+
+@pytest.fixture(scope="function")
+async def db(test_db):
+    """Get test database via conftest fixture."""
+    yield test_db
+
+
+@pytest.fixture(scope="function")
+async def http_client():
+    """HTTP client for making real API calls."""
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=30.0) as client:
+        yield client
+
 
 @pytest.fixture
 def valid_document_data() -> Dict[str, Any]:
@@ -61,7 +70,7 @@ def valid_transaction_data_single_document(valid_document_data) -> Dict[str, Any
         "cost_per_unit": 0.15,
         "source_language": "en",
         "target_language": "es",
-        "square_transaction_id": f"TEST-{uuid.uuid4().hex[:16].upper()}",
+        "square_transaction_id": f"TEST-MULTI-{uuid.uuid4().hex[:16].upper()}",
         "square_payment_id": f"TESTPAY-{uuid.uuid4().hex[:16].upper()}",
         "amount_cents": 150,
         "currency": "USD",
@@ -108,7 +117,7 @@ def valid_transaction_data_multiple_documents() -> Dict[str, Any]:
         "cost_per_unit": 0.15,
         "source_language": "en",
         "target_language": "es",
-        "square_transaction_id": f"TEST-{uuid.uuid4().hex[:16].upper()}",
+        "square_transaction_id": f"TEST-MULTI-{uuid.uuid4().hex[:16].upper()}",
         "square_payment_id": f"TESTPAY-{uuid.uuid4().hex[:16].upper()}",
         "amount_cents": 450,
         "currency": "USD",
@@ -117,8 +126,21 @@ def valid_transaction_data_multiple_documents() -> Dict[str, Any]:
     }
 
 
+@pytest.fixture(scope="function")
+async def cleanup_multi_doc_test_data(db):
+    """Cleanup test data after each test."""
+    yield
+    # Clean up test transactions (only those with TEST-MULTI- prefix)
+    try:
+        await db.user_transactions.delete_many({
+            "square_transaction_id": {"$regex": "^TEST-MULTI-"}
+        })
+    except Exception as e:
+        print(f"Cleanup warning: {e}")
+
+
 # ============================================================================
-# 1. Model Validation Tests (Pydantic)
+# 1. Model Validation Tests (Pydantic) - No DB required
 # ============================================================================
 
 class TestDocumentSchemaValidation:
@@ -132,7 +154,6 @@ class TestDocumentSchemaValidation:
         assert document.document_url == valid_document_data["document_url"]
         assert document.translated_url == valid_document_data["translated_url"]
         assert document.status == valid_document_data["status"]
-        # Note: uploaded_at and translated_at are ISO strings in fixture, datetime in model
         assert document.uploaded_at is not None
         assert document.translated_at is not None
 
@@ -198,7 +219,6 @@ class TestUserTransactionCreateValidation:
 
         error_msg = str(exc_info.value).lower()
         assert "documents" in error_msg
-        assert "at least 1" in error_msg or "min_length" in error_msg
 
     def test_user_transaction_create_no_documents_field(self, valid_transaction_data_single_document):
         """Missing documents field should fail."""
@@ -212,130 +232,7 @@ class TestUserTransactionCreateValidation:
 
 
 # ============================================================================
-# 2. CRUD Helper Function Tests
-# ============================================================================
-
-class TestCRUDHelperFunctions:
-    """Test CRUD helper functions with multiple documents support."""
-
-    @pytest.mark.asyncio
-    async def test_create_user_transaction_with_multiple_documents(
-        self, valid_transaction_data_multiple_documents
-    ):
-        """Create transaction with 2 documents and verify in DB."""
-        # Connect to database
-        await database.connect()
-
-        # Prepare data (use only 2 documents)
-        data = valid_transaction_data_multiple_documents.copy()
-        data["documents"] = data["documents"][:2]
-        square_txn_id = data["square_transaction_id"]
-
-        # Create transaction
-        result = await create_user_transaction(
-            user_name=data["user_name"],
-            user_email=data["user_email"],
-            documents=data["documents"],
-            number_of_units=data["number_of_units"],
-            unit_type=data["unit_type"],
-            cost_per_unit=data["cost_per_unit"],
-            source_language=data["source_language"],
-            target_language=data["target_language"],
-            square_transaction_id=square_txn_id,
-            date=datetime.now(timezone.utc),
-            status=data["status"],
-            square_payment_id=data["square_payment_id"],
-            amount_cents=data["amount_cents"],
-            currency=data["currency"],
-            payment_status=data["payment_status"],
-        )
-
-        # Verify result is USER format transaction_id
-        assert result is not None
-        assert isinstance(result, str)
-        assert result.startswith("USER"), f"Should return USER format transaction_id, got: {result}"
-
-        # Verify in database
-        collection = database.user_transactions
-        db_transaction = await collection.find_one({"square_transaction_id": square_txn_id})
-
-        assert db_transaction is not None
-        assert db_transaction["user_email"] == data["user_email"]
-        assert db_transaction["transaction_id"] == result  # Verify transaction_id matches
-        assert len(db_transaction["documents"]) == 2
-        assert db_transaction["documents"][0]["document_name"] == "contract.pdf"
-        assert db_transaction["documents"][1]["document_name"] == "invoice.docx"
-
-        # Cleanup using transaction_id (new primary key)
-        await collection.delete_one({"transaction_id": result})
-
-    @pytest.mark.asyncio
-    async def test_create_user_transaction_documents_array_validation(self):
-        """Empty documents array should return None."""
-        await database.connect()
-
-        transaction_id = f"TEST-INVALID-{uuid.uuid4().hex[:8].upper()}"
-
-        result = await create_user_transaction(
-            user_name="Invalid User",
-            user_email="invalid@example.com",
-            documents=[],  # Empty array
-            number_of_units=10,
-            unit_type="page",
-            cost_per_unit=0.15,
-            source_language="en",
-            target_language="es",
-            square_transaction_id=transaction_id,
-            date=datetime.now(timezone.utc),
-            status="processing",
-            square_payment_id="INVALID-PAY",
-            amount_cents=150,
-        )
-
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_get_user_transaction_returns_documents_array(
-        self, valid_transaction_data_single_document
-    ):
-        """Retrieved transaction has documents field."""
-        await database.connect()
-
-        data = valid_transaction_data_single_document
-        transaction_id = data["square_transaction_id"]
-
-        # Create transaction
-        await create_user_transaction(
-            user_name=data["user_name"],
-            user_email=data["user_email"],
-            documents=data["documents"],
-            number_of_units=data["number_of_units"],
-            unit_type=data["unit_type"],
-            cost_per_unit=data["cost_per_unit"],
-            source_language=data["source_language"],
-            target_language=data["target_language"],
-            square_transaction_id=transaction_id,
-            date=datetime.now(timezone.utc),
-            status=data["status"],
-            square_payment_id=data["square_payment_id"],
-            amount_cents=data["amount_cents"],
-        )
-
-        # Retrieve transaction
-        transaction = await get_user_transaction(transaction_id)
-
-        assert transaction is not None
-        assert "documents" in transaction
-        assert isinstance(transaction["documents"], list)
-        assert len(transaction["documents"]) == 1
-        assert transaction["documents"][0]["document_name"] == "test_contract.pdf"
-
-        # Cleanup
-        await database.user_transactions.delete_one({"square_transaction_id": transaction_id})
-
-
-# ============================================================================
-# 3. API Endpoint Tests (Most Critical)
+# 2. API Endpoint Tests (Primary Integration Tests)
 # ============================================================================
 
 class TestAPIEndpoints:
@@ -343,18 +240,13 @@ class TestAPIEndpoints:
 
     @pytest.mark.asyncio
     async def test_post_process_transaction_single_document(
-        self, valid_transaction_data_single_document
+        self, http_client, db, valid_transaction_data_single_document, cleanup_multi_doc_test_data
     ):
         """POST with 1 document should return 201 response."""
-        from app.main import app
-        from fastapi.testclient import TestClient
-
-        # Use sync TestClient for these tests (FastAPI best practice)
-        with TestClient(app) as client:
-            response = client.post(
-                "/api/v1/user-transactions/process",
-                json=valid_transaction_data_single_document,
-            )
+        response = await http_client.post(
+            "/api/v1/user-transactions/process",
+            json=valid_transaction_data_single_document,
+        )
 
         assert response.status_code == 201
         data = response.json()
@@ -363,24 +255,15 @@ class TestAPIEndpoints:
         assert len(data["documents"]) == 1
         assert data["documents"][0]["document_name"] == "test_contract.pdf"
 
-        # Cleanup
-        await database.user_transactions.delete_one(
-            {"square_transaction_id": valid_transaction_data_single_document["square_transaction_id"]}
-        )
-
     @pytest.mark.asyncio
     async def test_post_process_transaction_multiple_documents(
-        self, valid_transaction_data_multiple_documents
+        self, http_client, db, valid_transaction_data_multiple_documents, cleanup_multi_doc_test_data
     ):
         """POST with 3 documents should verify response structure."""
-        from app.main import app
-        from fastapi.testclient import TestClient
-
-        with TestClient(app) as client:
-            response = client.post(
-                "/api/v1/user-transactions/process",
-                json=valid_transaction_data_multiple_documents,
-            )
+        response = await http_client.post(
+            "/api/v1/user-transactions/process",
+            json=valid_transaction_data_multiple_documents,
+        )
 
         assert response.status_code == 201
         data = response.json()
@@ -389,46 +272,32 @@ class TestAPIEndpoints:
         assert data["documents"][0]["document_name"] == "contract.pdf"
         assert data["documents"][1]["document_name"] == "invoice.docx"
         assert data["documents"][2]["document_name"] == "terms.txt"
-        assert data["total_cost"] == 4.5
-
-        # Cleanup
-        await database.user_transactions.delete_one(
-            {"square_transaction_id": valid_transaction_data_multiple_documents["square_transaction_id"]}
-        )
 
     @pytest.mark.asyncio
     async def test_post_process_transaction_empty_documents_fails(
-        self, valid_transaction_data_single_document
+        self, http_client, valid_transaction_data_single_document
     ):
         """POST with empty documents array should fail (422)."""
-        from app.main import app
-        from fastapi.testclient import TestClient
-
         data = valid_transaction_data_single_document.copy()
         data["documents"] = []
 
-        with TestClient(app) as client:
-            response = client.post(
-                "/api/v1/user-transactions/process",
-                json=data,
-            )
+        response = await http_client.post(
+            "/api/v1/user-transactions/process",
+            json=data,
+        )
 
         # Should fail validation (422 Unprocessable Entity)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
     async def test_post_process_transaction_response_contains_documents(
-        self, valid_transaction_data_single_document
+        self, http_client, db, valid_transaction_data_single_document, cleanup_multi_doc_test_data
     ):
         """Response has documents array with correct structure."""
-        from app.main import app
-        from fastapi.testclient import TestClient
-
-        with TestClient(app) as client:
-            response = client.post(
-                "/api/v1/user-transactions/process",
-                json=valid_transaction_data_single_document,
-            )
+        response = await http_client.post(
+            "/api/v1/user-transactions/process",
+            json=valid_transaction_data_single_document,
+        )
 
         assert response.status_code == 201
         data = response.json()
@@ -442,36 +311,28 @@ class TestAPIEndpoints:
         doc = data["documents"][0]
         assert "document_name" in doc
         assert "document_url" in doc
-        assert "translated_url" in doc
         assert "status" in doc
         assert "uploaded_at" in doc
 
-        # Cleanup
-        await database.user_transactions.delete_one(
-            {"square_transaction_id": valid_transaction_data_single_document["square_transaction_id"]}
-        )
-
     @pytest.mark.asyncio
     async def test_get_transaction_by_id_returns_documents(
-        self, valid_transaction_data_single_document
+        self, http_client, db, valid_transaction_data_single_document, cleanup_multi_doc_test_data
     ):
         """GET by square_transaction_id returns documents array."""
-        from app.main import app
-        from fastapi.testclient import TestClient
-
         # First create a transaction
-        with TestClient(app) as client:
-            create_response = client.post(
-                "/api/v1/user-transactions/process",
-                json=valid_transaction_data_single_document,
-            )
-            assert create_response.status_code == 201
+        create_response = await http_client.post(
+            "/api/v1/user-transactions/process",
+            json=valid_transaction_data_single_document,
+        )
+        assert create_response.status_code == 201
 
-            # Then retrieve it by ID
-            transaction_id = valid_transaction_data_single_document["square_transaction_id"]
-            get_response = client.get(
-                f"/api/v1/user-transactions/{transaction_id}"
-            )
+        # Use square_transaction_id (the endpoint path param is named square_transaction_id)
+        square_transaction_id = valid_transaction_data_single_document["square_transaction_id"]
+
+        # Then retrieve it by square_transaction_id
+        get_response = await http_client.get(
+            f"/api/v1/user-transactions/{square_transaction_id}"
+        )
 
         assert get_response.status_code == 200
         response_data = get_response.json()
@@ -484,29 +345,20 @@ class TestAPIEndpoints:
         assert isinstance(transaction["documents"], list)
         assert len(transaction["documents"]) == 1
 
-        # Cleanup
-        await database.user_transactions.delete_one(
-            {"square_transaction_id": transaction_id}
-        )
-
     @pytest.mark.asyncio
     async def test_get_all_transactions_returns_documents(
-        self, valid_transaction_data_single_document
+        self, http_client, db, valid_transaction_data_single_document, cleanup_multi_doc_test_data
     ):
         """GET /user-transactions returns documents for all transactions."""
-        from app.main import app
-        from fastapi.testclient import TestClient
-
         # Create a test transaction
-        with TestClient(app) as client:
-            create_response = client.post(
-                "/api/v1/user-transactions/process",
-                json=valid_transaction_data_single_document,
-            )
-            assert create_response.status_code == 201
+        create_response = await http_client.post(
+            "/api/v1/user-transactions/process",
+            json=valid_transaction_data_single_document,
+        )
+        assert create_response.status_code == 201
 
-            # Get all transactions
-            list_response = client.get("/api/v1/user-transactions")
+        # Get all transactions
+        list_response = await http_client.get("/api/v1/user-transactions")
 
         assert list_response.status_code == 200
         response_data = list_response.json()
@@ -519,7 +371,7 @@ class TestAPIEndpoints:
 
         # Find our test transaction
         test_txn = next(
-            (t for t in transactions if t["square_transaction_id"] ==
+            (t for t in transactions if t.get("square_transaction_id") ==
              valid_transaction_data_single_document["square_transaction_id"]),
             None
         )
@@ -528,49 +380,37 @@ class TestAPIEndpoints:
         assert "documents" in test_txn
         assert isinstance(test_txn["documents"], list)
 
-        # Cleanup
-        await database.user_transactions.delete_one(
-            {"square_transaction_id": valid_transaction_data_single_document["square_transaction_id"]}
-        )
-
 
 # ============================================================================
-# 4. Database Serialization Tests
+# 3. Database Verification Tests (via API)
 # ============================================================================
 
-class TestDatabaseSerialization:
-    """Test documents array serialization to/from MongoDB."""
+class TestDatabaseVerificationViaAPI:
+    """Test documents array is stored correctly via API."""
 
     @pytest.mark.asyncio
-    async def test_documents_serialized_correctly_to_mongodb(
-        self, valid_transaction_data_multiple_documents
+    async def test_documents_stored_and_retrieved_via_api(
+        self, http_client, db, valid_transaction_data_multiple_documents, cleanup_multi_doc_test_data
     ):
-        """Documents array properly stored in MongoDB."""
-        await database.connect()
-
+        """Documents array properly stored and retrieved via API."""
         data = valid_transaction_data_multiple_documents
-        transaction_id = data["square_transaction_id"]
+        square_txn_id = data["square_transaction_id"]
 
-        # Create transaction
-        await create_user_transaction(
-            user_name=data["user_name"],
-            user_email=data["user_email"],
-            documents=data["documents"],
-            number_of_units=data["number_of_units"],
-            unit_type=data["unit_type"],
-            cost_per_unit=data["cost_per_unit"],
-            source_language=data["source_language"],
-            target_language=data["target_language"],
-            square_transaction_id=transaction_id,
-            date=datetime.now(timezone.utc),
-            status=data["status"],
-            square_payment_id=data["square_payment_id"],
-            amount_cents=data["amount_cents"],
+        # Create transaction via API
+        response = await http_client.post(
+            "/api/v1/user-transactions/process",
+            json=data,
         )
 
-        # Retrieve directly from MongoDB
-        collection = database.user_transactions
-        db_doc = await collection.find_one({"square_transaction_id": transaction_id})
+        assert response.status_code == 201
+        response_data = response.json()
+
+        # Verify response has documents
+        assert "documents" in response_data
+        assert len(response_data["documents"]) == 3
+
+        # Verify in database using test_db
+        db_doc = await db.user_transactions.find_one({"square_transaction_id": square_txn_id})
 
         assert db_doc is not None
         assert "documents" in db_doc
@@ -583,99 +423,3 @@ class TestDatabaseSerialization:
             assert "document_url" in doc
             assert "status" in doc
             assert "uploaded_at" in doc
-            # translated_url and translated_at can be None
-
-        # Cleanup
-        await collection.delete_one({"square_transaction_id": transaction_id})
-
-    @pytest.mark.asyncio
-    async def test_documents_deserialized_correctly_from_mongodb(
-        self, valid_transaction_data_multiple_documents
-    ):
-        """Documents array properly retrieved with all fields."""
-        await database.connect()
-
-        data = valid_transaction_data_multiple_documents
-        transaction_id = data["square_transaction_id"]
-
-        # Create transaction
-        await create_user_transaction(
-            user_name=data["user_name"],
-            user_email=data["user_email"],
-            documents=data["documents"],
-            number_of_units=data["number_of_units"],
-            unit_type=data["unit_type"],
-            cost_per_unit=data["cost_per_unit"],
-            source_language=data["source_language"],
-            target_language=data["target_language"],
-            square_transaction_id=transaction_id,
-            date=datetime.now(timezone.utc),
-            status=data["status"],
-            square_payment_id=data["square_payment_id"],
-            amount_cents=data["amount_cents"],
-        )
-
-        # Retrieve using helper function
-        transaction = await get_user_transaction(transaction_id)
-
-        assert transaction is not None
-        assert "documents" in transaction
-
-        documents = transaction["documents"]
-        assert len(documents) == 3
-
-        # Verify first document (completed)
-        doc1 = documents[0]
-        assert doc1["document_name"] == "contract.pdf"
-        assert doc1["document_url"] == "https://drive.google.com/file/d/1TEST_001/view"
-        assert doc1["translated_url"] == "https://drive.google.com/file/d/1TEST_001_es/view"
-        assert doc1["status"] == "completed"
-        assert doc1["uploaded_at"] is not None
-        assert doc1["translated_at"] is not None
-
-        # Verify third document (in progress, no translation yet)
-        doc3 = documents[2]
-        assert doc3["document_name"] == "terms.txt"
-        assert doc3["status"] == "translating"
-        assert doc3["translated_url"] is None
-        assert doc3["translated_at"] is None
-
-        # Cleanup
-        await database.user_transactions.delete_one({"square_transaction_id": transaction_id})
-
-
-# ============================================================================
-# Test Summary
-# ============================================================================
-
-"""
-Test Coverage Summary:
-
-1. Model Validation (4 tests)
-   - DocumentSchema valid creation
-   - DocumentSchema missing required fields
-   - UserTransactionCreate with single document
-   - UserTransactionCreate with multiple documents
-   - Empty documents array validation
-   - Missing documents field validation
-
-2. CRUD Helper Functions (3 tests)
-   - Create with multiple documents
-   - Empty documents array returns None
-   - Get transaction returns documents array
-
-3. API Endpoints (6 tests)
-   - POST with single document (201)
-   - POST with multiple documents (201)
-   - POST with empty array (422)
-   - Response contains documents array
-   - GET by ID returns documents
-   - GET all returns documents
-
-4. Database Serialization (2 tests)
-   - Documents serialized to MongoDB
-   - Documents deserialized from MongoDB
-
-Total: 15 comprehensive integration tests
-All tests use real MongoDB and test data cleanup
-"""

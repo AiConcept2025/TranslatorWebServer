@@ -32,11 +32,31 @@ from app.database.mongodb import database
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/login", tags=["Authentication"])
 
-# Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address)
+
+def get_rate_limit_key(request: Request) -> str:
+    """
+    Get rate limit key - returns empty string in test mode to effectively disable rate limiting.
+
+    In test mode, all requests use the same key "", but with enabled=False
+    the limiter won't track them.
+    """
+    if settings.is_test_mode():
+        # Return a constant key that won't be rate limited
+        return "test_mode_bypass"
+    return get_remote_address(request)
+
+
+# Initialize rate limiter with test mode awareness
+# In test mode, use a permissive configuration
+limiter = Limiter(
+    key_func=get_rate_limit_key,
+    enabled=not settings.is_test_mode()  # Disable rate limiting in test mode
+)
 
 
 class CorporateLoginRequest(BaseModel):

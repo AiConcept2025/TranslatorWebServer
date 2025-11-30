@@ -387,22 +387,30 @@ async def test_company_user(test_db, test_company):
 # Real User Authentication Fixtures
 # ============================================================================
 
-# Cache for enterprise token
+# Session-scoped cache for enterprise token (reduces rate limiting)
 _enterprise_token_cache: Dict[str, str] = {}
 
 
+@pytest.fixture(scope="session")
+def enterprise_auth_token_cached():
+    """
+    Session-scoped placeholder for cached enterprise auth token.
+    Caching at session level reduces login requests and avoids rate limiting.
+    """
+    return _enterprise_token_cache
+
+
 @pytest.fixture(scope="function")
-async def enterprise_auth_token(test_db):
+async def enterprise_auth_token(test_db, enterprise_auth_token_cached):
     """
     Get authentication token for enterprise user (danishevsky@gmail.com).
     Uses real credentials for integration testing.
 
     CRITICAL: Uses test_db fixture to read from translation_test, NOT production.
+    Token is cached at session level to avoid rate limiting (429 errors).
     """
-    global _enterprise_token_cache
-
-    if "token" in _enterprise_token_cache:
-        return {"Authorization": f"Bearer {_enterprise_token_cache['token']}"}
+    if "token" in enterprise_auth_token_cached:
+        return {"Authorization": f"Bearer {enterprise_auth_token_cached['token']}"}
 
     from app.services.auth_service import auth_service
 
@@ -425,7 +433,7 @@ async def enterprise_auth_token(test_db):
     if not session_token:
         pytest.skip("Failed to authenticate enterprise user")
 
-    _enterprise_token_cache["token"] = session_token
+    enterprise_auth_token_cached["token"] = session_token
     return {"Authorization": f"Bearer {session_token}"}
 
 
@@ -435,22 +443,30 @@ async def enterprise_headers(enterprise_auth_token):
     return enterprise_auth_token
 
 
-# Cache for individual token
+# Session-scoped cache for individual token (reduces rate limiting)
 _individual_token_cache: Dict[str, str] = {}
 
 
+@pytest.fixture(scope="session")
+def individual_auth_token_cached():
+    """
+    Session-scoped placeholder for cached individual auth token.
+    Caching at session level reduces login requests and avoids rate limiting.
+    """
+    return _individual_token_cache
+
+
 @pytest.fixture(scope="function")
-async def individual_auth_token(test_db):
+async def individual_auth_token(test_db, individual_auth_token_cached):
     """
     Get authentication token for individual user (danishevsky@yahoo.com).
     Uses real credentials for integration testing.
 
     CRITICAL: Uses test_db fixture to read from translation_test, NOT production.
+    Token is cached at session level to avoid rate limiting (429 errors).
     """
-    global _individual_token_cache
-
-    if "token" in _individual_token_cache:
-        return {"Authorization": f"Bearer {_individual_token_cache['token']}"}
+    if "token" in individual_auth_token_cached:
+        return {"Authorization": f"Bearer {individual_auth_token_cached['token']}"}
 
     from app.services.auth_service import auth_service
 
@@ -476,7 +492,7 @@ async def individual_auth_token(test_db):
         if not session_token:
             pytest.skip("Failed to authenticate individual user")
 
-        _individual_token_cache["token"] = session_token
+        individual_auth_token_cached["token"] = session_token
         return {"Authorization": f"Bearer {session_token}"}
     except Exception as e:
         pytest.skip(f"Individual user auth failed: {e}")

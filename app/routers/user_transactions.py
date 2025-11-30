@@ -41,38 +41,42 @@ def serialize_transaction_for_json(txn: dict) -> dict:
     Handles:
     - ObjectId → string
     - Decimal128 → float
-    - datetime → ISO 8601 string (top-level and nested in documents array)
+    - datetime → ISO 8601 string (all fields at all levels)
 
     Args:
         txn: Transaction document from MongoDB
 
     Returns:
         JSON-serializable dict
+
+    Note:
+        This function is backward compatible - it preserves all existing fields
+        and only converts non-JSON-serializable types to their string/float equivalents.
     """
-    # Convert ObjectId
-    if "_id" in txn:
-        txn["_id"] = str(txn["_id"])
+    import copy
+    from bson import ObjectId
 
-    # Convert Decimal128 fields to float
-    for key, value in list(txn.items()):
+    def serialize_value(value):
+        """Recursively serialize a value to JSON-compatible format."""
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, ObjectId):
+            return str(value)
         if isinstance(value, Decimal128):
-            txn[key] = float(value.to_decimal())
+            return float(value.to_decimal())
+        if isinstance(value, dict):
+            return {k: serialize_value(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [serialize_value(item) for item in value]
+        return value
 
-    # Convert top-level datetime fields to ISO format strings
-    datetime_fields = ["date", "created_at", "updated_at", "payment_date"]
-    for field in datetime_fields:
-        if field in txn and hasattr(txn[field], "isoformat"):
-            txn[field] = txn[field].isoformat()
+    # Create a deep copy to avoid modifying the original
+    txn = copy.deepcopy(txn)
 
-    # Convert datetime fields in documents array
-    if "documents" in txn and isinstance(txn["documents"], list):
-        for doc in txn["documents"]:
-            doc_datetime_fields = ["uploaded_at", "translated_at"]
-            for field in doc_datetime_fields:
-                if field in doc and doc[field] is not None and hasattr(doc[field], "isoformat"):
-                    doc[field] = doc[field].isoformat()
-
-    return txn
+    # Recursively serialize all values
+    return {key: serialize_value(value) for key, value in txn.items()}
 
 router = APIRouter(prefix="/api/v1/user-transactions", tags=["User Transaction Payments"])
 
@@ -901,8 +905,8 @@ async def get_transaction_by_id(
                 detail=f"Transaction not found: {square_transaction_id}"
             )
 
-        # Convert ObjectId to string
-        transaction["_id"] = str(transaction["_id"])
+        # Serialize transaction for JSON (handles ObjectId, datetime, Decimal128)
+        transaction = serialize_transaction_for_json(transaction)
 
         logger.info(f"✅ Retrieval successful:")
         logger.info(f"   - square_transaction_id: {square_transaction_id}")

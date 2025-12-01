@@ -235,3 +235,15 @@ yarn.lock
 # Coverage reports
 htmlcov/
 .admin-credentials.txt
+
+# Claude session backups
+.claude/transcript-backups/
+
+# Database backups
+backups/
+
+# Deprecated test files
+*_DEPRECATED.py
+
+# External project files
+app/app-counter

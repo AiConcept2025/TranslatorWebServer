@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any
 import logging
 
 from app.services.google_drive_service import google_drive_service
+from app.services.pricing_service import pricing_service
 
 router = APIRouter(prefix="/api/payment", tags=["Payments"])
 
@@ -214,10 +215,12 @@ async def process_payment_files_background(
                 }
                 documents.append(doc)
 
-            # Calculate pricing (using dummy $0.01 per page)
+            # Calculate pricing using pricing service (individual user, default mode)
             total_units = sum(file_info.get('page_count', 1) for file_info in files_to_move)
-            price_per_unit = 0.01  # $0.01 per page
-            total_price = round(total_units * price_per_unit, 2)
+            total_price_decimal = pricing_service.calculate_price(total_units, "individual", "default")
+            total_price = float(total_price_decimal)
+            # Back-calculate price per unit for database storage
+            price_per_unit = total_price / total_units if total_units > 0 else 0
 
             # Extract languages from first file (all files should have same languages)
             source_language = files_to_move[0].get('source_language', 'en')

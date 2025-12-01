@@ -194,7 +194,25 @@ async def create_user_transaction(
             print(f"      • user_email: {user_email}")
             print(f"      • total_cost: ${total_cost}")
             print(f"      • status: {status}")
-            print(f"   📄 Documents: {', '.join([d.get('file_name') or d.get('document_name', 'unknown') for d in documents])}")
+            # Log each document with its translation mode (matching Enterprise flow format)
+            for idx, doc in enumerate(documents, 1):
+                doc_name = doc.get('file_name') or doc.get('document_name', 'unknown')
+                doc_mode = doc.get('translation_mode', 'automatic')
+                doc_pages = doc.get('page_count', 1)  # Get page count from document, default to 1
+                print(f"   📄 Document {idx}: {doc_name} ({doc_pages} pages, mode: {doc_mode})")
+
+            # Full transaction record logging (for debugging and verification)
+            print("=" * 80)
+            print("📋 FULL TRANSACTION RECORD CREATED IN DATABASE:")
+            print("=" * 80)
+            for key, value in transaction_doc.items():
+                if key == "documents":
+                    print(f"   • {key}: [{len(value)} documents]")
+                    for idx, doc in enumerate(value, 1):
+                        print(f"      📄 Doc {idx}: {doc}")
+                else:
+                    print(f"   • {key}: {value}")
+            print("=" * 80)
 
             # Structured logging for production
             logger.info(

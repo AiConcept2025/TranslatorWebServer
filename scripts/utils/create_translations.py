@@ -198,9 +198,11 @@ def create_indexes(collection) -> List[str]:
     print(f"  ✓ Created index: {date_index}")
 
     # Unique index on square_transaction_id for payment verification
+    # Sparse allows multiple null values (before payment), but enforces uniqueness on non-null
     square_index = collection.create_index(
         [("square_transaction_id", ASCENDING)],
         unique=True,
+        sparse=True,  # Allow multiple documents with null square_transaction_id
         name="idx_square_transaction_id_unique"
     )
     indexes.append(square_index)

@@ -5,9 +5,11 @@ Translation API endpoints.
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Literal
 import uuid
 import re
+
+from app.services.pricing_service import pricing_service
 
 router = APIRouter(prefix="/api", tags=["Translation"])
 
@@ -23,6 +25,7 @@ class TranslateRequest(BaseModel):
     targetLanguage: str
     email: EmailStr
     paymentIntentId: Optional[str] = None
+    translation_mode: Optional[Literal['automatic', 'human', 'formats', 'handwriting']] = 'automatic'
 
 @router.post("/translate")
 async def store_files_on_google_drive(request: TranslateRequest):
@@ -33,6 +36,7 @@ async def store_files_on_google_drive(request: TranslateRequest):
     print(f"Hello World - Store files endpoint called for {len(request.files)} files")
     print(f"Hello World - Storing files for: {request.sourceLanguage} -> {request.targetLanguage}")
     print(f"Hello World - Customer email: {request.email}")
+    print(f"Hello World - Translation mode: {request.translation_mode}")
     
     # Validate email format (additional validation beyond EmailStr)
     email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
@@ -160,10 +164,14 @@ async def store_files_on_google_drive(request: TranslateRequest):
         # Estimate pages based on file size (rough estimate: 2KB per page)
         estimated_pages = max(1, file_info.size // 2048)
         total_pages += estimated_pages
-    
-    # Calculate pricing
-    price_per_page = 0.10  # $0.10 per page
-    total_amount = total_pages * price_per_page
+
+    # Calculate pricing using pricing service (individual user, default mode)
+    # TODO: Map translation_mode to pricing service mode properly
+    pricing_mode = "default"  # Simplified mapping for now
+    total_amount_decimal = pricing_service.calculate_price(total_pages, "individual", pricing_mode)
+    total_amount = float(total_amount_decimal)
+    # Back-calculate price per page for response
+    price_per_page = total_amount / total_pages if total_pages > 0 else 0
     amount_cents = int(total_amount * 100)  # Convert to cents for payment processing
     
     successful_file_ids = [f["file_id"] for f in stored_files if f["status"] == "stored" and f["file_id"]]

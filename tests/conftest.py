@@ -413,6 +413,11 @@ async def enterprise_auth_token(test_db, enterprise_auth_token_cached):
         return {"Authorization": f"Bearer {enterprise_auth_token_cached['token']}"}
 
     from app.services.auth_service import auth_service
+    from app.database.mongodb import database
+
+    # Ensure database is connected for auth_service
+    if not database.is_connected:
+        await database.connect()
 
     # Find the company for this user from TEST database
     user = await test_db.company_users.find_one({"email": "danishevsky@gmail.com"})
@@ -469,21 +474,22 @@ async def individual_auth_token(test_db, individual_auth_token_cached):
         return {"Authorization": f"Bearer {individual_auth_token_cached['token']}"}
 
     from app.services.auth_service import auth_service
+    from app.database.mongodb import database
 
-    # Individual users may be in users_login collection - from TEST database
-    user = await test_db.users_login.find_one({"email": "danishevsky@yahoo.com"})
+    # Ensure database is connected for auth_service
+    if not database.is_connected:
+        await database.connect()
+
+    # Individual users are in users_login collection
+    # Note: users_login uses "user_email" field, not "email"
+    user = await test_db.users_login.find_one({"user_email": "danishevsky@yahoo.com"})
+
     if not user:
-        # Try company_users as fallback
-        user = await test_db.company_users.find_one({"email": "danishevsky@yahoo.com"})
+        pytest.skip("Individual user danishevsky@yahoo.com not found in users_login collection")
 
-    if not user:
-        pytest.skip("Individual user danishevsky@yahoo.com not found in database")
-
-    # For individual users, authenticate differently
+    # For individual users, use authenticate_individual_user (no password required)
     try:
-        auth_result = await auth_service.authenticate_user(
-            company_name=user.get("company_name", ""),
-            password="Sveta87201120!",
+        auth_result = await auth_service.authenticate_individual_user(
             user_name=user.get("user_name", "Vladimir Danishevsky"),
             email="danishevsky@yahoo.com"
         )

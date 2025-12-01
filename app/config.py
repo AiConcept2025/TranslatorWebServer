@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./translator.db"
     mongodb_uri: str  # Required - must be set in .env file (no hardcoded credentials)
     mongodb_database: str = "translation"
+    mongodb_database_test: str = "translation_test"
+    database_mode: str = "production"  # "production" or "test"
 
     # Redis Configuration
     redis_url: str = "redis://localhost:6379/0"
@@ -158,7 +160,18 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         """Check if running in development environment."""
         return self.environment.lower() == "development"
-    
+
+    @property
+    def active_mongodb_database(self) -> str:
+        """Get the active MongoDB database based on database_mode."""
+        if self.database_mode.lower() == "test":
+            return self.mongodb_database_test
+        return self.mongodb_database
+
+    def is_test_mode(self) -> bool:
+        """Check if running in test mode."""
+        return self.database_mode.lower() == "test"
+
     @property
     def log_config(self) -> dict:
         """Get logging configuration."""

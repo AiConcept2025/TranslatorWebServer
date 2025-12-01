@@ -41,14 +41,15 @@ class MongoDB:
                 maxIdleTimeMS=30000
             )
 
-            # Get database
-            self.db = self.client[settings.mongodb_database]
+            # Get database (uses active_mongodb_database property for mode switching)
+            self.db = self.client[settings.active_mongodb_database]
 
             # Test connection
             await self.client.admin.command('ping')
 
             self._connected = True
-            logger.info(f"[MongoDB] Successfully connected to database: {settings.mongodb_database}")
+            logger.info(f"[MongoDB] Successfully connected to database: {settings.active_mongodb_database}")
+            logger.info(f"[MongoDB] Database mode: {settings.database_mode}")
 
             # Create indexes
             await self._create_indexes()
@@ -96,7 +97,8 @@ class MongoDB:
             return {
                 "healthy": True,
                 "status": "connected",
-                "database": settings.mongodb_database,
+                "database": settings.active_mongodb_database,
+                "database_mode": settings.database_mode,
                 "version": server_info.get('version'),
                 "collections": await self.db.list_collection_names()
             }

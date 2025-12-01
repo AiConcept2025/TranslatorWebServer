@@ -502,7 +502,8 @@ async def translate_files(
     print(f"\n👤 Customer Type: {'Enterprise' if is_enterprise else 'Individual'}")
     if is_enterprise:
         print(f"   Company: {company_name}")
-    print(f"   User: {current_user.get('user_name', 'N/A')} ({request.email})")
+    user_name = current_user.get('user_name', 'N/A') if current_user else 'N/A'
+    print(f"   User: {user_name} ({request.email})")
 
     # For enterprise users, validate company exists in database
     # CRITICAL: Enforce referential integrity - REJECT if company doesn't exist

@@ -1,12 +1,14 @@
 """
-Translate User Router - Individual user translation endpoint.
+Translate User Router - User translation endpoint (individual + enterprise).
 
-This endpoint is designed for non-enterprise individual users who pay per translation.
-Key differences from /translate endpoint:
-- No enterprise/subscription logic
-- No company association
-- Uses user_transactions collection instead of translation_transactions
-- Fixed pricing ($0.10 per page)
+This endpoint handles translation requests for both individual and enterprise users.
+It automatically detects authenticated enterprise users and updates their subscriptions.
+
+Key features:
+- Individual users (no auth): Pay per translation with Square payment IDs
+- Enterprise users (with auth): Subscription usage automatically tracked
+- Uses user_transactions collection
+- Tiered pricing based on pricing service
 - Uses Square transaction IDs (format: sqt_{20_random_chars})
 - Requires userName field
 """
@@ -17,9 +19,9 @@ import re
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional, Literal
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 
@@ -27,7 +29,11 @@ from app.exceptions.google_drive_exceptions import (
     GoogleDriveError,
     google_drive_error_to_http_exception,
 )
+from app.middleware.auth_middleware import get_optional_user
 from app.services.google_drive_service import google_drive_service
+from app.services.pricing_service import pricing_service
+from app.services.subscription_service import subscription_service
+from app.models.subscription import UsageUpdate
 from app.utils.user_transaction_helper import create_user_transaction
 
 # Configure logging
@@ -35,6 +41,9 @@ logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter()
+
+# Module load marker - will appear in server logs when module is loaded
+logger.warning("🔄 TRANSLATE_USER MODULE LOADED WITH CUSTOMER TYPE FIX - v3.0")
 
 
 # ============================================================================
@@ -52,10 +61,18 @@ class UserFileInfo(BaseModel):
     content: str  # Base64-encoded file content
 
 
+# Per-file translation mode info (for file-level mode selection)
+class FileTranslationModeInfo(BaseModel):
+    """Per-file translation mode specification."""
+    fileName: str
+    translationMode: Literal['automatic', 'human', 'formats', 'handwriting'] = 'automatic'
+
+
 class TranslateUserRequest(BaseModel):
     """Request model for individual user translation."""
 
     files: List[UserFileInfo]
+    fileTranslationModes: Optional[List[FileTranslationModeInfo]] = None  # Per-file translation modes
     sourceLanguage: str
     targetLanguage: str
     email: EmailStr
@@ -204,12 +221,16 @@ def validate_language_code(language: str, language_type: str) -> None:
 
 
 @router.post("/translate-user", tags=["Translation"])
-async def translate_user_files(request: TranslateUserRequest = Body(...)):
+async def translate_user_files(
+    request: TranslateUserRequest = Body(...),
+    current_user: Optional[Dict] = Depends(get_optional_user)
+):
     """
-    Individual user translation endpoint (non-enterprise).
+    User translation endpoint for both individual and enterprise users.
 
-    This endpoint handles file uploads and translation requests for individual users
-    who pay per translation (no subscription model).
+    This endpoint handles file uploads and translation requests. It automatically
+    detects if the user is authenticated as an enterprise user and updates their
+    subscription accordingly.
 
     Workflow:
     1. Validate email, languages, and files
@@ -217,17 +238,17 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
     3. Upload files to Temp folder
     4. Estimate page count for pricing
     5. Create user transaction records with Square transaction IDs
-    6. Return pricing and file metadata for payment processing
+    6. **NEW**: If enterprise user (authenticated), update subscription usage
+    7. Return pricing and file metadata for payment processing
 
-    Key differences from /translate:
-    - No enterprise/subscription logic
-    - Uses user_transactions collection
-    - Fixed pricing: $0.10 per page
-    - Square transaction IDs (sqt_{20_chars})
-    - Requires userName field
+    Authentication (optional):
+    - If Authorization header present with valid token → enterprise user
+    - Enterprise users: subscription usage automatically updated
+    - Individual users (no auth): pay per translation
 
     Args:
         request: Translation request with files, languages, email, userName
+        current_user: Optional authenticated user data (from Authorization header)
 
     Returns:
         JSONResponse with file metadata, pricing, and Square transaction IDs
@@ -237,6 +258,15 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
     """
     # Initialize timing tracker
     request_start_time = time.time()
+
+    # DEBUG: Log authentication status immediately
+    logger.info(f"🔐 AUTHENTICATION DEBUG: current_user present={current_user is not None}")
+    if current_user:
+        logger.info(f"   User email: {current_user.get('email')}")
+        logger.info(f"   Company: {current_user.get('company_name')}")
+        logger.info(f"   Permission: {current_user.get('permission_level')}")
+    else:
+        logger.warning(f"   ⚠️  No authentication (current_user is None)")
 
     def log_step(step_name: str, details: str = ""):
         """Log step with timing."""
@@ -257,6 +287,10 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
     print(f"[RAW INCOMING DATA]   - User Email: {request.email}")
     print(f"[RAW INCOMING DATA]   - Source Language: {request.sourceLanguage}")
     print(f"[RAW INCOMING DATA]   - Target Language: {request.targetLanguage}")
+    print(f"[RAW INCOMING DATA]   - File Translation Modes: {len(request.fileTranslationModes) if request.fileTranslationModes else 0} entries")
+    if request.fileTranslationModes:
+        for mode_info in request.fileTranslationModes:
+            print(f"[RAW INCOMING DATA]     - {mode_info.fileName}: {mode_info.translationMode}")
     print(f"[RAW INCOMING DATA]   - Number of Files: {len(request.files)}")
     print(
         f"[RAW INCOMING DATA]   - Payment Intent ID: {request.paymentIntentId or 'None'}"
@@ -360,7 +394,23 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
     stored_files = []
     all_documents = []  # ✅ FIX: Accumulate all documents for single transaction
     total_units = 0
-    cost_per_unit = 0.10  # Fixed pricing for individual users
+    # Pricing will be calculated after we know total_units (pricing varies by tier)
+    cost_per_unit = 0.0  # Initialize to avoid undefined variable errors
+    total_amount = 0.0
+
+    # Determine customer type based on authentication
+    customer_type = "enterprise" if (current_user and current_user.get("company_name")) else "individual"
+    log_step("CUSTOMER TYPE", f"Detected as: {customer_type}")
+    print(f"Customer type: {customer_type}")
+
+    # Build file-level translation modes dict from request
+    file_translation_modes: Dict[str, str] = {}
+    if request.fileTranslationModes:
+        for mode_info in request.fileTranslationModes:
+            file_translation_modes[mode_info.fileName] = mode_info.translationMode
+        log_step("FILE MODES", f"Per-file translation modes: {file_translation_modes}")
+    else:
+        log_step("FILE MODES", "No per-file modes specified, using default (automatic)")
 
     for i, file_info in enumerate(request.files, 1):
         try:
@@ -399,6 +449,9 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
             )
             log_step(f"FILE {i} GDRIVE UPLOADED", f"File ID: {file_result['file_id']}")
 
+            # Get translation mode for this specific file (default to automatic)
+            file_mode = file_translation_modes.get(file_info.name, "automatic")
+
             # Update file metadata (initial properties)
             log_step(f"FILE {i} METADATA UPDATE", "Setting initial file properties")
             initial_properties = {
@@ -411,6 +464,7 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
                 "status": "awaiting_payment",
                 "upload_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "original_filename": file_info.name,
+                "translation_mode": file_mode,  # Add translation mode to metadata
             }
             await google_drive_service.update_file_properties(
                 file_id=file_result["file_id"],
@@ -426,6 +480,7 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
             all_documents.append({
                 "file_name": file_info.name,
                 "file_size": file_info.size,
+                "page_count": page_count,  # Include page count for logging
                 "original_url": file_result.get("google_drive_url", ""),
                 "translated_url": None,
                 "translated_name": None,
@@ -434,6 +489,7 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
                 "translated_at": None,
                 "processing_started_at": None,
                 "processing_duration": None,
+                "translation_mode": file_mode,  # Per-file translation mode
             })
             log_step(f"FILE {i} ADDED TO BATCH", f"Document added to batch transaction")
 
@@ -491,6 +547,16 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
             first_file = stored_files[0] if stored_files else {}
             unit_type = first_file.get("unit_type", "page")
 
+            # Calculate pricing using pricing service
+            # For enterprise users: pricing is informational (they use subscription units)
+            # For individual users: pricing determines actual payment amount
+            total_price_decimal = pricing_service.calculate_price(total_units, customer_type, "default")
+            total_amount = float(total_price_decimal)
+            # Back-calculate average cost per unit for database storage
+            cost_per_unit = total_amount / total_units if total_units > 0 else 0
+            log_step("PRICING CALCULATED",
+                    f"Customer: {customer_type}, Total: ${total_amount:.2f} ({total_units} units @ avg ${cost_per_unit:.4f}/unit)")
+
             batch_transaction_id = await create_user_transaction(
                 user_name=request.userName,
                 user_email=request.email,
@@ -528,6 +594,104 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
             print(f"   ❌ Error creating batch transaction: {e}")
 
     # ========================================================================
+    # ENTERPRISE SUBSCRIPTION UPDATE (if authenticated user)
+    # ========================================================================
+    if current_user and total_units > 0:
+        company_name = current_user.get("company_name")
+        user_email = current_user.get("email")
+
+        if company_name:
+            log_step("ENTERPRISE USER DETECTED", f"Company: {company_name}, User: {user_email}")
+            print(f"\n🏢 Enterprise user detected: {company_name}")
+            print(f"   User: {user_email}")
+            print(f"   Units to record: {total_units}")
+
+            try:
+                # Find active subscription for this company
+                from app.database.mongodb import database
+                subscription = await database.subscriptions.find_one({
+                    "company_name": company_name,
+                    "status": "active"
+                })
+
+                if subscription:
+                    subscription_id = str(subscription["_id"])
+                    log_step("SUBSCRIPTION FOUND", f"ID: {subscription_id}")
+                    print(f"   Found active subscription: {subscription_id}")
+
+                    # Record usage using subscription service
+                    usage_data = UsageUpdate(
+                        units_to_add=total_units,
+                        use_promotional_units=False
+                    )
+
+                    log_step("RECORDING USAGE", f"Adding {total_units} units to subscription")
+                    updated_subscription = await subscription_service.record_usage(
+                        subscription_id,
+                        usage_data
+                    )
+
+                    if updated_subscription:
+                        # Find current active period (same logic as record_usage)
+                        usage_periods = updated_subscription.get("usage_periods", [])
+                        now = datetime.now(timezone.utc)
+                        current_period = None
+                        current_period_idx = None
+
+                        for idx, period in enumerate(usage_periods):
+                            period_start = period["period_start"]
+                            period_end = period["period_end"]
+
+                            # Handle timezone-aware comparison
+                            if not period_start.tzinfo:
+                                period_start = period_start.replace(tzinfo=timezone.utc)
+                            if not period_end.tzinfo:
+                                period_end = period_end.replace(tzinfo=timezone.utc)
+
+                            if period_start <= now <= period_end:
+                                current_period = period
+                                current_period_idx = idx
+                                break
+
+                        if current_period:
+                            units_used = current_period["units_used"]
+                            units_allocated = current_period["units_allocated"]
+                            promotional = current_period.get("promotional_units", 0)
+                            remaining = units_allocated + promotional - units_used
+
+                            log_step("SUBSCRIPTION UPDATED",
+                                    f"Period {current_period_idx}: Units used: {units_used}, Remaining: {remaining}")
+                            print(f"   ✅ Subscription updated successfully")
+                            print(f"      Current period: {current_period_idx}")
+                            print(f"      Units used: {units_used}")
+                            print(f"      Units remaining: {remaining}")
+                        else:
+                            log_step("SUBSCRIPTION WARNING", "No current period found to display")
+                            print(f"   ⚠️  No current active period found")
+                    else:
+                        log_step("SUBSCRIPTION UPDATE FAILED", "Service returned None")
+                        print(f"   ⚠️  Subscription update returned None")
+                else:
+                    log_step("NO SUBSCRIPTION", f"No active subscription for {company_name}")
+                    print(f"   ⚠️  No active subscription found for company: {company_name}")
+
+            except Exception as e:
+                log_step("SUBSCRIPTION UPDATE ERROR", f"Error: {str(e)}")
+                print(f"   ⚠️  Failed to update subscription: {e}")
+                logger.warning(f"Failed to update subscription for {company_name}: {e}")
+                # Don't fail the request - subscription update is supplementary
+        else:
+            log_step("INDIVIDUAL USER", f"No company_name in user data")
+            print(f"\n👤 Individual user (no company association)")
+    else:
+        if not current_user:
+            log_step("NO AUTHENTICATION", "Request not authenticated")
+            print(f"\n🔓 Unauthenticated request (individual user)")
+        elif total_units == 0:
+            log_step("NO UNITS", "No units to record")
+            print(f"\n⚠️  No units to record")
+
+    # ========================================================================
     # SUMMARY AND RESPONSE
     # ========================================================================
     successful_uploads = len([f for f in stored_files if f["status"] == "stored"])
@@ -535,11 +699,10 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
 
     print(f"\nUPLOAD COMPLETE: {successful_uploads} successful, {failed_uploads} failed")
     print(f"Total units for pricing: {total_units}")
-    print(f"Total amount: ${total_units * cost_per_unit:.2f}")
+    print(f"Total amount: ${total_amount:.2f}")
     print(f"Customer: {request.userName} ({request.email})")
     print(f"Batch transaction ID: {batch_transaction_id}")
 
-    total_amount = total_units * cost_per_unit
     amount_cents = int(total_amount * 100)
 
     log_step(
@@ -566,7 +729,7 @@ async def translate_user_files(request: TranslateUserRequest = Body(...)):
                 "price_per_page": cost_per_unit,  # Changed from cost_per_unit to match frontend
                 "total_amount": total_amount,
                 "currency": "usd",  # Lowercase to match frontend expectations
-                "customer_type": "individual",  # Added for frontend
+                "customer_type": customer_type,  # enterprise or individual based on authentication
                 "transaction_ids": [batch_transaction_id] if batch_transaction_id else [],  # ✅ Database transaction ID (USER######), not Square ID
             },
             # File information

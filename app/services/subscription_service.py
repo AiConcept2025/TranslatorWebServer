@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from bson import ObjectId
 from decimal import Decimal
+from pymongo import ReturnDocument
 
 from app.database.mongodb import database
 from app.models.subscription import (
@@ -20,6 +21,9 @@ from app.models.subscription import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Module load marker - will appear in server logs when module is loaded
+logger.warning("🔄 SUBSCRIPTION_SERVICE MODULE LOADED WITH DEBUG LOGGING - v3.0")
 
 
 class SubscriptionError(Exception):
@@ -229,12 +233,21 @@ class SubscriptionService:
         Raises:
             SubscriptionError: If no active period or insufficient units
         """
+        logger.info(f"[RECORD_USAGE ENTRY] Subscription: {subscription_id}, Units to add: {usage_data.units_to_add}")
+        print(f"[RECORD_USAGE ENTRY] Subscription: {subscription_id}, Units to add: {usage_data.units_to_add}")
+
         subscription = await self.get_subscription(subscription_id)
+        logger.info(f"[RECORD_USAGE] Got subscription: {subscription is not None}")
+        print(f"[RECORD_USAGE] Got subscription: {subscription is not None}")
+
         if not subscription:
             raise SubscriptionError(f"Subscription not found: {subscription_id}")
 
         # Find current active period
         usage_periods = subscription.get("usage_periods", [])
+        logger.info(f"[RECORD_USAGE] Usage periods count: {len(usage_periods)}")
+        print(f"[RECORD_USAGE] Usage periods count: {len(usage_periods)}")
+
         if not usage_periods:
             raise SubscriptionError("No usage periods defined")
 
@@ -255,11 +268,17 @@ class SubscriptionService:
                 current_period_idx = idx
                 break
 
+        logger.info(f"[RECORD_USAGE] Current period index: {current_period_idx}")
+        print(f"[RECORD_USAGE] Current period index: {current_period_idx}")
+
         if current_period_idx is None:
             raise SubscriptionError("No active usage period found")
 
         current_period = usage_periods[current_period_idx]
         units_to_add = usage_data.units_to_add
+
+        logger.info(f"[RECORD_USAGE] Units to add: {units_to_add}")
+        print(f"[RECORD_USAGE] Units to add: {units_to_add}")
 
         # NEW LOGIC: Check total available units using formula:
         # promotional_units + units_allocated - units_used >= units_needed
@@ -268,6 +287,9 @@ class SubscriptionService:
         # Get units from current period using correct field names
         units_allocated = current_period.get("units_allocated", 0)
         units_used = current_period.get("units_used", 0)
+
+        logger.info(f"[RECORD_USAGE] Current state - allocated: {units_allocated}, used: {units_used}, promo: {promotional_units_in_period}")
+        print(f"[RECORD_USAGE] Current state - allocated: {units_allocated}, used: {units_used}, promo: {promotional_units_in_period}")
 
         # Validate units_allocated was found
         if units_allocated == 0 and "units_allocated" not in current_period:
@@ -282,6 +304,9 @@ class SubscriptionService:
 
         total_available = promotional_units_in_period + units_allocated - units_used
 
+        logger.info(f"[RECORD_USAGE] Total available: {total_available}, Need: {units_to_add}")
+        print(f"[RECORD_USAGE] Total available: {total_available}, Need: {units_to_add}")
+
         # Check if we have enough (must have at least units_needed, can be equal)
         if total_available < units_to_add:
             logger.warning(
@@ -294,8 +319,12 @@ class SubscriptionService:
                 f"(promotional: {promotional_units_in_period}, allocated: {units_allocated}, used: {units_used})"
             )
 
+        print(f"[RECORD_USAGE] ✅ Passed validation checks, about to update MongoDB")
+        logger.info(f"[RECORD_USAGE] ✅ Passed validation checks, about to update MongoDB")
+
         # Log before update
         logger.info(f"[SUBSCRIPTION UPDATE] Subscription: {subscription_id}")
+        print(f"[SUBSCRIPTION UPDATE] Subscription: {subscription_id}")
         logger.info(f"[SUBSCRIPTION UPDATE] Period index: {current_period_idx}")
         logger.info(f"[SUBSCRIPTION UPDATE] Current units_used: {units_used}, Adding: {units_to_add}, New total: {units_used + units_to_add}")
         logger.info(f"[SUBSCRIPTION UPDATE] Total available before: {total_available}")
@@ -309,11 +338,11 @@ class SubscriptionService:
 
         logger.info(f"[SUBSCRIPTION UPDATE] MongoDB update query: {update_query}")
 
-        # Update subscription
+        # Update subscription (return document AFTER update)
         result = await database.subscriptions.find_one_and_update(
             {"_id": ObjectId(subscription_id)},
             {"$set": update_query},
-            return_document=True
+            return_document=ReturnDocument.AFTER
         )
 
         if result:

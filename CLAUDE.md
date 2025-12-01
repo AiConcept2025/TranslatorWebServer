@@ -34,6 +34,113 @@ uvicorn app.main:app --reload --port 8000
 
 ## ⚠️ CRITICAL RULES - ALWAYS FOLLOW
 
+### **-1. TOP PRIORITY: NEVER MOCK OR BYPASS HTTP LAYER IN INTEGRATION TESTS**
+
+**ABSOLUTE REQUIREMENT:**
+- ❌ **NEVER** use direct function calls, service imports, or database operations in integration tests
+- ❌ **NEVER** bypass the HTTP layer "for convenience" or "to avoid authentication"
+- ❌ **NEVER** create tests that don't show HTTP logs in test output
+- ✅ **ALWAYS** use `http_client.post()`, `http_client.get()`, etc. with real endpoints
+- ✅ **ALWAYS** verify HTTP logs appear in test output (look for "HTTP Request: POST ...")
+
+**Why This is Rule #-1 (Higher Priority than Rule #0):**
+- Mocked tests hide critical bugs in HTTP layer, routing, middleware, serialization
+- Direct database calls bypass authentication, validation, business logic
+- Tests without HTTP logs are NOT integration tests - they are unit tests in disguise
+
+**Red Flag - Test is WRONG if:**
+```python
+# ❌ NO HTTP LOGS in test output
+# ❌ Direct service/database calls
+from app.services.some_service import some_service
+result = await some_service.do_something()  # WRONG - bypasses HTTP!
+
+# ❌ Direct database operations
+await test_db.collection.update_one(...)  # WRONG - bypasses API!
+```
+
+**Correct - Test is RIGHT if:**
+```python
+# ✅ HTTP LOGS appear in output: "HTTP Request: POST http://localhost:8000/api/endpoint"
+# ✅ Real HTTP request
+response = await http_client.post("/api/endpoint", json=data, headers=auth_headers)
+assert response.status_code == 200
+
+# ✅ Then verify database state
+record = await test_db.collection.find_one(...)
+```
+
+**Enforcement:**
+- If test output shows NO HTTP request logs → Test is INVALID
+- If test imports services/functions → Test is INVALID
+- If test passes but you can't see API calls → Test is INVALID
+
+---
+
+### **0. MANDATORY: Real Server + Real Database Testing (NO EXCEPTIONS)**
+
+**ALL tests MUST run against:**
+- ✅ **Real running webserver** (FastAPI uvicorn instance)
+- ✅ **Real test database** (`translation_test`, NOT `translation` production DB)
+- ✅ **Real HTTP requests** using `httpx.AsyncClient`
+
+**NEVER:**
+- ❌ NO mocking of server/database/internal services (unless EXPLICITLY approved by user)
+- ❌ NO direct function imports for integration tests (use HTTP API endpoints)
+- ❌ NO testing against production database
+
+**Test Structure:**
+```python
+# ✅ CORRECT - Integration test with real server + real DB
+import httpx
+import pytest
+
+@pytest.fixture
+async def http_client():
+    """Client for real running server at http://localhost:8000"""
+    async with httpx.AsyncClient(base_url="http://localhost:8000") as client:
+        yield client
+
+@pytest.mark.asyncio
+async def test_translate_endpoint(http_client, test_db):
+    # ACT: Real HTTP POST to running server
+    response = await http_client.post(
+        "/api/translate",
+        json={"file": "...", "translation_mode": "default"}
+    )
+
+    # ASSERT: Verify HTTP response
+    assert response.status_code == 200
+    data = response.json()
+    assert "pricing" in data
+
+    # VERIFY: Check real test database
+    transaction = await test_db.translation_transactions.find_one({...})
+    assert transaction is not None
+```
+
+```python
+# ❌ WRONG - Direct function import (NOT testing HTTP layer)
+from app.pricing.pricing_calculator import calculate_individual_price
+price = calculate_individual_price(5, "default", config)  # Bypasses API!
+```
+
+**Rationale:**
+- Integration tests must verify the FULL stack: HTTP → routing → validation → business logic → database
+- Direct function calls skip HTTP serialization, middleware, authentication, and routing
+- Real server catches issues that unit tests miss (CORS, serialization, middleware bugs)
+
+**Before Running Tests:**
+```bash
+# Terminal 1: Start test server
+DATABASE_MODE=test uvicorn app.main:app --port 8000
+
+# Terminal 2: Run tests
+pytest tests/integration/ -v
+```
+
+---
+
 ### **1. MongoDB → JSON Serialization (JSONResponse)**
 
 When returning MongoDB documents in `JSONResponse`, **ALWAYS** serialize:
@@ -216,6 +323,54 @@ timestamp = datetime.now(timezone.utc)  # Has timezone info
 
 ---
 
+### **7. MongoDB Unique Indexes - Use Sparse for Nullable Fields**
+
+**Problem:** Unique indexes on nullable fields only allow ONE document with `null` value.
+
+```python
+# ❌ WRONG - Only allows one null value
+collection.create_index(
+    [("square_transaction_id", ASCENDING)],
+    unique=True,
+    name="square_transaction_id_unique"
+)
+```
+
+**Error:**
+```
+E11000 duplicate key error collection: translation.user_transactions
+index: square_transaction_id_unique dup key: { square_transaction_id: null }
+```
+
+**Solution:** Use **sparse** unique indexes for fields populated later:
+
+```python
+# ✅ CORRECT - Allows multiple null values
+collection.create_index(
+    [("square_transaction_id", ASCENDING)],
+    unique=True,
+    sparse=True,  # Multiple nulls OK, enforces uniqueness on non-null
+    name="square_transaction_id_unique"
+)
+```
+
+**When to Use Sparse Unique:**
+- Payment IDs (null before payment, unique after)
+- External system IDs (null before sync, unique after)
+- Any field populated asynchronously
+
+**Migration:**
+```bash
+python scripts/fix_sparse_index_migration.py --database translation_test --confirm
+```
+
+**Why This Matters:**
+- Integration tests create multiple transactions with `null` payment IDs
+- Without sparse, second transaction fails → test fails
+- Sparse allows test data while enforcing uniqueness on real data
+
+---
+
 ## Plugin System (wshobson/agents)
 
 **Install:**
@@ -322,11 +477,28 @@ timestamp = datetime.now(timezone.utc)  # Has timezone info
 
 ## Real Integration Testing (MANDATORY)
 
-**Default Testing Mode:** Real API + Real MongoDB
+**Default Testing Mode:** Real Running Webserver + Real MongoDB
 
-All tests use real backend endpoints and MongoDB connections unless explicitly mocking external services.
+**CRITICAL:** All integration tests MUST run against:
+1. **Real running FastAPI webserver** (`uvicorn app.main:app --port 8000`)
+2. **Real HTTP requests** (using `httpx.AsyncClient`)
+3. **Real MongoDB test database** (`translation_test`)
 
-**Test Database:** `translation_test` (separate from production)
+**Test Database:** `translation_test` (separate from production `translation`)
+
+**Setup:**
+```bash
+# Terminal 1: Start test server
+DATABASE_MODE=test uvicorn app.main:app --reload --port 8000
+
+# Terminal 2: Run integration tests
+pytest tests/integration/ -v
+```
+
+**NEVER:**
+- ❌ Direct function imports for integration tests
+- ❌ Mocking internal services/database (unless explicitly approved)
+- ❌ Testing against production database
 
 ---
 

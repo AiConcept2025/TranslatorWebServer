@@ -1,0 +1,30 @@
+# Translation Service Pricing Configuration
+
+# Page tier definitions
+page_tiers:
+  individual:
+    small: [1, 10]
+    medium: [11, 50]
+    large: [51, null]
+
+# Base prices in USD per page for default (automatic) translation
+base_pricing:
+  individual:
+    small: 0.20
+    medium: 0.18
+    large: 0.16
+
+# Multipliers for different translation modes
+multipliers:
+  enterprise:
+    default: 1
+    human: 2
+    handwriting: 3
+    formats: 4
+
+  individual:
+    default: 1
+    human: 2
+    handwriting: 2
+    formats: 3
+

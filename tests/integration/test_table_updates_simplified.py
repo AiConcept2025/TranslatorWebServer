@@ -8,6 +8,7 @@ Tests UPDATE operations via HTTP API on:
 
 Using REAL web server HTTP endpoints instead of direct database operations.
 Tests make actual HTTP requests to the running FastAPI server.
+Uses the REAL TEST database (translation_test) for all operations.
 
 NO MOCKS - Real API + Real Database testing as per requirements.
 """
@@ -19,7 +20,7 @@ from bson import ObjectId
 from datetime import datetime, timezone
 import uuid
 
-# Configuration
+# Configuration - CRITICAL: Use test database, not production
 API_BASE_URL = "http://localhost:8000"
 MONGODB_URI = "mongodb://iris:Sveta87201120@localhost:27017/translation_test?authSource=translation"
 DATABASE_NAME = "translation_test"
@@ -42,30 +43,35 @@ async def http_client():
 
 
 @pytest.fixture(scope="function")
-async def db():
-    """Connect to REAL test database for verification and cleanup."""
-    client = AsyncIOMotorClient(MONGODB_URI)
-    database = client[DATABASE_NAME]
-    yield database
-    client.close()
+async def db(test_db):
+    """
+    Connect to REAL test database for verification and cleanup.
+
+    Uses test_db fixture from conftest.py to ensure we use translation_test.
+    """
+    yield test_db
 
 
 @pytest.fixture(scope="function")
-async def cleanup_test_data(db):
-    """Cleanup test data before and after tests."""
+async def cleanup_test_data(test_db):
+    """
+    Cleanup test data before and after tests.
+
+    Uses test_db fixture from conftest.py to ensure we clean translation_test.
+    """
     # Cleanup before test
-    await db.subscriptions.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
-    await db.company_users.delete_many({"email": {"$regex": f"^{TEST_PREFIX}"}})
-    await db.companies.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
-    await db.company.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
+    await test_db.subscriptions.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
+    await test_db.company_users.delete_many({"email": {"$regex": f"^{TEST_PREFIX}"}})
+    await test_db.companies.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
+    await test_db.company.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
 
     yield
 
     # Cleanup after test
-    await db.subscriptions.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
-    await db.company_users.delete_many({"email": {"$regex": f"^{TEST_PREFIX}"}})
-    await db.companies.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
-    await db.company.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
+    await test_db.subscriptions.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
+    await test_db.company_users.delete_many({"email": {"$regex": f"^{TEST_PREFIX}"}})
+    await test_db.companies.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
+    await test_db.company.delete_many({"company_name": {"$regex": f"^{TEST_PREFIX}"}})
 
 
 @pytest.fixture(scope="function")
@@ -132,12 +138,16 @@ async def admin_token(http_client, db, test_company):
         print(f"✅ Created admin user via database: {admin_email}")
 
     # Login to get token
+    # Note: Use /login/corporate for enterprise users in company_users collection
+    # The endpoint expects camelCase field names due to Pydantic aliases
     login_response = await http_client.post(
-        "/api/auth/login",
+        "/login/corporate",
         json={
-            "email": admin_email,
+            "companyName": TEST_COMPANY,
             "password": "AdminPass123",
-            "company_name": TEST_COMPANY
+            "userFullName": "Test Admin",
+            "userEmail": admin_email,
+            "loginDateTime": datetime.now(timezone.utc).isoformat()
         }
     )
 
@@ -146,7 +156,8 @@ async def admin_token(http_client, db, test_company):
         pytest.skip(f"Login failed: {login_response.status_code}")
 
     login_data = login_response.json()
-    token = login_data.get("access_token")
+    # Corporate login returns token in data.authToken
+    token = login_data.get("data", {}).get("authToken")
 
     if not token:
         print(f"❌ No token in response: {login_data}")

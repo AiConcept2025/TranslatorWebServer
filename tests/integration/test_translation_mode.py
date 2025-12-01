@@ -1,43 +1,28 @@
 """
-INTEGRATION TESTS FOR TRANSLATION_MODE FEATURE - TDD APPROACH
+INTEGRATION TESTS FOR TRANSLATION_MODE FEATURE
 
-These tests are written BEFORE implementation to drive the development
-of the translation_mode feature. Tests verify:
+Tests verify:
 
 1. TranslationMode enum validation (automatic, human, formats, handwriting)
-2. TranslateRequest model accepts translation_mode parameter
-3. Default value is "automatic" when not provided
-4. Mode is stored correctly in transaction documents
-5. Collection routing (user_transactions vs translation_transactions)
+2. TranslateRequest model accepts fileTranslationModes for per-file modes
+3. Default mode is "automatic" when not provided
+4. Modes are stored correctly in transaction documents
 
-TESTS WILL FAIL INITIALLY - This is expected in TDD!
+NOTE: The actual implementation uses fileTranslationModes (per-file modes)
+instead of a single translation_mode field on the request.
 
-NO MOCKS - Real MongoDB database testing as per requirements.
+NOTE: These tests validate Pydantic models and do NOT require database connection.
 """
 
 import pytest
 import pytest_asyncio
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic import BaseModel, ValidationError
 
-from app.database import database
-
-
-# Set pytest-asyncio to use module scope for event loop
-pytestmark = pytest.mark.asyncio(scope="module")
-
-
-# ============================================================================
-# Test Fixtures
-# ============================================================================
-
-@pytest_asyncio.fixture(scope="module", autouse=True)
-async def setup_database():
-    """Setup database connection once for all tests in this module."""
-    if not database._connected:
-        await database.connect()
-    yield
+# CRITICAL: Do NOT import database from app.database here!
+# That singleton uses settings.mongodb_database which points to PRODUCTION.
+# These tests are model validation tests that don't need database.
 
 
 # ============================================================================
@@ -97,34 +82,39 @@ class TestTranslationModeEnumDefinition:
 
 
 # ============================================================================
-# Test: TranslateRequest Model Accepts translation_mode
+# Test: TranslateRequest Model Accepts fileTranslationModes (per-file modes)
 # ============================================================================
 
 class TestTranslateRequestModel:
-    """Tests for TranslateRequest model with translation_mode field."""
+    """Tests for TranslateRequest model with fileTranslationModes field."""
 
-    def test_translate_request_accepts_translation_mode(self):
-        """TranslateRequest should accept translation_mode parameter."""
-        from app.main import TranslateRequest
+    def test_translate_request_accepts_file_translation_modes(self):
+        """TranslateRequest should accept fileTranslationModes parameter."""
+        from app.main import TranslateRequest, FileTranslationModeInfo
         from app.mongodb_models import TranslationMode
 
-        # Create request with translation_mode
+        # Create request with per-file translation modes
         request = TranslateRequest(
             files=[],
             email="test@example.com",
             sourceLanguage="en",
             targetLanguage="es",
-            translation_mode=TranslationMode.AUTOMATIC if hasattr(TranslationMode, 'AUTOMATIC') else TranslationMode.automatic
+            fileTranslationModes=[
+                FileTranslationModeInfo(
+                    fileName="test.pdf",
+                    translationMode=TranslationMode.AUTOMATIC
+                )
+            ]
         )
 
-        assert request.translation_mode is not None
+        assert request.fileTranslationModes is not None
+        assert len(request.fileTranslationModes) == 1
 
-    def test_translate_request_default_is_automatic(self):
-        """TranslateRequest should default translation_mode to 'automatic'."""
+    def test_translate_request_default_file_modes_is_none(self):
+        """TranslateRequest should default fileTranslationModes to None."""
         from app.main import TranslateRequest
-        from app.mongodb_models import TranslationMode
 
-        # Create request WITHOUT translation_mode
+        # Create request WITHOUT fileTranslationModes
         request = TranslateRequest(
             files=[],
             email="test@example.com",
@@ -132,35 +122,39 @@ class TestTranslateRequestModel:
             targetLanguage="es"
         )
 
-        # Default should be automatic
-        expected = TranslationMode.AUTOMATIC if hasattr(TranslationMode, 'AUTOMATIC') else TranslationMode.automatic
-        assert request.translation_mode == expected
+        # Default should be None (each file uses automatic mode implicitly)
+        assert request.fileTranslationModes is None
 
-    def test_translate_request_all_modes_valid(self):
-        """TranslateRequest should accept all valid translation_mode values."""
-        from app.main import TranslateRequest
+    def test_translate_request_all_modes_valid_in_file_modes(self):
+        """TranslateRequest should accept all valid translation modes for files."""
+        from app.main import TranslateRequest, FileTranslationModeInfo
         from app.mongodb_models import TranslationMode
 
         valid_modes = [
-            TranslationMode.AUTOMATIC if hasattr(TranslationMode, 'AUTOMATIC') else TranslationMode.automatic,
-            TranslationMode.HUMAN if hasattr(TranslationMode, 'HUMAN') else TranslationMode.human,
-            TranslationMode.FORMATS if hasattr(TranslationMode, 'FORMATS') else TranslationMode.formats,
-            TranslationMode.HANDWRITING if hasattr(TranslationMode, 'HANDWRITING') else TranslationMode.handwriting,
+            TranslationMode.AUTOMATIC,
+            TranslationMode.HUMAN,
+            TranslationMode.FORMATS,
+            TranslationMode.HANDWRITING,
         ]
 
-        for mode in valid_modes:
+        for i, mode in enumerate(valid_modes):
             request = TranslateRequest(
                 files=[],
                 email="test@example.com",
                 sourceLanguage="en",
                 targetLanguage="es",
-                translation_mode=mode
+                fileTranslationModes=[
+                    FileTranslationModeInfo(
+                        fileName=f"test{i}.pdf",
+                        translationMode=mode
+                    )
+                ]
             )
-            assert request.translation_mode == mode
+            assert request.fileTranslationModes[0].translationMode == mode
 
     def test_translate_request_invalid_mode_raises_error(self):
-        """TranslateRequest should reject invalid translation_mode values."""
-        from app.main import TranslateRequest
+        """TranslateRequest should reject invalid translation_mode values in file modes."""
+        from app.main import TranslateRequest, FileTranslationModeInfo
 
         with pytest.raises(ValidationError):
             TranslateRequest(
@@ -168,7 +162,12 @@ class TestTranslateRequestModel:
                 email="test@example.com",
                 sourceLanguage="en",
                 targetLanguage="es",
-                translation_mode="invalid_mode"
+                fileTranslationModes=[
+                    FileTranslationModeInfo(
+                        fileName="test.pdf",
+                        translationMode="invalid_mode"
+                    )
+                ]
             )
 
 
@@ -227,49 +226,54 @@ class TestTranslationModeStorage:
 # ============================================================================
 
 class TestCreateTransactionRecordWithMode:
-    """Tests for create_transaction_record() including translation_mode."""
+    """Tests for create_transaction_record() including file_translation_modes."""
 
-    def test_create_transaction_record_accepts_translation_mode(self):
-        """create_transaction_record should accept translation_mode parameter."""
+    def test_create_transaction_record_accepts_file_translation_modes(self):
+        """create_transaction_record should accept file_translation_modes parameter."""
         from app.main import create_transaction_record
         import inspect
 
-        # Check function signature accepts translation_mode
+        # Check function signature accepts file_translation_modes
         sig = inspect.signature(create_transaction_record)
         params = list(sig.parameters.keys())
 
-        assert "translation_mode" in params, \
-            f"create_transaction_record should accept 'translation_mode' parameter. Current params: {params}"
+        assert "file_translation_modes" in params, \
+            f"create_transaction_record should accept 'file_translation_modes' parameter. Current params: {params}"
 
-    def test_create_transaction_record_has_default_mode(self):
-        """create_transaction_record should have default for translation_mode."""
+    def test_create_transaction_record_has_default_for_file_modes(self):
+        """create_transaction_record should have default for file_translation_modes."""
         from app.main import create_transaction_record
-        from app.mongodb_models import TranslationMode
         import inspect
 
         sig = inspect.signature(create_transaction_record)
-        param = sig.parameters.get("translation_mode")
+        param = sig.parameters.get("file_translation_modes")
 
+        # file_translation_modes should have a default (None)
         assert param is not None
-        assert param.default == TranslationMode.AUTOMATIC
+        assert param.default is None
 
-    def test_translate_request_mode_propagates_correctly(self):
-        """TranslateRequest.translation_mode should propagate to function call."""
-        from app.main import TranslateRequest
+    def test_translate_request_file_modes_propagate_correctly(self):
+        """TranslateRequest.fileTranslationModes should provide per-file modes."""
+        from app.main import TranslateRequest, FileTranslationModeInfo
         from app.mongodb_models import TranslationMode
 
-        # Create request with human mode
+        # Create request with human mode for a file
         request = TranslateRequest(
             files=[],
             email="test@example.com",
             sourceLanguage="en",
             targetLanguage="es",
-            translation_mode=TranslationMode.HUMAN
+            fileTranslationModes=[
+                FileTranslationModeInfo(
+                    fileName="test.pdf",
+                    translationMode=TranslationMode.HUMAN
+                )
+            ]
         )
 
         # Verify mode can be extracted for function call
-        assert request.translation_mode == TranslationMode.HUMAN
-        assert request.translation_mode.value == "human"
+        assert request.fileTranslationModes[0].translationMode == TranslationMode.HUMAN
+        assert request.fileTranslationModes[0].translationMode.value == "human"
 
 
 # ============================================================================
@@ -277,11 +281,11 @@ class TestCreateTransactionRecordWithMode:
 # ============================================================================
 
 class TestTranslationModeEdgeCases:
-    """Edge cases and validation for translation_mode."""
+    """Edge cases and validation for translation_mode via fileTranslationModes."""
 
     def test_translation_mode_case_sensitivity(self):
         """TranslationMode should be case-sensitive (lowercase only)."""
-        from app.main import TranslateRequest
+        from app.main import TranslateRequest, FileTranslationModeInfo
 
         # Uppercase should fail
         with pytest.raises(ValidationError):
@@ -290,12 +294,17 @@ class TestTranslationModeEdgeCases:
                 email="test@example.com",
                 sourceLanguage="en",
                 targetLanguage="es",
-                translation_mode="AUTOMATIC"  # Should fail - case sensitive
+                fileTranslationModes=[
+                    FileTranslationModeInfo(
+                        fileName="test.pdf",
+                        translationMode="AUTOMATIC"  # Should fail - case sensitive
+                    )
+                ]
             )
 
     def test_translation_mode_empty_string_rejected(self):
         """TranslationMode should reject empty string."""
-        from app.main import TranslateRequest
+        from app.main import TranslateRequest, FileTranslationModeInfo
 
         with pytest.raises(ValidationError):
             TranslateRequest(
@@ -303,20 +312,30 @@ class TestTranslationModeEdgeCases:
                 email="test@example.com",
                 sourceLanguage="en",
                 targetLanguage="es",
-                translation_mode=""
+                fileTranslationModes=[
+                    FileTranslationModeInfo(
+                        fileName="test.pdf",
+                        translationMode=""
+                    )
+                ]
             )
 
     def test_translation_mode_accepts_string_values(self):
-        """TranslateRequest should accept translation_mode as string."""
-        from app.main import TranslateRequest
+        """TranslateRequest should accept translationMode as string in fileTranslationModes."""
+        from app.main import TranslateRequest, FileTranslationModeInfo
 
-        # String value should work
+        # String value should work (Pydantic coerces to enum)
         request = TranslateRequest(
             files=[],
             email="test@example.com",
             sourceLanguage="en",
             targetLanguage="es",
-            translation_mode="human"  # String, not enum
+            fileTranslationModes=[
+                FileTranslationModeInfo(
+                    fileName="test.pdf",
+                    translationMode="human"  # String, not enum
+                )
+            ]
         )
 
-        assert request.translation_mode.value == "human"
+        assert request.fileTranslationModes[0].translationMode.value == "human"

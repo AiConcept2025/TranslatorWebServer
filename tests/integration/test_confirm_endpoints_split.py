@@ -458,6 +458,9 @@ async def test_individual_confirm_success(
     user_email = "danishevsky@yahoo.com"  # Individual user from Golden Source
     square_txn_id = f"sqt_test_{uuid.uuid4().hex[:12]}"
 
+    # Generate unique placeholder square_transaction_id to avoid unique index collision
+    placeholder_square_id = f"pending_{uuid.uuid4().hex[:16]}"
+
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_email": user_email,
@@ -467,6 +470,7 @@ async def test_individual_confirm_success(
         "price_per_unit": 0.10,
         "total_price": 0.50,
         "status": "started",
+        "square_transaction_id": placeholder_square_id,  # Placeholder for unique index
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
         "documents": [
@@ -528,11 +532,14 @@ async def test_individual_confirm_cancel(
     """
     transaction_id = f"TXN-TEST-IND-{uuid.uuid4().hex[:8].upper()}"
     user_email = "danishevsky@yahoo.com"
+    # Unique placeholder for square_transaction_id index
+    placeholder_square_id = f"pending_{uuid.uuid4().hex[:16]}"
 
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_email": user_email,
         "status": "started",
+        "square_transaction_id": placeholder_square_id,  # Placeholder for unique index
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
@@ -578,11 +585,14 @@ async def test_individual_missing_file_ids_422(
     """
     transaction_id = f"TXN-TEST-IND-{uuid.uuid4().hex[:8].upper()}"
     user_email = "danishevsky@yahoo.com"
+    # Unique placeholder for square_transaction_id index
+    placeholder_square_id = f"pending_{uuid.uuid4().hex[:16]}"
 
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_email": user_email,
         "status": "started",
+        "square_transaction_id": placeholder_square_id,  # Placeholder for unique index
         "created_at": datetime.now(timezone.utc)
     }
 
@@ -618,11 +628,14 @@ async def test_individual_empty_file_ids_400(
     """
     transaction_id = f"TXN-TEST-IND-{uuid.uuid4().hex[:8].upper()}"
     user_email = "danishevsky@yahoo.com"
+    # Unique placeholder for square_transaction_id index
+    placeholder_square_id = f"pending_{uuid.uuid4().hex[:16]}"
 
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_email": user_email,
         "status": "started",
+        "square_transaction_id": placeholder_square_id,  # Placeholder for unique index
         "created_at": datetime.now(timezone.utc)
     }
 
@@ -775,11 +788,14 @@ async def test_individual_confirm_stores_payment_info(
     transaction_id = f"TXN-TEST-IND-{uuid.uuid4().hex[:8].upper()}"
     user_email = "danishevsky@yahoo.com"
     square_txn_id = f"sqt_payment_{uuid.uuid4().hex[:12]}"
+    # Unique placeholder for square_transaction_id index
+    placeholder_square_id = f"pending_{uuid.uuid4().hex[:16]}"
 
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_email": user_email,
         "status": "started",
+        "square_transaction_id": placeholder_square_id,  # Placeholder for unique index
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }

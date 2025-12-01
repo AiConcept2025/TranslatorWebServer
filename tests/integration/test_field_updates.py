@@ -2,7 +2,7 @@
 COMPREHENSIVE FIELD UPDATE INTEGRATION TESTS
 
 Tests ALL editable fields from Admin Dashboard screens using real HTTP API calls
-and real MongoDB database connections.
+and the REAL TEST MongoDB database (translation_test).
 
 Test Coverage:
 1. Subscription Fields: company_name, plan_type (subscription_unit), status, start_date, end_date
@@ -13,10 +13,12 @@ Test Coverage:
 
 Testing Approach:
 - Real HTTP API calls via httpx (NOT mocking)
-- Real MongoDB database with TEST_PREFIX isolation
+- Real TEST MongoDB database (translation_test) with TEST_PREFIX isolation
 - Tests both CREATE and UPDATE operations
 - Validates HTTP responses AND database state
 - Tests edge cases and validation errors
+
+CRITICAL: Uses test database (translation_test), NOT production database.
 """
 
 import pytest
@@ -25,19 +27,20 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 from datetime import datetime, timezone, timedelta
 
-# Configuration
+# Configuration - CRITICAL: Use test database, not production
 API_BASE_URL = "http://localhost:8000"
-MONGODB_URI = "mongodb://iris:Sveta87201120@localhost:27017/translation?authSource=translation"
-DATABASE_NAME = "translation"
+MONGODB_URI = "mongodb://iris:Sveta87201120@localhost:27017/translation_test?authSource=translation"
+DATABASE_NAME = "translation_test"
 TEST_PREFIX = "TEST_FIELDS_"
 
 @pytest.fixture(scope="function")
-async def db():
-    """Connect to test database."""
-    client = AsyncIOMotorClient(MONGODB_URI)
-    database = client[DATABASE_NAME]
-    yield database
-    client.close()
+async def db(test_db):
+    """
+    Connect to test database.
+
+    Uses test_db fixture from conftest.py to ensure we connect to translation_test.
+    """
+    yield test_db
 
 @pytest.fixture(scope="function")
 async def http_client():
@@ -319,7 +322,8 @@ class TestUsagePeriodFields:
 
         # Verify
         updated = await db.subscriptions.find_one({"_id": subscription["_id"]})
-        assert updated["usage_periods"][0]["units_allocated"] == 1500
+        # Field name is subscription_units (what we set), not units_allocated
+        assert updated["usage_periods"][0]["subscription_units"] == 1500
 
         print(f"✅ Units allocated updated: 1000 → 1500")
 
@@ -359,7 +363,8 @@ class TestUsagePeriodFields:
 
         # Verify
         updated = await db.subscriptions.find_one({"_id": subscription["_id"]})
-        assert updated["usage_periods"][0]["units_used"] == 350
+        # Field name is used_units (what we set), not units_used
+        assert updated["usage_periods"][0]["used_units"] == 350
 
         print(f"✅ Units used updated: 200 → 350")
 

@@ -393,7 +393,8 @@ async def translate_user_files(
 
     stored_files = []
     all_documents = []  # ✅ FIX: Accumulate all documents for single transaction
-    total_units = 0
+    total_units = 0  # Raw page count
+    total_quota_units = 0  # Quota units (with mode multipliers for enterprise)
     # Pricing will be calculated after we know total_units (pricing varies by tier)
     cost_per_unit = 0.0  # Initialize to avoid undefined variable errors
     total_amount = 0.0
@@ -436,8 +437,30 @@ async def translate_user_files(
             # Estimate page count
             page_count = estimate_page_count(file_info.name, file_info.size)
             unit_type = get_unit_type(file_info.name)
-            total_units += page_count
+
+            # Get translation mode for this specific file (default to automatic)
+            file_mode = file_translation_modes.get(file_info.name, "automatic")
+
+            # Calculate quota units for this file with its specific mode
+            # For enterprise: apply multiplier based on translation mode
+            # For individual: quota = raw pages (multiplier handled in pricing)
+            if customer_type == "enterprise":
+                # Map automatic -> default for pricing service
+                pricing_mode = "default" if file_mode == "automatic" else file_mode
+                file_quota_decimal = pricing_service.calculate_enterprise_quota(page_count, pricing_mode, pricing_service.config)
+                file_quota_units = int(file_quota_decimal)
+            else:
+                file_quota_units = page_count  # Individual: raw pages
+
+            # Accumulate totals
+            total_units += page_count  # Always track raw page count
+            total_quota_units += file_quota_units  # Quota units (with multipliers)
+
             log_step(f"FILE {i} PAGE COUNT", f"{page_count} {unit_type}s estimated")
+            if customer_type == "enterprise":
+                log_step(f"FILE {i} QUOTA CALC",
+                        f"Mode: {file_mode}, Raw: {page_count} pages, Quota: {file_quota_units} units (multiplier applied)")
+                print(f"   📊 Quota Calculation: {page_count} pages × {file_mode} mode = {file_quota_units} quota units")
 
             # Upload to Google Drive
             log_step(f"FILE {i} GDRIVE UPLOAD", f"Uploading to folder {folder_id}")
@@ -448,9 +471,6 @@ async def translate_user_files(
                 target_language=request.targetLanguage,
             )
             log_step(f"FILE {i} GDRIVE UPLOADED", f"File ID: {file_result['file_id']}")
-
-            # Get translation mode for this specific file (default to automatic)
-            file_mode = file_translation_modes.get(file_info.name, "automatic")
 
             # Update file metadata (initial properties)
             log_step(f"FILE {i} METADATA UPDATE", "Setting initial file properties")
@@ -480,7 +500,8 @@ async def translate_user_files(
             all_documents.append({
                 "file_name": file_info.name,
                 "file_size": file_info.size,
-                "page_count": page_count,  # Include page count for logging
+                "page_count": page_count,  # Raw page count
+                "quota_units": file_quota_units,  # Quota units (with mode multiplier)
                 "original_url": file_result.get("google_drive_url", ""),
                 "translated_url": None,
                 "translated_name": None,
@@ -536,10 +557,18 @@ async def translate_user_files(
     # ========================================================================
     batch_transaction_id = None
     if all_documents:  # Only create if we have successfully uploaded documents
+        # Determine which units to use for billing
+        # Enterprise: Use quota units (with mode multipliers applied)
+        # Individual: Use raw page count (pricing service applies multipliers)
+        units_for_billing = total_quota_units if customer_type == "enterprise" else total_units
+
         log_step("BATCH TRANSACTION CREATE", f"Creating transaction with {len(all_documents)} documents")
         print(f"\n💾 Creating batch transaction record...")
         print(f"   Documents: {len(all_documents)}")
-        print(f"   Total units: {total_units}")
+        print(f"   Raw pages: {total_units}")
+        if customer_type == "enterprise":
+            print(f"   Quota units (with multipliers): {total_quota_units}")
+        print(f"   Units for billing: {units_for_billing}")
         print(f"   Square TX ID: {batch_square_tx_id}")
 
         try:
@@ -547,21 +576,30 @@ async def translate_user_files(
             first_file = stored_files[0] if stored_files else {}
             unit_type = first_file.get("unit_type", "page")
 
+            # Determine translation mode for logging (mixed if multiple modes)
+            unique_modes = set(doc.get("translation_mode", "automatic") for doc in all_documents)
+            batch_translation_mode = "mixed" if len(unique_modes) > 1 else next(iter(unique_modes))
+
             # Calculate pricing using pricing service
             # For enterprise users: pricing is informational (they use subscription units)
             # For individual users: pricing determines actual payment amount
-            total_price_decimal = pricing_service.calculate_price(total_units, customer_type, "default")
+            # NOTE: For enterprise, we pass "default" because quota units already have multipliers
+            pricing_mode_for_calc = "default" if customer_type == "enterprise" else batch_translation_mode
+            total_price_decimal = pricing_service.calculate_price(units_for_billing, customer_type, pricing_mode_for_calc)
             total_amount = float(total_price_decimal)
             # Back-calculate average cost per unit for database storage
-            cost_per_unit = total_amount / total_units if total_units > 0 else 0
+            cost_per_unit = total_amount / units_for_billing if units_for_billing > 0 else 0
+
             log_step("PRICING CALCULATED",
-                    f"Customer: {customer_type}, Total: ${total_amount:.2f} ({total_units} units @ avg ${cost_per_unit:.4f}/unit)")
+                    f"Customer: {customer_type}, Mode: {batch_translation_mode}, Total: ${total_amount:.2f} ({units_for_billing} units @ avg ${cost_per_unit:.4f}/unit)")
+            if customer_type == "enterprise":
+                print(f"   💰 Pricing: {total_units} raw pages → {total_quota_units} quota units → ${total_amount:.2f}")
 
             batch_transaction_id = await create_user_transaction(
                 user_name=request.userName,
                 user_email=request.email,
                 documents=all_documents,  # ✅ FIX: All documents in one transaction
-                number_of_units=total_units,
+                number_of_units=units_for_billing,  # Use quota units for enterprise
                 unit_type=unit_type,
                 cost_per_unit=cost_per_unit,
                 source_language=request.sourceLanguage,
@@ -621,11 +659,13 @@ async def translate_user_files(
 
                     # Record usage using subscription service
                     usage_data = UsageUpdate(
-                        units_to_add=total_units,
-                        use_promotional_units=False
+                        units_to_add=units_for_billing,  # Use quota units (with multipliers)
+                        use_promotional_units=False,
+                        translation_mode=batch_translation_mode  # Include mode for logging
                     )
 
-                    log_step("RECORDING USAGE", f"Adding {total_units} units to subscription")
+                    log_step("RECORDING USAGE", f"Adding {units_for_billing} quota units (mode: {batch_translation_mode}) to subscription")
+                    print(f"   📊 Usage Recording: {total_units} raw pages → {units_for_billing} quota units")
                     updated_subscription = await subscription_service.record_usage(
                         subscription_id,
                         usage_data

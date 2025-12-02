@@ -712,8 +712,8 @@ async def translate_files(
                 price_per_page = float(price_value)
 
             # Enhanced subscription logging - Find current active period
-            # Database schema: subscription_units, used_units, promotional_units
-            # Formula: total_remaining = (subscription_units + promotional_units) - used_units
+            # Database schema: units_allocated, units_used, promotional_units
+            # Formula: total_remaining = (units_allocated + promotional_units) - units_used
             usage_periods = subscription.get("usage_periods", [])
             subscription_unit = subscription.get("subscription_unit", "page")
             status = subscription.get("status", "unknown")
@@ -901,12 +901,12 @@ async def translate_files(
             "progress": 100,
             "message": f"Files uploaded successfully. Ready for payment.",
 
-                # Pricing information
+                # Pricing information (conditionally include payment fields)
                 "pricing": {
                     "total_pages": total_pages,
-                    "price_per_page": price_per_page,  # Dynamic: subscription or default
-                    "total_amount": total_pages * price_per_page,  # Dynamic calculation
-                    "currency": "USD",
+                    "price_per_page": None if is_enterprise else price_per_page,
+                    "total_amount": None if is_enterprise else (total_pages * price_per_page),
+                    "currency": None if is_enterprise else "USD",
                     "customer_type": "enterprise" if is_enterprise else "individual",
                     "transaction_ids": transaction_ids  # Transaction IDs for all files
                 },
@@ -935,6 +935,15 @@ async def translate_files(
                     "customer_email": request.email
                 },
 
+                # Subscription information (enterprise only)
+                "subscription": {
+                    "units_allocated": units_allocated if is_enterprise and subscription else 0,
+                    "units_used": total_used if is_enterprise and subscription else 0,
+                    "units_remaining": total_remaining if is_enterprise and subscription else 0,
+                    "promotional_units": promotional_units if is_enterprise and subscription else 0,
+                    "subscription_unit": subscription_unit if is_enterprise and subscription else "page"
+                } if is_enterprise and subscription else None,
+
                 # User information (permission level and identity)
                 "user": user_info
             },
@@ -955,9 +964,27 @@ async def translate_files(
     print(f"[RAW OUTGOING DATA] Message: {response_data['data']['message']}")
     print(f"[RAW OUTGOING DATA] Pricing:")
     print(f"[RAW OUTGOING DATA]   - Total Pages: {response_data['data']['pricing']['total_pages']}")
-    print(f"[RAW OUTGOING DATA]   - Price Per Page: ${response_data['data']['pricing']['price_per_page']}")
-    print(f"[RAW OUTGOING DATA]   - Total Amount: ${response_data['data']['pricing']['total_amount']:.2f}")
-    print(f"[RAW OUTGOING DATA]   - Currency: {response_data['data']['pricing']['currency']}")
+
+    # Handle None values for enterprise users
+    price_per_page = response_data['data']['pricing']['price_per_page']
+    total_amount = response_data['data']['pricing']['total_amount']
+    currency = response_data['data']['pricing']['currency']
+
+    if price_per_page is not None:
+        print(f"[RAW OUTGOING DATA]   - Price Per Page: ${price_per_page:.2f}")
+    else:
+        print(f"[RAW OUTGOING DATA]   - Price Per Page: N/A (using subscription)")
+
+    if total_amount is not None:
+        print(f"[RAW OUTGOING DATA]   - Total Amount: ${total_amount:.2f}")
+    else:
+        print(f"[RAW OUTGOING DATA]   - Total Amount: N/A (using subscription)")
+
+    if currency is not None:
+        print(f"[RAW OUTGOING DATA]   - Currency: {currency}")
+    else:
+        print(f"[RAW OUTGOING DATA]   - Currency: N/A (using subscription)")
+
     print(f"[RAW OUTGOING DATA]   - Customer Type: {response_data['data']['pricing']['customer_type']}")
     print(f"[RAW OUTGOING DATA]   - Transaction IDs ({len(response_data['data']['pricing']['transaction_ids'])}): {response_data['data']['pricing']['transaction_ids']}")
     print(f"[RAW OUTGOING DATA] Files:")
@@ -969,6 +996,13 @@ async def translate_files(
     print(f"[RAW OUTGOING DATA] Customer: {response_data['data']['customer']['email']}")
     print(f"[RAW OUTGOING DATA] Payment Required: {response_data['data']['payment']['required']}")
     print(f"[RAW OUTGOING DATA] Payment Amount (cents): {response_data['data']['payment']['amount_cents']}")
+    if response_data['data'].get('subscription'):
+        print(f"[RAW OUTGOING DATA] Subscription Information:")
+        print(f"[RAW OUTGOING DATA]   - Units Allocated: {response_data['data']['subscription']['units_allocated']}")
+        print(f"[RAW OUTGOING DATA]   - Units Used: {response_data['data']['subscription']['units_used']}")
+        print(f"[RAW OUTGOING DATA]   - Units Remaining: {response_data['data']['subscription']['units_remaining']}")
+        print(f"[RAW OUTGOING DATA]   - Promotional Units: {response_data['data']['subscription']['promotional_units']}")
+        print(f"[RAW OUTGOING DATA]   - Subscription Unit: {response_data['data']['subscription']['subscription_unit']}")
     print(f"[RAW OUTGOING DATA] User Information:")
     print(f"[RAW OUTGOING DATA]   - Permission Level: {response_data['data']['user']['permission_level']}")
     print(f"[RAW OUTGOING DATA]   - Email: {response_data['data']['user']['email']}")
@@ -1135,15 +1169,17 @@ async def process_transaction_confirmation_background(
         if subscription_updates:
             for subscription_id_str, total_units in subscription_updates.items():
                 try:
+                    # Batch operations: mark as "mixed" since multiple transactions may have different modes
                     usage_update = UsageUpdate(
                         units_to_add=total_units,
-                        use_promotional_units=False
+                        use_promotional_units=False,
+                        translation_mode="mixed"  # Batch aggregation
                     )
                     await subscription_service.record_usage(
                         subscription_id=subscription_id_str,
                         usage_data=usage_update
                     )
-                    print(f"   ✅ Subscription {subscription_id_str}: +{total_units} units")
+                    print(f"   ✅ Subscription {subscription_id_str}: +{total_units} units (batch mode: mixed)")
                 except Exception as e:
                     print(f"   ⚠️  Subscription update failed for {subscription_id_str}: {e}")
         else:
@@ -1556,7 +1592,11 @@ async def confirm_enterprise_transaction(
                 subscription_id = transaction.get("subscription_id")
                 units_count = transaction.get("units_count", 0)
 
-                logging.info(f"[CONFIRM-ENTERPRISE] Subscription tracking - ID: {subscription_id}, Units: {units_count}")
+                # Determine translation mode from documents (mixed if multiple modes)
+                unique_modes = set(doc.get("translation_mode", "automatic") for doc in documents)
+                transaction_mode = "mixed" if len(unique_modes) > 1 else next(iter(unique_modes))
+
+                logging.info(f"[CONFIRM-ENTERPRISE] Subscription tracking - ID: {subscription_id}, Units: {units_count}, Mode: {transaction_mode}")
 
                 if subscription_id and units_count > 0:
                     from app.services.subscription_service import subscription_service
@@ -1565,13 +1605,14 @@ async def confirm_enterprise_transaction(
                     try:
                         usage_update = UsageUpdate(
                             units_to_add=units_count,
-                            use_promotional_units=False
+                            use_promotional_units=False,
+                            translation_mode=transaction_mode  # Include mode for logging
                         )
                         await subscription_service.record_usage(
                             subscription_id=str(subscription_id),
                             usage_data=usage_update
                         )
-                        logging.info(f"[CONFIRM-ENTERPRISE] Updated subscription usage: +{units_count} units")
+                        logging.info(f"[CONFIRM-ENTERPRISE] Updated subscription usage: +{units_count} units (mode: {transaction_mode})")
                     except Exception as e:
                         logging.error(f"[CONFIRM-ENTERPRISE] Subscription update failed: {e}")
                         # Don't fail the entire operation if usage tracking fails

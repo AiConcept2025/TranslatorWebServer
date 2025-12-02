@@ -97,6 +97,7 @@ class UsageUpdate(BaseModel):
     """Model for updating usage in a period."""
     units_to_add: int = Field(gt=0)
     use_promotional_units: bool = False
+    translation_mode: str = Field(default="default", description="Translation mode: default, formats, human, handwriting, or mixed")
 
 
 class SubscriptionResponse(BaseModel):

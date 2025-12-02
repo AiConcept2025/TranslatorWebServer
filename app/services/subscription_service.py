@@ -233,8 +233,8 @@ class SubscriptionService:
         Raises:
             SubscriptionError: If no active period or insufficient units
         """
-        logger.info(f"[RECORD_USAGE ENTRY] Subscription: {subscription_id}, Units to add: {usage_data.units_to_add}")
-        print(f"[RECORD_USAGE ENTRY] Subscription: {subscription_id}, Units to add: {usage_data.units_to_add}")
+        logger.info(f"[RECORD_USAGE ENTRY] Subscription: {subscription_id}, Mode: {usage_data.translation_mode}, Units to add: {usage_data.units_to_add}")
+        print(f"[RECORD_USAGE ENTRY] Subscription: {subscription_id}, Mode: {usage_data.translation_mode}, Units to add: {usage_data.units_to_add}")
 
         subscription = await self.get_subscription(subscription_id)
         logger.info(f"[RECORD_USAGE] Got subscription: {subscription is not None}")
@@ -329,13 +329,19 @@ class SubscriptionService:
         logger.info(f"[SUBSCRIPTION UPDATE] Current units_used: {units_used}, Adding: {units_to_add}, New total: {units_used + units_to_add}")
         logger.info(f"[SUBSCRIPTION UPDATE] Total available before: {total_available}")
 
-        # Update using correct field name 'units_used'
+        # Calculate new values using correct formula
+        new_units_used = units_used + units_to_add
+        new_units_remaining = units_allocated + promotional_units_in_period - new_units_used
+
+        # Update using correct field names including units_remaining
         update_query = {
-            f"usage_periods.{current_period_idx}.units_used": units_used + units_to_add,
+            f"usage_periods.{current_period_idx}.units_used": new_units_used,
+            f"usage_periods.{current_period_idx}.units_remaining": new_units_remaining,
             f"usage_periods.{current_period_idx}.last_updated": now,
             "updated_at": now
         }
 
+        logger.info(f"[SUBSCRIPTION UPDATE] New units_remaining: {new_units_remaining}")
         logger.info(f"[SUBSCRIPTION UPDATE] MongoDB update query: {update_query}")
 
         # Update subscription (return document AFTER update)

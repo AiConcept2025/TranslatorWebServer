@@ -121,7 +121,7 @@ async def test_individual_transaction(test_db):
 
     transaction_doc = {
         "transaction_id": transaction_id,
-        "square_transaction_id": square_txn_id,
+        "stripe_checkout_session_id": square_txn_id,
         "user_id": "individual_submit@example.com",
         "user_name": "Jane Submit Test",
         "status": "processing",

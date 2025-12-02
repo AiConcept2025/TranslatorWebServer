@@ -42,7 +42,7 @@ def main():
         print(f"Document: {t['document_url'][:80]}...")
         print(f"Units: {t['number_of_units']} {t['unit_type']}(s) @ ${t['cost_per_unit']:.2f}/{t['unit_type']}")
         print(f"Languages: {t['source_language']} → {t['target_language']}")
-        print(f"Square Transaction ID: {t['square_transaction_id']}")
+        print(f"Stripe Transaction ID: {t['stripe_checkout_session_id']}")
         print(f"Date: {t['date'].strftime('%Y-%m-%d %H:%M:%S UTC')}")
         print(f"Status: {t['status']}")
         print(f"Total Cost: ${t['total_cost']:.2f}")

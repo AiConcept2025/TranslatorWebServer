@@ -78,8 +78,8 @@ pytest tests/integration/test_confirm_square_payment.py::test_1_valid_success_re
 # Test 2: Valid failure request
 pytest tests/integration/test_confirm_square_payment.py::test_2_valid_failure_request -v
 
-# Test 3a: Missing square_transaction_id
-pytest tests/integration/test_confirm_square_payment.py::test_3a_missing_square_transaction_id -v
+# Test 3a: Missing stripe_checkout_session_id
+pytest tests/integration/test_confirm_square_payment.py::test_3a_missing_stripe_checkout_session_id -v
 
 # Test 3b: Missing status field
 pytest tests/integration/test_confirm_square_payment.py::test_3b_missing_status_field -v
@@ -118,12 +118,12 @@ These tests cover:
 ### 1. Request Validation
 - ✅ Valid success request (status=True)
 - ✅ Valid failure request (status=False)
-- ✅ Missing square_transaction_id field (422 error)
+- ✅ Missing stripe_checkout_session_id field (422 error)
 - ✅ Missing status field (422 error)
 
 ### 2. Transaction Creation
 - ✅ Transaction created with TXN- format ID
-- ✅ Transaction has square_transaction_id field
+- ✅ Transaction has stripe_checkout_session_id field
 - ✅ Transaction saved to MongoDB
 - ✅ Transaction has correct user_id, status, documents
 
@@ -150,16 +150,16 @@ These tests cover:
 Tests use **automatic cleanup** with these strategies:
 
 ### 1. TEST- Prefix
-All test data uses `TEST-` prefix in `square_transaction_id`:
+All test data uses `TEST-` prefix in `stripe_checkout_session_id`:
 ```python
-"square_transaction_id": "TEST-sqt_test123"
+"stripe_checkout_session_id": "TEST-sqt_test123"
 ```
 
 ### 2. Before Each Test
 ```python
 # Clean up any leftover TEST- transactions
 await database.user_transactions.delete_many({
-    "square_transaction_id": {"$regex": "^TEST-"}
+    "stripe_checkout_session_id": {"$regex": "^TEST-"}
 })
 ```
 
@@ -167,7 +167,7 @@ await database.user_transactions.delete_many({
 ```python
 # Clean up TEST- transactions created during test
 await database.user_transactions.delete_many({
-    "square_transaction_id": {"$regex": "^TEST-"}
+    "stripe_checkout_session_id": {"$regex": "^TEST-"}
 })
 ```
 
@@ -326,7 +326,7 @@ collected 8 items
 
 tests/integration/test_confirm_square_payment.py::test_1_valid_success_request PASSED [ 12%]
 tests/integration/test_confirm_square_payment.py::test_2_valid_failure_request PASSED [ 25%]
-tests/integration/test_confirm_square_payment.py::test_3a_missing_square_transaction_id PASSED [ 37%]
+tests/integration/test_confirm_square_payment.py::test_3a_missing_stripe_checkout_session_id PASSED [ 37%]
 tests/integration/test_confirm_square_payment.py::test_3b_missing_status_field PASSED [ 50%]
 tests/integration/test_confirm_square_payment.py::test_4_transaction_creation_on_success PASSED [ 62%]
 tests/integration/test_confirm_square_payment.py::test_5_no_transaction_on_failure PASSED [ 75%]

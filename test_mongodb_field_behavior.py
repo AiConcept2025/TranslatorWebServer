@@ -32,7 +32,7 @@ async def main():
     doc1 = {
         "transaction_id": "TEST-FIELD-001",
         "user_email": "test@example.com",
-        "square_transaction_id": "TEST-SQ-001",  # Required unique field
+        "stripe_checkout_session_id": "TEST-SQ-001",  # Required unique field
         "documents": [{
             "file_name": "doc1.pdf",
             "original_url": "https://example.com/doc1"
@@ -46,7 +46,7 @@ async def main():
     doc2 = {
         "transaction_id": "TEST-FIELD-002",
         "user_email": "test@example.com",
-        "square_transaction_id": "TEST-SQ-002",  # Required unique field
+        "stripe_checkout_session_id": "TEST-SQ-002",  # Required unique field
         "documents": [{
             "file_name": "doc2.pdf",
             "original_url": "https://example.com/doc2",
@@ -60,7 +60,7 @@ async def main():
     doc3 = {
         "transaction_id": "TEST-FIELD-003",
         "user_email": "test@example.com",
-        "square_transaction_id": "TEST-SQ-003",  # Required unique field
+        "stripe_checkout_session_id": "TEST-SQ-003",  # Required unique field
         "documents": [{
             "file_name": "doc3.pdf",
             "original_url": "https://example.com/doc3",

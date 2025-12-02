@@ -115,12 +115,12 @@ COLLECTIONS = {
         "validator": {
             "$jsonSchema": {
                 "bsonType": "object",
-                "required": ["customer_id", "square_payment_id", "amount", "payment_status", "payment_date"],
+                "required": ["customer_id", "stripe_payment_intent_id", "amount", "payment_status", "payment_date"],
                 "properties": {
                     "customer_id": {"bsonType": "objectId"},
                     "subscription_id": {"bsonType": ["objectId", "null"]},
-                    "square_payment_id": {"bsonType": "string"},
-                    "square_order_id": {"bsonType": ["string", "null"]},
+                    "stripe_payment_intent_id": {"bsonType": "string"},
+                    "stripe_invoice_id": {"bsonType": ["string", "null"]},
                     "square_receipt_url": {"bsonType": ["string", "null"]},
                     "amount": {"bsonType": ["double", "decimal"]},
                     "currency": {"bsonType": "string"},
@@ -139,7 +139,7 @@ COLLECTIONS = {
             }
         },
         "indexes": [
-            ([("square_payment_id", ASCENDING)], {"unique": True}),
+            ([("stripe_payment_intent_id", ASCENDING)], {"unique": True}),
             ([("customer_id", ASCENDING)], {}),
             ([("payment_date", DESCENDING)], {}),
             ([("payment_status", ASCENDING)], {})

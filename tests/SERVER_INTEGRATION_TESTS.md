@@ -140,7 +140,7 @@ All tests use the `TestLogger` utility for human-readable output:
 |------|---------|
 | `test_1_valid_success_request` | Valid success request |
 | `test_2_valid_failure_request` | Valid failure request |
-| `test_3a_missing_square_transaction_id` | Require transaction ID |
+| `test_3a_missing_stripe_checkout_session_id` | Require transaction ID |
 | `test_3b_missing_status_field` | Require status field |
 | `test_4_transaction_creation_on_success` | Create transaction on success |
 | `test_5_no_transaction_on_failure` | No transaction on failure |

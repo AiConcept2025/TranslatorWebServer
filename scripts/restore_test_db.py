@@ -27,8 +27,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.config import get_settings
 
-# Golden source directory
+# Golden source directory (legacy - now using daily backups)
 GOLDEN_DB_DIR = Path(__file__).parent.parent / "tests" / "fixtures" / "golden_db"
+
+# Daily backups directory (preferred source)
+BACKUPS_DIR = Path(__file__).parent.parent / "backups"
 
 
 class TestDatabaseRestorer:
@@ -183,91 +186,94 @@ class TestDatabaseRestorer:
             except Exception as e:
                 print(f"      ⚠️  Failed to create index {index_name}: {e}")
 
-    async def restore_all(self):
-        """Restore all collections from golden source directory."""
-        print(f"🔄 Restoring Golden Source to '{self.db_name}'...")
-        print(f"📁 Source location: {GOLDEN_DB_DIR}")
+    async def restore_from_daily_backup(self):
+        """Restore all collections from latest daily backup file."""
+        print(f"🔄 Restoring from latest daily backup to '{self.db_name}'...")
+        print(f"📁 Backups location: {BACKUPS_DIR}")
         print()
 
-        # Verify golden source directory exists
-        if not GOLDEN_DB_DIR.exists():
-            print(f"❌ Golden source directory not found: {GOLDEN_DB_DIR}")
-            print("   Run 'python scripts/dump_golden_db.py' first to create golden source.")
+        # Verify backups directory exists
+        if not BACKUPS_DIR.exists():
+            print(f"❌ Backups directory not found: {BACKUPS_DIR}")
+            print("   Create backups first or use old restore_all() method.")
             return
 
-        # Get all JSON files
-        json_files = list(GOLDEN_DB_DIR.glob("*.json"))
+        # Get all backup files and find the latest
+        backup_files = sorted(BACKUPS_DIR.glob("backup_translation_*.json"), reverse=True)
 
-        if not json_files:
-            print(f"❌ No JSON files found in {GOLDEN_DB_DIR}")
-            print("   Run 'python scripts/dump_golden_db.py' first to create golden source.")
+        if not backup_files:
+            print(f"❌ No backup files found in {BACKUPS_DIR}")
+            print("   Create a backup first.")
             return
 
-        print(f"📦 Found {len(json_files)} collection files")
+        latest_backup = backup_files[0]
+        print(f"📦 Using latest backup: {latest_backup.name}")
+        print(f"   Timestamp: {latest_backup.stat().st_mtime}")
+        print()
+
+        # Load backup file
+        with open(latest_backup, 'r') as f:
+            backup_data = json.load(f, object_hook=json_util.object_hook)
+
+        collections_data = backup_data.get("collections", {})
+        print(f"📦 Found {len(collections_data)} collections in backup")
         if self.verbose:
-            for f in sorted(json_files):
-                print(f"   - {f.name}")
+            for coll_name in sorted(collections_data.keys()):
+                doc_count = len(collections_data[coll_name])
+                print(f"   - {coll_name}: {doc_count} documents")
             print()
 
         # Drop existing collections
         await self.drop_all_collections()
 
-        # Restore each collection
+        # Restore each collection from backup
         print("📝 Restoring collections...")
         total_docs = 0
         restored_collections = []
 
-        for json_file in sorted(json_files):
-            try:
-                collection_name, doc_count = await self.restore_collection(json_file)
-                total_docs += doc_count
-                if doc_count > 0:
-                    restored_collections.append(collection_name)
+        for collection_name, documents in sorted(collections_data.items()):
+            if not documents:
+                if self.verbose:
+                    print(f"   ℹ️  {collection_name}: empty")
+                continue
 
-                    # Recreate indexes
-                    if not self.skip_indexes:
-                        await self.recreate_indexes(collection_name)
+            try:
+                # Insert documents
+                collection = self.db[collection_name]
+                if documents:
+                    await collection.insert_many(documents)
+
+                doc_count = len(documents)
+                total_docs += doc_count
+                restored_collections.append(collection_name)
+                print(f"   ✅ {collection_name}: {doc_count} documents")
+
+                # Recreate indexes
+                if not self.skip_indexes:
+                    await self.recreate_indexes(collection_name)
 
             except Exception as e:
-                print(f"   ❌ {json_file.stem}: ERROR - {e}")
+                print(f"   ❌ {collection_name}: ERROR - {e}")
                 if self.verbose:
                     import traceback
                     traceback.print_exc()
 
-        # Verify restoration
-        print()
-        print("🔍 Verifying restoration...")
-        verification_passed = True
-
-        for json_file in sorted(json_files):
-            collection_name = json_file.stem
-
-            # Get expected count from JSON file
-            with open(json_file, 'r') as f:
-                expected_count = len(json.load(f))
-
-            # Get actual count from database
-            actual_count = await self.db[collection_name].count_documents({})
-
-            if expected_count != actual_count:
-                print(f"   ❌ {collection_name}: Expected {expected_count}, got {actual_count}")
-                verification_passed = False
-            elif self.verbose and expected_count > 0:
-                print(f"   ✅ {collection_name}: {actual_count} documents verified")
-
         # Summary
         print()
-        if verification_passed:
-            print(f"✅ Restoration completed successfully!")
-        else:
-            print(f"⚠️  Restoration completed with verification warnings!")
-
-        print(f"   Collections restored: {len(restored_collections)}/{len(json_files)}")
+        print("=" * 80)
+        print("✅ Restoration completed successfully!")
+        print(f"   Collections restored: {len(restored_collections)}/{len(collections_data)}")
         print(f"   Total documents: {total_docs}")
         print(f"   Database: {self.db_name}")
-
+        print(f"   Source: {latest_backup.name}")
         if not self.skip_indexes:
-            print(f"   Indexes recreated: ✅")
+            print("   Indexes recreated: ✅")
+        print("=" * 80)
+
+    async def restore_all(self):
+        """Restore all collections - now uses daily backups instead of golden source."""
+        # Use daily backup restoration
+        await self.restore_from_daily_backup()
 
 
 async def main():

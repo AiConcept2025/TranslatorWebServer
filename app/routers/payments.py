@@ -81,7 +81,7 @@ def payment_doc_to_response(payment_doc: dict) -> dict:
         "_id": str(payment_doc["_id"]),
         "company_name": company_name,
         "user_email": payment_doc["user_email"],
-        "square_payment_id": payment_doc["square_payment_id"],
+        "stripe_payment_intent_id": payment_doc["stripe_payment_intent_id"],
         "amount": payment_doc["amount"],
         "currency": payment_doc["currency"],
         "payment_status": payment_doc["payment_status"],
@@ -113,7 +113,7 @@ def payment_doc_to_response(payment_doc: dict) -> dict:
                                             "_id": "68fad3c2a0f41c24037c4810",
                                             "company_name": "Acme Health LLC",
                                             "user_email": "test5@yahoo.com",
-                                            "square_payment_id": "payment_sq_1761244600756",
+                                            "stripe_payment_intent_id": "payment_sq_1761244600756",
                                             "amount": 1299,
                                             "currency": "USD",
                                             "payment_status": "COMPLETED",
@@ -126,7 +126,7 @@ def payment_doc_to_response(payment_doc: dict) -> dict:
                                             "_id": "68fad3c2a0f41c24037c4811",
                                             "company_name": "TechCorp Inc",
                                             "user_email": "admin@techcorp.com",
-                                            "square_payment_id": "payment_sq_1761268674",
+                                            "stripe_payment_intent_id": "payment_sq_1761268674",
                                             "amount": 2499,
                                             "currency": "USD",
                                             "payment_status": "COMPLETED",
@@ -158,7 +158,7 @@ def payment_doc_to_response(payment_doc: dict) -> dict:
                                             "_id": "68fad3c2a0f41c24037c4810",
                                             "company_name": "Acme Health LLC",
                                             "user_email": "test5@yahoo.com",
-                                            "square_payment_id": "payment_sq_1761244600756",
+                                            "stripe_payment_intent_id": "payment_sq_1761244600756",
                                             "amount": 1299,
                                             "currency": "USD",
                                             "payment_status": "COMPLETED",
@@ -316,9 +316,9 @@ async def get_all_payments(
     ## Payment Record Fields
     Each payment record includes:
     - **_id**: MongoDB ObjectId (24-character hex string)
-    - **square_payment_id**: Square payment identifier
-    - **square_order_id**: Square order identifier (if available)
-    - **square_customer_id**: Square customer identifier (if available)
+    - **stripe_payment_intent_id**: Square payment identifier
+    - **stripe_invoice_id**: Square order identifier (if available)
+    - **stripe_customer_id**: Square customer identifier (if available)
     - **company_name**: Full company name
     - **subscription_id**: Subscription identifier (if available)
     - **user_id**: User identifier
@@ -471,7 +471,7 @@ async def create_payment(payment_data: PaymentCreate):
     **Required Fields:**
     - `company_name`: Company name
     - `user_email`: User email address
-    - `square_payment_id`: Square payment ID
+    - `stripe_payment_intent_id`: Square payment ID
     - `amount`: Payment amount in cents
 
     **Optional Fields (with defaults):**
@@ -484,7 +484,7 @@ async def create_payment(payment_data: PaymentCreate):
     {
         "company_name": "Acme Health LLC",
         "user_email": "test5@yahoo.com",
-        "square_payment_id": "payment_sq_1761244600756",
+        "stripe_payment_intent_id": "payment_sq_1761244600756",
         "amount": 1299,
         "currency": "USD",
         "payment_status": "COMPLETED"
@@ -497,7 +497,7 @@ async def create_payment(payment_data: PaymentCreate):
         "_id": "68fad3c2a0f41c24037c4810",
         "company_name": "Acme Health LLC",
         "user_email": "test5@yahoo.com",
-        "square_payment_id": "payment_sq_1761244600756",
+        "stripe_payment_intent_id": "payment_sq_1761244600756",
         "amount": 1299,
         "currency": "USD",
         "payment_status": "COMPLETED",
@@ -520,7 +520,7 @@ async def create_payment(payment_data: PaymentCreate):
          -d '{
            "company_name": "Acme Health LLC",
            "user_email": "test5@yahoo.com",
-           "square_payment_id": "payment_sq_1761244600756",
+           "stripe_payment_intent_id": "payment_sq_1761244600756",
            "amount": 1299
          }'
     ```
@@ -531,12 +531,12 @@ async def create_payment(payment_data: PaymentCreate):
         logger.info(f"📥 Request Data:")
         logger.info(f"   - company_name: {payment_data.company_name}")
         logger.info(f"   - user_email: {payment_data.user_email}")
-        logger.info(f"   - square_payment_id: {payment_data.square_payment_id}")
+        logger.info(f"   - stripe_payment_intent_id: {payment_data.stripe_payment_intent_id}")
         logger.info(f"   - amount: {payment_data.amount} cents")
         logger.info(f"   - currency: {payment_data.currency}")
         logger.info(f"   - payment_status: {payment_data.payment_status}")
 
-        logger.info(f"Creating payment for {payment_data.user_email}, Square ID: {payment_data.square_payment_id}")
+        logger.info(f"Creating payment for {payment_data.user_email}, Square ID: {payment_data.stripe_payment_intent_id}")
 
         # Create payment
         logger.info(f"🔄 Calling payment_repository.create_payment()...")
@@ -557,7 +557,7 @@ async def create_payment(payment_data: PaymentCreate):
         logger.info(f"✅ Payment created successfully:")
         logger.info(f"   - _id: {payment_id}")
         logger.info(f"   - company_name: {payment_doc.get('company_name')}")
-        logger.info(f"   - square_payment_id: {payment_doc.get('square_payment_id')}")
+        logger.info(f"   - stripe_payment_intent_id: {payment_doc.get('stripe_payment_intent_id')}")
         logger.info(f"   - amount: {payment_doc.get('amount')}")
         logger.info(f"   - status: {payment_doc.get('payment_status')}")
 
@@ -574,7 +574,7 @@ async def create_payment(payment_data: PaymentCreate):
         logger.error(f"   - Error: {str(e)}")
         logger.error(f"   - Error type: {type(e).__name__}")
         logger.error(f"   - User email: {payment_data.user_email}")
-        logger.error(f"   - Square ID: {payment_data.square_payment_id}")
+        logger.error(f"   - Square ID: {payment_data.stripe_payment_intent_id}")
         logger.error(f"Failed to create payment: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -595,9 +595,9 @@ async def create_payment(payment_data: PaymentCreate):
                         "message": "Subscription payment created successfully",
                         "data": {
                             "_id": "690023c7eb2bceb90e274140",
-                            "square_payment_id": "sq_payment_e59858fff0794614",
-                            "square_order_id": "sq_order_e4dce86988a847b1",
-                            "square_customer_id": "sq_customer_c7b478ddc7b04f99",
+                            "stripe_payment_intent_id": "sq_payment_e59858fff0794614",
+                            "stripe_invoice_id": "sq_order_e4dce86988a847b1",
+                            "stripe_customer_id": "sq_customer_c7b478ddc7b04f99",
                             "company_name": "Acme Translation Corp",
                             "subscription_id": "690023c7eb2bceb90e274133",
                             "user_id": "user_9db5a0fbe769442d",
@@ -707,11 +707,11 @@ async def create_subscription_payment(
     All fields from the existing payment structure in the database are supported:
     - **company_name** *(required)*: Company name (must match subscription)
     - **subscription_id** *(required)*: Subscription ObjectId
-    - **square_payment_id** *(required)*: Square payment identifier
+    - **stripe_payment_intent_id** *(required)*: Square payment identifier
     - **user_email** *(required)*: Email of user who made the payment
     - **amount** *(required)*: Payment amount in cents (e.g., 9000 = $90.00)
-    - **square_order_id** *(optional)*: Square order ID
-    - **square_customer_id** *(optional)*: Square customer ID
+    - **stripe_invoice_id** *(optional)*: Square order ID
+    - **stripe_customer_id** *(optional)*: Square customer ID
     - **user_id** *(optional)*: User identifier
     - **currency** *(optional, default: "USD")*: Currency code
     - **payment_status** *(optional, default: "COMPLETED")*: Payment status
@@ -741,9 +741,9 @@ async def create_subscription_payment(
          -d '{
            "company_name": "Acme Translation Corp",
            "subscription_id": "690023c7eb2bceb90e274133",
-           "square_payment_id": "sq_payment_e59858fff0794614",
-           "square_order_id": "sq_order_e4dce86988a847b1",
-           "square_customer_id": "sq_customer_c7b478ddc7b04f99",
+           "stripe_payment_intent_id": "sq_payment_e59858fff0794614",
+           "stripe_invoice_id": "sq_order_e4dce86988a847b1",
+           "stripe_customer_id": "sq_customer_c7b478ddc7b04f99",
            "user_email": "admin@acme.com",
            "user_id": "user_9db5a0fbe769442d",
            "amount": 9000,
@@ -764,7 +764,7 @@ async def create_subscription_payment(
          -d '{
            "company_name": "Acme Translation Corp",
            "subscription_id": "690023c7eb2bceb90e274133",
-           "square_payment_id": "sq_payment_abc123",
+           "stripe_payment_intent_id": "sq_payment_abc123",
            "user_email": "admin@acme.com",
            "amount": 9000
          }'
@@ -820,9 +820,9 @@ async def create_subscription_payment(
         # Create payment document with all fields
         now = datetime.now(timezone.utc)
         payment_doc = {
-            "square_payment_id": payment_data.square_payment_id,
-            "square_order_id": payment_data.square_order_id,
-            "square_customer_id": payment_data.square_customer_id,
+            "stripe_payment_intent_id": payment_data.stripe_payment_intent_id,
+            "stripe_invoice_id": payment_data.stripe_invoice_id,
+            "stripe_customer_id": payment_data.stripe_customer_id,
             "company_name": payment_data.company_name,
             "subscription_id": payment_data.subscription_id,
             "user_id": payment_data.user_id,
@@ -849,7 +849,7 @@ async def create_subscription_payment(
 
         logger.info(
             f"[ADMIN] Subscription payment created successfully - "
-            f"Payment ID: {payment_id}, Square ID: {payment_data.square_payment_id}"
+            f"Payment ID: {payment_id}, Square ID: {payment_data.stripe_payment_intent_id}"
         )
 
         # Retrieve the created payment to return complete document
@@ -941,7 +941,7 @@ async def get_payment_by_id(
         logger.info(f"✅ Payment retrieved:")
         logger.info(f"   - _id: {payment_id}")
         logger.info(f"   - company_name: {payment_doc.get('company_name')}")
-        logger.info(f"   - square_payment_id: {payment_doc.get('square_payment_id')}")
+        logger.info(f"   - stripe_payment_intent_id: {payment_doc.get('stripe_payment_intent_id')}")
         logger.info(f"   - amount: {payment_doc.get('amount')}")
         logger.info(f"   - status: {payment_doc.get('payment_status')}")
 
@@ -964,9 +964,9 @@ async def get_payment_by_id(
         )
 
 
-@router.get("/square/{square_payment_id}")
+@router.get("/square/{stripe_payment_intent_id}")
 async def get_payment_by_square_id(
-    square_payment_id: str = Path(..., description="Square payment ID")
+    stripe_payment_intent_id: str = Path(..., description="Square payment ID")
 ):
     """
     Get payment by Square payment ID.
@@ -974,7 +974,7 @@ async def get_payment_by_square_id(
     Retrieves a payment record using the Square payment identifier.
 
     **Path Parameters:**
-    - `square_payment_id`: Square payment ID (e.g., "sq_payment_abc123")
+    - `stripe_payment_intent_id`: Square payment ID (e.g., "sq_payment_abc123")
 
     **Response:**
     - **200**: Payment found and returned (full payment details)
@@ -988,26 +988,26 @@ async def get_payment_by_square_id(
     """
     try:
         timestamp = datetime.now(timezone.utc).isoformat()
-        logger.info(f"🔍 [{timestamp}] GET /api/v1/payments/square/{square_payment_id} - START")
+        logger.info(f"🔍 [{timestamp}] GET /api/v1/payments/square/{stripe_payment_intent_id} - START")
         logger.info(f"📥 Request Parameters:")
-        logger.info(f"   - square_payment_id: {square_payment_id}")
+        logger.info(f"   - stripe_payment_intent_id: {stripe_payment_intent_id}")
 
         logger.info(f"🔄 Calling payment_repository.get_payment_by_square_id()...")
-        logger.info(f"Fetching payment by Square ID: {square_payment_id}")
-        payment_doc = await payment_repository.get_payment_by_square_id(square_payment_id)
+        logger.info(f"Fetching payment by Square ID: {stripe_payment_intent_id}")
+        payment_doc = await payment_repository.get_payment_by_square_id(stripe_payment_intent_id)
         logger.info(f"🔎 Database Result: found={payment_doc is not None}")
 
         if not payment_doc:
-            logger.warning(f"❌ Payment not found for Square ID: {square_payment_id}")
+            logger.warning(f"❌ Payment not found for Square ID: {stripe_payment_intent_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Payment not found for Square ID: {square_payment_id}"
+                detail=f"Payment not found for Square ID: {stripe_payment_intent_id}"
             )
 
         logger.info(f"✅ Payment retrieved:")
         logger.info(f"   - _id: {payment_doc.get('_id')}")
         logger.info(f"   - company_name: {payment_doc.get('company_name')}")
-        logger.info(f"   - square_payment_id: {square_payment_id}")
+        logger.info(f"   - stripe_payment_intent_id: {stripe_payment_intent_id}")
         logger.info(f"   - amount: {payment_doc.get('amount')}")
         logger.info(f"   - status: {payment_doc.get('payment_status')}")
 
@@ -1024,8 +1024,8 @@ async def get_payment_by_square_id(
         logger.error(f"❌ Failed to retrieve payment by Square ID:", exc_info=True)
         logger.error(f"   - Error: {str(e)}")
         logger.error(f"   - Error type: {type(e).__name__}")
-        logger.error(f"   - Square Payment ID: {square_payment_id}")
-        logger.error(f"Failed to retrieve payment by Square ID {square_payment_id}: {e}", exc_info=True)
+        logger.error(f"   - Square Payment ID: {stripe_payment_intent_id}")
+        logger.error(f"Failed to retrieve payment by Square ID {stripe_payment_intent_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve payment: {str(e)}"
@@ -1053,7 +1053,7 @@ async def get_payment_by_square_id(
                                             "_id": "68fad3c2a0f41c24037c4810",
                                             "company_name": "Acme Health LLC",
                                             "user_email": "test5@yahoo.com",
-                                            "square_payment_id": "payment_sq_1761244600756",
+                                            "stripe_payment_intent_id": "payment_sq_1761244600756",
                                             "amount": 1299,
                                             "currency": "USD",
                                             "payment_status": "COMPLETED",
@@ -1066,7 +1066,7 @@ async def get_payment_by_square_id(
                                             "_id": "68fad3c2a0f41c24037c4811",
                                             "company_name": "Acme Health LLC",
                                             "user_email": "admin@acmehealth.com",
-                                            "square_payment_id": "payment_sq_1761268674",
+                                            "stripe_payment_intent_id": "payment_sq_1761268674",
                                             "amount": 2499,
                                             "currency": "USD",
                                             "payment_status": "COMPLETED",
@@ -1079,7 +1079,7 @@ async def get_payment_by_square_id(
                                             "_id": "68fad3c2a0f41c24037c4812",
                                             "company_name": "Acme Health LLC",
                                             "user_email": "billing@acmehealth.com",
-                                            "square_payment_id": "payment_sq_1761278900",
+                                            "stripe_payment_intent_id": "payment_sq_1761278900",
                                             "amount": 999,
                                             "currency": "USD",
                                             "payment_status": "COMPLETED",
@@ -1127,7 +1127,7 @@ async def get_payment_by_square_id(
                                             "_id": "68fad3c2a0f41c24037c4820",
                                             "company_name": "Acme Health LLC",
                                             "user_email": "refund@example.com",
-                                            "square_payment_id": "payment_sq_1761300000",
+                                            "stripe_payment_intent_id": "payment_sq_1761300000",
                                             "amount": 5000,
                                             "currency": "USD",
                                             "payment_status": "REFUNDED",
@@ -1262,7 +1262,7 @@ async def get_company_payments(
     - **_id**: MongoDB ObjectId (24-character hex string)
     - **company_name**: Full company name
     - **user_email**: Email of user who made the payment
-    - **square_payment_id**: Square payment identifier
+    - **stripe_payment_intent_id**: Square payment identifier
     - **amount**: Payment amount in cents (e.g., 1299 = $12.99)
     - **currency**: Currency code (ISO 4217, e.g., USD)
     - **payment_status**: Current payment status
@@ -1426,7 +1426,7 @@ async def get_payments_by_email(
         logger.info(f"✅ Payments retrieved successfully: count={len(payments)}")
         if payments:
             logger.info(f"📊 Sample Payment: _id={payments[0].get('_id')}, "
-                       f"square_payment_id={payments[0].get('square_payment_id')}, "
+                       f"stripe_payment_intent_id={payments[0].get('stripe_payment_intent_id')}, "
                        f"amount={payments[0].get('amount')}")
 
         logger.info(f"Found {len(payments)} payments for email {email}")
@@ -1457,9 +1457,9 @@ async def get_payments_by_email(
         )
 
 
-@router.patch("/{square_payment_id}")
+@router.patch("/{stripe_payment_intent_id}")
 async def update_payment(
-    square_payment_id: str = Path(..., description="Square payment ID"),
+    stripe_payment_intent_id: str = Path(..., description="Square payment ID"),
     update_data: PaymentUpdate = None
 ):
     """
@@ -1468,7 +1468,7 @@ async def update_payment(
     Updates payment information such as status, refund details, or notes.
 
     **Path Parameters:**
-    - `square_payment_id`: Square payment ID
+    - `stripe_payment_intent_id`: Square payment ID
 
     **Request Body:**
     ```json
@@ -1495,9 +1495,9 @@ async def update_payment(
     """
     try:
         timestamp = datetime.now(timezone.utc).isoformat()
-        logger.info(f"🔍 [{timestamp}] PATCH /api/v1/payments/{square_payment_id} - START")
+        logger.info(f"🔍 [{timestamp}] PATCH /api/v1/payments/{stripe_payment_intent_id} - START")
         logger.info(f"📥 Request Parameters:")
-        logger.info(f"   - square_payment_id: {square_payment_id}")
+        logger.info(f"   - stripe_payment_intent_id: {stripe_payment_intent_id}")
 
         if update_data:
             update_dict = update_data.model_dump(exclude_unset=True)
@@ -1505,27 +1505,27 @@ async def update_payment(
             for key, value in update_dict.items():
                 logger.info(f"   - {key}: {value}")
 
-        logger.info(f"Updating payment {square_payment_id}")
+        logger.info(f"Updating payment {stripe_payment_intent_id}")
 
         # Check if payment exists
         logger.info(f"🔄 Checking if payment exists...")
-        existing_payment = await payment_repository.get_payment_by_square_id(square_payment_id)
+        existing_payment = await payment_repository.get_payment_by_square_id(stripe_payment_intent_id)
         logger.info(f"🔎 Existing Payment: found={existing_payment is not None}")
 
         if not existing_payment:
-            logger.warning(f"❌ Payment not found: {square_payment_id}")
+            logger.warning(f"❌ Payment not found: {stripe_payment_intent_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Payment not found: {square_payment_id}"
+                detail=f"Payment not found: {stripe_payment_intent_id}"
             )
 
         # Update payment
         logger.info(f"🔄 Calling payment_repository.update_payment()...")
-        updated = await payment_repository.update_payment(square_payment_id, update_data)
+        updated = await payment_repository.update_payment(stripe_payment_intent_id, update_data)
         logger.info(f"🔎 Update Result: success={updated}")
 
         if not updated:
-            logger.error(f"❌ Payment update failed for: {square_payment_id}")
+            logger.error(f"❌ Payment update failed for: {stripe_payment_intent_id}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Payment update failed"
@@ -1533,12 +1533,12 @@ async def update_payment(
 
         # Retrieve updated payment
         logger.info(f"🔄 Retrieving updated payment...")
-        payment_doc = await payment_repository.get_payment_by_square_id(square_payment_id)
+        payment_doc = await payment_repository.get_payment_by_square_id(stripe_payment_intent_id)
 
         logger.info(f"✅ Payment updated successfully:")
-        logger.info(f"   - square_payment_id: {square_payment_id}")
+        logger.info(f"   - stripe_payment_intent_id: {stripe_payment_intent_id}")
         logger.info(f"   - status: {payment_doc.get('payment_status')}")
-        logger.info(f"Payment {square_payment_id} updated successfully")
+        logger.info(f"Payment {stripe_payment_intent_id} updated successfully")
 
         # Convert ObjectIds to strings
         payment_doc["_id"] = str(payment_doc["_id"])
@@ -1558,17 +1558,17 @@ async def update_payment(
         logger.error(f"❌ Failed to update payment:", exc_info=True)
         logger.error(f"   - Error: {str(e)}")
         logger.error(f"   - Error type: {type(e).__name__}")
-        logger.error(f"   - Square Payment ID: {square_payment_id}")
-        logger.error(f"Failed to update payment {square_payment_id}: {e}", exc_info=True)
+        logger.error(f"   - Square Payment ID: {stripe_payment_intent_id}")
+        logger.error(f"Failed to update payment {stripe_payment_intent_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update payment: {str(e)}"
         )
 
 
-@router.post("/{square_payment_id}/refund")
+@router.post("/{stripe_payment_intent_id}/refund")
 async def process_refund(
-    square_payment_id: str = Path(..., description="Square payment ID"),
+    stripe_payment_intent_id: str = Path(..., description="Square payment ID"),
     refund_request: RefundRequest = None
 ):
     """
@@ -1577,7 +1577,7 @@ async def process_refund(
     Marks a payment as refunded and records refund details in the refunds array.
 
     **Path Parameters:**
-    - `square_payment_id`: Square payment ID (e.g., "payment_sq_1761268674_852e5fe3")
+    - `stripe_payment_intent_id`: Square payment ID (e.g., "payment_sq_1761268674_852e5fe3")
 
     **Request Body:**
     ```json
@@ -1599,7 +1599,7 @@ async def process_refund(
                 "_id": "68fad3c2a0f41c24037c4810",
                 "company_name": "Acme Health LLC",
                 "user_email": "test5@yahoo.com",
-                "square_payment_id": "payment_sq_1761268674_852e5fe3",
+                "stripe_payment_intent_id": "payment_sq_1761268674_852e5fe3",
                 "amount": 1299,
                 "currency": "USD",
                 "payment_status": "REFUNDED",
@@ -1646,16 +1646,16 @@ async def process_refund(
     """
     try:
         timestamp = datetime.now(timezone.utc).isoformat()
-        logger.info(f"🔍 [{timestamp}] POST /api/v1/payments/{square_payment_id}/refund - START")
+        logger.info(f"🔍 [{timestamp}] POST /api/v1/payments/{stripe_payment_intent_id}/refund - START")
         logger.info(f"📥 Request Parameters:")
-        logger.info(f"   - square_payment_id: {square_payment_id}")
+        logger.info(f"   - stripe_payment_intent_id: {stripe_payment_intent_id}")
         logger.info(f"📨 Refund Data:")
         logger.info(f"   - refund_id: {refund_request.refund_id}")
         logger.info(f"   - amount: {refund_request.amount} cents")
         logger.info(f"   - currency: {refund_request.currency}")
         logger.info(f"   - idempotency_key: {refund_request.idempotency_key}")
 
-        logger.info(f"Processing refund for payment {square_payment_id}, amount: {refund_request.amount} cents")
+        logger.info(f"Processing refund for payment {stripe_payment_intent_id}, amount: {refund_request.amount} cents")
 
         # Validate refund amount
         logger.info(f"🔍 Validating refund amount...")
@@ -1669,14 +1669,14 @@ async def process_refund(
 
         # Check if payment exists
         logger.info(f"🔄 Checking if payment exists...")
-        existing_payment = await payment_repository.get_payment_by_square_id(square_payment_id)
+        existing_payment = await payment_repository.get_payment_by_square_id(stripe_payment_intent_id)
         logger.info(f"🔎 Existing Payment: found={existing_payment is not None}")
 
         if not existing_payment:
-            logger.warning(f"❌ Payment not found: {square_payment_id}")
+            logger.warning(f"❌ Payment not found: {stripe_payment_intent_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Payment not found: {square_payment_id}"
+                detail=f"Payment not found: {stripe_payment_intent_id}"
             )
 
         # Check if refund amount exceeds payment amount
@@ -1696,7 +1696,7 @@ async def process_refund(
         # Process refund
         logger.info(f"🔄 Calling payment_repository.process_refund()...")
         refunded = await payment_repository.process_refund(
-            square_payment_id=square_payment_id,
+            stripe_payment_intent_id=stripe_payment_intent_id,
             refund_id=refund_request.refund_id,
             refund_amount=refund_request.amount,
             refund_reason=None
@@ -1704,7 +1704,7 @@ async def process_refund(
         logger.info(f"🔎 Refund processing result: success={refunded}")
 
         if not refunded:
-            logger.error(f"❌ Refund processing failed for: {square_payment_id}")
+            logger.error(f"❌ Refund processing failed for: {stripe_payment_intent_id}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Refund processing failed"
@@ -1712,14 +1712,14 @@ async def process_refund(
 
         # Retrieve updated payment
         logger.info(f"🔄 Retrieving updated payment...")
-        payment_doc = await payment_repository.get_payment_by_square_id(square_payment_id)
+        payment_doc = await payment_repository.get_payment_by_square_id(stripe_payment_intent_id)
 
         logger.info(f"✅ Refund processed successfully:")
-        logger.info(f"   - square_payment_id: {square_payment_id}")
+        logger.info(f"   - stripe_payment_intent_id: {stripe_payment_intent_id}")
         logger.info(f"   - refund_id: {refund_request.refund_id}")
         logger.info(f"   - amount: {refund_request.amount} cents")
         logger.info(f"   - payment_status: {payment_doc.get('payment_status')}")
-        logger.info(f"Refund processed successfully for payment {square_payment_id}")
+        logger.info(f"Refund processed successfully for payment {stripe_payment_intent_id}")
 
         # Convert ObjectIds to strings
         payment_doc["_id"] = str(payment_doc["_id"])
@@ -1746,9 +1746,9 @@ async def process_refund(
         logger.error(f"❌ Failed to process refund:", exc_info=True)
         logger.error(f"   - Error: {str(e)}")
         logger.error(f"   - Error type: {type(e).__name__}")
-        logger.error(f"   - Square Payment ID: {square_payment_id}")
+        logger.error(f"   - Square Payment ID: {stripe_payment_intent_id}")
         logger.error(f"   - Refund ID: {refund_request.refund_id}")
-        logger.error(f"Failed to process refund for payment {square_payment_id}: {e}", exc_info=True)
+        logger.error(f"Failed to process refund for payment {stripe_payment_intent_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process refund: {str(e)}"

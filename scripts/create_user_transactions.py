@@ -37,7 +37,7 @@ async def create_user_transactions():
         "cost_per_unit": 0.12,
         "source_language": "en",
         "target_language": "fr",
-        "square_transaction_id": f"SQR-{datetime.now().strftime('%Y%m%d')}A1B2C3",
+        "stripe_checkout_session_id": f"STRIPE-{datetime.now().strftime('%Y%m%d')}A1B2C3",
         "date": datetime.now() - timedelta(days=5),
         "status": "completed",
         "total_cost": 1.80,  # 15 * 0.12
@@ -55,7 +55,7 @@ async def create_user_transactions():
         "cost_per_unit": 0.15,
         "source_language": "de",
         "target_language": "en",
-        "square_transaction_id": f"SQR-{datetime.now().strftime('%Y%m%d')}D4E5F6",
+        "stripe_checkout_session_id": f"STRIPE-{datetime.now().strftime('%Y%m%d')}D4E5F6",
         "date": datetime.now() - timedelta(days=2),
         "status": "pending",
         "total_cost": 1.20,  # 8 * 0.15
@@ -65,22 +65,22 @@ async def create_user_transactions():
 
     print(f"\nInserting transactions for user: {user_email}")
 
-    # Check if the user already has transactions (to avoid duplicate square_transaction_ids)
+    # Check if the user already has transactions (to avoid duplicate stripe_checkout_session_ids)
     existing_txn_1 = await database.user_transactions.find_one(
-        {"square_transaction_id": transaction_1["square_transaction_id"]}
+        {"stripe_checkout_session_id": transaction_1["stripe_checkout_session_id"]}
     )
     existing_txn_2 = await database.user_transactions.find_one(
-        {"square_transaction_id": transaction_2["square_transaction_id"]}
+        {"stripe_checkout_session_id": transaction_2["stripe_checkout_session_id"]}
     )
 
     # Insert transaction 1
     if existing_txn_1:
-        print(f"\n1. Transaction already exists: {transaction_1['square_transaction_id']}")
+        print(f"\n1. Transaction already exists: {transaction_1['stripe_checkout_session_id']}")
     else:
         print("\n1. Inserting completed transaction (5 days ago)...")
         result_1 = await database.user_transactions.insert_one(transaction_1)
         print(f"   ✓ Inserted transaction: {result_1.inserted_id}")
-        print(f"   - Square ID: {transaction_1['square_transaction_id']}")
+        print(f"   - Stripe ID: {transaction_1['stripe_checkout_session_id']}")
         print(f"   - Status: {transaction_1['status']}")
         print(f"   - Amount: ${transaction_1['total_cost']}")
         print(f"   - Units: {transaction_1['number_of_units']} {transaction_1['unit_type']}")
@@ -88,12 +88,12 @@ async def create_user_transactions():
 
     # Insert transaction 2
     if existing_txn_2:
-        print(f"\n2. Transaction already exists: {transaction_2['square_transaction_id']}")
+        print(f"\n2. Transaction already exists: {transaction_2['stripe_checkout_session_id']}")
     else:
         print("\n2. Inserting pending transaction (2 days ago)...")
         result_2 = await database.user_transactions.insert_one(transaction_2)
         print(f"   ✓ Inserted transaction: {result_2.inserted_id}")
-        print(f"   - Square ID: {transaction_2['square_transaction_id']}")
+        print(f"   - Stripe ID: {transaction_2['stripe_checkout_session_id']}")
         print(f"   - Status: {transaction_2['status']}")
         print(f"   - Amount: ${transaction_2['total_cost']}")
         print(f"   - Units: {transaction_2['number_of_units']} {transaction_2['unit_type']}")
@@ -109,7 +109,7 @@ async def create_user_transactions():
     print("\nTransaction Summary (sorted by date, newest first):")
     print("-" * 80)
     for txn in all_transactions:
-        print(f"  • {txn['square_transaction_id']} - ${txn['total_cost']:.2f} - Status: {txn['status']}")
+        print(f"  • {txn['stripe_checkout_session_id']} - ${txn['total_cost']:.2f} - Status: {txn['status']}")
         print(f"    Date: {txn['date'].strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"    Units: {txn['number_of_units']} {txn['unit_type']}")
         print(f"    Languages: {txn['source_language']} → {txn['target_language']}")

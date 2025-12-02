@@ -370,10 +370,10 @@ class TestIndividualTranslationModeDatabase:
         now = datetime.now(timezone.utc)
 
         # Create transaction with documents having different modes
-        # NOTE: Must include unique square_transaction_id due to unique index
+        # NOTE: Must include unique stripe_checkout_session_id due to unique index
         transaction_doc = {
             "transaction_id": transaction_id,
-            "square_transaction_id": f"SQ-TEST-MODES-{unique_id}",  # Required unique field
+            "stripe_checkout_session_id": f"SQ-TEST-MODES-{unique_id}",  # Required unique field
             "user_email": "test_all_modes@individual.com",
             "user_name": "Test User",
             "source_language": "en",
@@ -463,7 +463,7 @@ class TestIndividualTranslationModeDatabase:
 
         transaction_doc = {
             "transaction_id": transaction_id,
-            "square_transaction_id": f"SQ-TEST-TYPE-{unique_id}",  # Required unique field
+            "stripe_checkout_session_id": f"SQ-TEST-TYPE-{unique_id}",  # Required unique field
             "user_email": "test_type@individual.com",
             "documents": [{
                 "file_name": "type_test.pdf",
@@ -510,7 +510,7 @@ class TestIndividualTranslationModeDatabase:
 
             await collection.insert_one({
                 "transaction_id": transaction_id,
-                "square_transaction_id": f"SQ-TEST-QUERY-{mode.upper()[:4]}-{unique_id}",  # Required unique field
+                "stripe_checkout_session_id": f"SQ-TEST-QUERY-{mode.upper()[:4]}-{unique_id}",  # Required unique field
                 "user_email": f"test_query_{mode}@individual.com",
                 "documents": [{
                     "file_name": f"query_test_{mode}.pdf",
@@ -569,7 +569,7 @@ class TestIndividualTranslationModeDatabase:
 
             await collection.insert_one({
                 "transaction_id": transaction_id,
-                "square_transaction_id": f"SQ-TEST-AGG-{i}-{unique_id}",  # Required unique field
+                "stripe_checkout_session_id": f"SQ-TEST-AGG-{i}-{unique_id}",  # Required unique field
                 "user_email": f"test_agg_{i}@individual.com",
                 "documents": [{
                     "file_name": f"agg_test_{i}.pdf",

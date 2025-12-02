@@ -119,7 +119,7 @@ async def test_individual_transaction(db):
 
     transaction_doc = {
         "transaction_id": transaction_id,
-        "square_transaction_id": square_txn_id,
+        "stripe_checkout_session_id": square_txn_id,
         "user_email": "individual_integration@example.com",
         "user_name": "Jane Integration Test",
         "status": "processing",

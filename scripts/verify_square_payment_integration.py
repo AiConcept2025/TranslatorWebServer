@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Verify Square Payment Integration
+Verify Stripe Payment Integration
 
-Tests all components of the Square payment integration:
+Tests all components of the Stripe payment integration:
 1. Pydantic models
 2. Helper functions
 3. Router endpoints
@@ -55,10 +55,10 @@ def verify_models():
             cost_per_unit=0.15,
             source_language="en",
             target_language="es",
-            square_transaction_id="SQR-TEST",
-            square_payment_id="SQR-PAY-TEST",
+            stripe_checkout_session_id="STRIPE-TEST",
+            stripe_payment_intent_id="STRIPE-PAY-TEST",
         )
-        print(f"✓ UserTransactionCreate validation works: {txn_create.square_transaction_id}")
+        print(f"✓ UserTransactionCreate validation works: {txn_create.stripe_checkout_session_id}")
 
         return True
 
@@ -99,7 +99,7 @@ def verify_helper_functions():
         params = list(sig.parameters.keys())
 
         required_params = [
-            "square_payment_id",
+            "stripe_payment_intent_id",
             "amount_cents",
             "currency",
             "payment_status",
@@ -212,7 +212,7 @@ def verify_backwards_compatibility():
 
         # Check that new parameters are optional
         new_params = [
-            "square_payment_id",
+            "stripe_payment_intent_id",
             "amount_cents",
             "currency",
             "payment_status",

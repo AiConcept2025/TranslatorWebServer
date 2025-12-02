@@ -28,8 +28,8 @@ async def clear_user_transactions():
     # ⚠️ SAFE: Only delete test records with specific patterns
     result = await collection.delete_many({
         "$or": [
-            {"square_transaction_id": {"$regex": "^TEST-"}},
-            {"square_transaction_id": {"$regex": "^SQR-"}},
+            {"stripe_checkout_session_id": {"$regex": "^TEST-"}},
+            {"stripe_checkout_session_id": {"$regex": "^STRIPE-"}},
             {"user_email": {"$regex": "@example\\.com$"}},
             {"user_email": "danishevsky@yahoo.com"}
         ]
@@ -74,10 +74,10 @@ async def create_test_transaction_1():
         cost_per_unit=0.01,
         source_language="en",
         target_language="fr",
-        square_transaction_id=f"payment_sq_{int(datetime.now().timestamp())}_test1",
+        stripe_checkout_session_id=f"payment_sq_{int(datetime.now().timestamp())}_test1",
         date=datetime.now(timezone.utc),
         status="processing",
-        square_payment_id=f"SQPAY-{uuid.uuid4().hex[:16].upper()}",
+        stripe_payment_intent_id=f"SQPAY-{uuid.uuid4().hex[:16].upper()}",
         amount_cents=4,
         currency="usd",
         payment_status="COMPLETED",
@@ -120,10 +120,10 @@ async def create_test_transaction_2():
         cost_per_unit=0.01,
         source_language="en",
         target_language="es",
-        square_transaction_id=f"payment_sq_{int(datetime.now().timestamp())}_test2",
+        stripe_checkout_session_id=f"payment_sq_{int(datetime.now().timestamp())}_test2",
         date=datetime.now(timezone.utc),
         status="failed",  # ✅ Valid status: processing, completed, failed
-        square_payment_id=f"SQPAY-{uuid.uuid4().hex[:16].upper()}",
+        stripe_payment_intent_id=f"SQPAY-{uuid.uuid4().hex[:16].upper()}",
         amount_cents=2,
         currency="usd",
         payment_status="COMPLETED",
@@ -160,10 +160,10 @@ async def create_test_transaction_3():
         cost_per_unit=0.01,
         source_language="en",
         target_language="de",
-        square_transaction_id=f"payment_sq_{int(datetime.now().timestamp())}_test3",
+        stripe_checkout_session_id=f"payment_sq_{int(datetime.now().timestamp())}_test3",
         date=datetime.now(timezone.utc),
         status="completed",
-        square_payment_id=f"SQPAY-{uuid.uuid4().hex[:16].upper()}",
+        stripe_payment_intent_id=f"SQPAY-{uuid.uuid4().hex[:16].upper()}",
         amount_cents=3,
         currency="usd",
         payment_status="COMPLETED",
@@ -198,7 +198,7 @@ async def verify_test_data():
             print(f"         - translated_url: {doc.get('translated_url')}")  # ✅ VERIFY THIS FIELD
             print(f"         - status: {doc['status']}")
         print(f"    Total Cost: ${txn.get('total_price', txn.get('total_cost', 0)):.2f}")
-        print(f"    Square ID: {txn['square_transaction_id']}")
+        print(f"    Stripe ID: {txn['stripe_checkout_session_id']}")
 
 
 async def main():

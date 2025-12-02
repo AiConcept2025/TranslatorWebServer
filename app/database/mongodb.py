@@ -263,7 +263,8 @@ class MongoDB:
         try:
             user_transactions_indexes = [
                 IndexModel([("transaction_id", ASCENDING)], unique=True, name="transaction_id_unique"),
-                IndexModel([("square_transaction_id", ASCENDING)], unique=True, name="square_transaction_id_unique"),
+                IndexModel([("stripe_checkout_session_id", ASCENDING)], unique=True, sparse=True, name="stripe_checkout_session_id_unique"),
+                IndexModel([("stripe_payment_intent_id", ASCENDING)], sparse=True, name="stripe_payment_intent_id_idx"),
                 IndexModel([("user_email", ASCENDING)], name="user_email_idx"),
                 IndexModel([("date", ASCENDING)], name="date_desc_idx"),
                 IndexModel([("user_email", ASCENDING), ("date", ASCENDING)], name="user_email_date_idx"),
@@ -277,11 +278,13 @@ class MongoDB:
             logger.warning(f"[MongoDB] User transactions index creation failed: {e}")
             failed_count += 1
 
-        # Payments collection indexes (for Square payments) - CRITICAL FOR PAYMENT FUNCTIONALITY
-        # NOTE: square_payment_id is NOT unique to support stub implementation with hardcoded IDs
+        # Payments collection indexes (for Stripe payments) - CRITICAL FOR PAYMENT FUNCTIONALITY
+        # NOTE: Stripe indexes use sparse for optional fields
         try:
             payments_indexes = [
-                IndexModel([("square_payment_id", ASCENDING)], name="square_payment_id_idx"),
+                IndexModel([("stripe_payment_intent_id", ASCENDING)], unique=True, sparse=True, name="stripe_payment_intent_id_unique"),
+                IndexModel([("stripe_invoice_id", ASCENDING)], sparse=True, name="stripe_invoice_id_idx"),
+                IndexModel([("stripe_customer_id", ASCENDING)], sparse=True, name="stripe_customer_id_idx"),
                 IndexModel([("company_name", ASCENDING)], name="company_name_idx"),
                 IndexModel([("subscription_id", ASCENDING)], name="subscription_id_idx"),
                 IndexModel([("user_id", ASCENDING)], name="user_id_idx"),
@@ -290,8 +293,6 @@ class MongoDB:
                 IndexModel([("user_email", ASCENDING)], name="user_email_idx"),
                 IndexModel([("company_name", ASCENDING), ("payment_status", ASCENDING)], name="company_status_idx"),
                 IndexModel([("user_id", ASCENDING), ("payment_date", ASCENDING)], name="user_payment_date_idx"),
-                IndexModel([("square_order_id", ASCENDING)], name="square_order_id_idx"),
-                IndexModel([("square_customer_id", ASCENDING)], name="square_customer_id_idx"),
                 IndexModel([("created_at", ASCENDING)], name="created_at_asc")
             ]
             await self.db.payments.create_indexes(payments_indexes)

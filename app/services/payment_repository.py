@@ -36,7 +36,7 @@ class PaymentRepository:
             >>> payment = PaymentCreate(
             ...     company_name="Acme Health LLC",
             ...     user_email="test5@yahoo.com",
-            ...     square_payment_id="payment_sq_1761244600756",
+            ...     stripe_payment_intent_id="payment_sq_1761244600756",
             ...     amount=1299,
             ...     currency="USD",
             ...     payment_status="COMPLETED"
@@ -46,7 +46,7 @@ class PaymentRepository:
         payment_doc = {
             "company_name": payment_data.company_name,
             "user_email": payment_data.user_email,
-            "square_payment_id": payment_data.square_payment_id,
+            "stripe_payment_intent_id": payment_data.stripe_payment_intent_id,
             "amount": payment_data.amount,
             "currency": payment_data.currency,
             "payment_status": payment_data.payment_status,
@@ -75,17 +75,17 @@ class PaymentRepository:
         except Exception:
             return None
 
-    async def get_payment_by_square_id(self, square_payment_id: str) -> Optional[Dict[str, Any]]:
+    async def get_payment_by_square_id(self, stripe_payment_intent_id: str) -> Optional[Dict[str, Any]]:
         """
         Get a payment by Square payment ID.
 
         Args:
-            square_payment_id: Square payment ID
+            stripe_payment_intent_id: Square payment ID
 
         Returns:
             Payment document or None if not found
         """
-        return await self.collection.find_one({"square_payment_id": square_payment_id})
+        return await self.collection.find_one({"stripe_payment_intent_id": stripe_payment_intent_id})
 
     async def get_payments_by_company(
         self,
@@ -189,14 +189,14 @@ class PaymentRepository:
 
     async def update_payment(
         self,
-        square_payment_id: str,
+        stripe_payment_intent_id: str,
         update_data: PaymentUpdate
     ) -> bool:
         """
         Update payment status.
 
         Args:
-            square_payment_id: Square payment ID
+            stripe_payment_intent_id: Square payment ID
             update_data: Payment update data
 
         Returns:
@@ -208,14 +208,14 @@ class PaymentRepository:
             update_doc["$set"]["payment_status"] = update_data.payment_status
 
         result = await self.collection.update_one(
-            {"square_payment_id": square_payment_id},
+            {"stripe_payment_intent_id": stripe_payment_intent_id},
             update_doc
         )
         return result.modified_count > 0
 
     async def process_refund(
         self,
-        square_payment_id: str,
+        stripe_payment_intent_id: str,
         refund_id: str,
         refund_amount: int,
         idempotency_key: str,
@@ -225,7 +225,7 @@ class PaymentRepository:
         Add a refund to payment's refunds array.
 
         Args:
-            square_payment_id: Square payment ID
+            stripe_payment_intent_id: Square payment ID
             refund_id: Square refund ID
             refund_amount: Refund amount in cents
             idempotency_key: Unique idempotency key for Square API
@@ -244,7 +244,7 @@ class PaymentRepository:
         }
 
         result = await self.collection.update_one(
-            {"square_payment_id": square_payment_id},
+            {"stripe_payment_intent_id": stripe_payment_intent_id},
             {
                 "$push": {"refunds": refund_obj},
                 "$set": {"updated_at": datetime.now(timezone.utc)}

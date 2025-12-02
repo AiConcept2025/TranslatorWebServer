@@ -448,17 +448,17 @@ async def test_individual_confirm_success(
     Individual confirm success flow with payment.
 
     Setup: Create Individual user (no company), upload files, create transaction
-    Call: POST /api/transactions/confirm-individual with transaction_id, square_transaction_id, file_ids
+    Call: POST /api/transactions/confirm-individual with transaction_id, stripe_checkout_session_id, file_ids
     Assert:
     - HTTP 200
     - Transaction status updated to 'completed'
-    - square_transaction_id stored in transaction
+    - stripe_checkout_session_id stored in transaction
     """
     transaction_id = f"TXN-TEST-IND-{uuid.uuid4().hex[:8].upper()}"
     user_email = "danishevsky@yahoo.com"  # Individual user from Golden Source
     square_txn_id = f"sqt_test_{uuid.uuid4().hex[:12]}"
 
-    # Generate unique placeholder square_transaction_id to avoid unique index collision
+    # Generate unique placeholder stripe_checkout_session_id to avoid unique index collision
     placeholder_square_id = f"pending_{uuid.uuid4().hex[:16]}"
 
     transaction_doc = {
@@ -470,7 +470,7 @@ async def test_individual_confirm_success(
         "price_per_unit": 0.10,
         "total_price": 0.50,
         "status": "started",
-        "square_transaction_id": placeholder_square_id,  # Placeholder for unique index
+        "stripe_checkout_session_id": placeholder_square_id,  # Placeholder for unique index
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
         "documents": [
@@ -488,7 +488,7 @@ async def test_individual_confirm_success(
         "/api/transactions/confirm-individual",
         json={
             "transaction_id": transaction_id,
-            "square_transaction_id": square_txn_id,
+            "stripe_checkout_session_id": square_txn_id,
             "file_ids": ["file-ind-001"],
             "status": True
         },
@@ -503,12 +503,12 @@ async def test_individual_confirm_success(
     assert data["success"] is True
     assert "confirmed" in data["message"].lower() or "completed" in data["message"].lower()
     assert data["data"]["transaction_id"] == transaction_id
-    assert data["data"]["square_transaction_id"] == square_txn_id
+    assert data["data"]["stripe_checkout_session_id"] == square_txn_id
 
     # Verify transaction updated
     txn = await db.user_transactions.find_one({"transaction_id": transaction_id})
     assert txn["status"] == "completed"
-    assert txn["square_transaction_id"] == square_txn_id
+    assert txn["stripe_checkout_session_id"] == square_txn_id
 
     print(f"  Database verified: status={txn['status']}, square_txn_id stored")
     print("  PASSED")
@@ -532,14 +532,14 @@ async def test_individual_confirm_cancel(
     """
     transaction_id = f"TXN-TEST-IND-{uuid.uuid4().hex[:8].upper()}"
     user_email = "danishevsky@yahoo.com"
-    # Unique placeholder for square_transaction_id index
+    # Unique placeholder for stripe_checkout_session_id index
     placeholder_square_id = f"pending_{uuid.uuid4().hex[:16]}"
 
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_email": user_email,
         "status": "started",
-        "square_transaction_id": placeholder_square_id,  # Placeholder for unique index
+        "stripe_checkout_session_id": placeholder_square_id,  # Placeholder for unique index
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
@@ -585,14 +585,14 @@ async def test_individual_missing_file_ids_422(
     """
     transaction_id = f"TXN-TEST-IND-{uuid.uuid4().hex[:8].upper()}"
     user_email = "danishevsky@yahoo.com"
-    # Unique placeholder for square_transaction_id index
+    # Unique placeholder for stripe_checkout_session_id index
     placeholder_square_id = f"pending_{uuid.uuid4().hex[:16]}"
 
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_email": user_email,
         "status": "started",
-        "square_transaction_id": placeholder_square_id,  # Placeholder for unique index
+        "stripe_checkout_session_id": placeholder_square_id,  # Placeholder for unique index
         "created_at": datetime.now(timezone.utc)
     }
 
@@ -628,14 +628,14 @@ async def test_individual_empty_file_ids_400(
     """
     transaction_id = f"TXN-TEST-IND-{uuid.uuid4().hex[:8].upper()}"
     user_email = "danishevsky@yahoo.com"
-    # Unique placeholder for square_transaction_id index
+    # Unique placeholder for stripe_checkout_session_id index
     placeholder_square_id = f"pending_{uuid.uuid4().hex[:16]}"
 
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_email": user_email,
         "status": "started",
-        "square_transaction_id": placeholder_square_id,  # Placeholder for unique index
+        "stripe_checkout_session_id": placeholder_square_id,  # Placeholder for unique index
         "created_at": datetime.now(timezone.utc)
     }
 
@@ -788,14 +788,14 @@ async def test_individual_confirm_stores_payment_info(
     transaction_id = f"TXN-TEST-IND-{uuid.uuid4().hex[:8].upper()}"
     user_email = "danishevsky@yahoo.com"
     square_txn_id = f"sqt_payment_{uuid.uuid4().hex[:12]}"
-    # Unique placeholder for square_transaction_id index
+    # Unique placeholder for stripe_checkout_session_id index
     placeholder_square_id = f"pending_{uuid.uuid4().hex[:16]}"
 
     transaction_doc = {
         "transaction_id": transaction_id,
         "user_email": user_email,
         "status": "started",
-        "square_transaction_id": placeholder_square_id,  # Placeholder for unique index
+        "stripe_checkout_session_id": placeholder_square_id,  # Placeholder for unique index
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
@@ -807,7 +807,7 @@ async def test_individual_confirm_stores_payment_info(
         "/api/transactions/confirm-individual",
         json={
             "transaction_id": transaction_id,
-            "square_transaction_id": square_txn_id,
+            "stripe_checkout_session_id": square_txn_id,
             "file_ids": ["file-001"],
             "status": True
         },
@@ -819,7 +819,7 @@ async def test_individual_confirm_stores_payment_info(
 
     # Verify payment info stored
     txn = await db.user_transactions.find_one({"transaction_id": transaction_id})
-    assert txn["square_transaction_id"] == square_txn_id
+    assert txn["stripe_checkout_session_id"] == square_txn_id
     assert txn["status"] == "completed"
 
     print(f"  Payment info stored: {square_txn_id}")

@@ -60,7 +60,7 @@ async def cleanup_test_transactions(db):
     # Clean up test user transactions (only those with TEST- prefix)
     try:
         result = await db.user_transactions.delete_many({
-            "square_transaction_id": {"$regex": "^TEST-SQR-"}
+            "stripe_checkout_session_id": {"$regex": "^TEST-SQR-"}
         })
         if result.deleted_count > 0:
             print(f"\n  Cleaned up {result.deleted_count} test transaction(s)")
@@ -103,10 +103,10 @@ class TestTransactionIdGenerationViaAPI:
             "cost_per_unit": 0.15,
             "source_language": "en",
             "target_language": "es",
-            "square_transaction_id": test_square_id,
+            "stripe_checkout_session_id": test_square_id,
             "date": datetime.now(timezone.utc).isoformat(),
             "status": "processing",
-            "square_payment_id": test_square_id,
+            "stripe_payment_intent_id": test_square_id,
             "amount_cents": 150,
             "currency": "USD",
             "payment_status": "COMPLETED"
@@ -138,7 +138,7 @@ class TestTransactionIdGenerationViaAPI:
             transaction = await db.user_transactions.find_one({"transaction_id": transaction_id})
             if transaction:
                 assert transaction["transaction_id"] == transaction_id
-                assert transaction["square_transaction_id"] == test_square_id
+                assert transaction["stripe_checkout_session_id"] == test_square_id
                 print(f"  Database verified: transaction_id={transaction_id}")
             else:
                 print(f"  Note: Transaction not found in test_db (server may use different DB)")
@@ -174,17 +174,17 @@ class TestTransactionIdGenerationViaAPI:
             "target_language": "es",
             "date": datetime.now(timezone.utc).isoformat(),
             "status": "processing",
-            "square_payment_id": "dummy-payment-id"
+            "stripe_payment_intent_id": "dummy-payment-id"
         }
 
         # Create first transaction
-        data1 = {**base_data, "square_transaction_id": test_square_id_1}
+        data1 = {**base_data, "stripe_checkout_session_id": test_square_id_1}
         print(f"\n  Creating first transaction: {test_square_id_1}")
         response1 = await http_client.post("/api/v1/user-transactions/process", json=data1)
         print(f"  Response 1: {response1.status_code}")
 
         # Create second transaction
-        data2 = {**base_data, "square_transaction_id": test_square_id_2}
+        data2 = {**base_data, "stripe_checkout_session_id": test_square_id_2}
         print(f"  Creating second transaction: {test_square_id_2}")
         response2 = await http_client.post("/api/v1/user-transactions/process", json=data2)
         print(f"  Response 2: {response2.status_code}")
@@ -234,18 +234,18 @@ class TestTransactionIdIndexes:
         print("  PASSED")
 
     @pytest.mark.asyncio
-    async def test_square_transaction_id_index_exists(self, db):
-        """Test that square_transaction_id index exists for backward compatibility."""
+    async def test_stripe_checkout_session_id_index_exists(self, db):
+        """Test that stripe_checkout_session_id index exists for backward compatibility."""
         collection = db.user_transactions
         indexes = await collection.index_information()
 
-        # Check if square_transaction_id_unique index exists
-        if "square_transaction_id_unique" in indexes:
-            index_info = indexes["square_transaction_id_unique"]
-            assert index_info["unique"] is True, "square_transaction_id index should be unique"
-            print("  square_transaction_id_unique index verified")
+        # Check if stripe_checkout_session_id_unique index exists
+        if "stripe_checkout_session_id_unique" in indexes:
+            index_info = indexes["stripe_checkout_session_id_unique"]
+            assert index_info["unique"] is True, "stripe_checkout_session_id index should be unique"
+            print("  stripe_checkout_session_id_unique index verified")
         else:
-            print("  Note: square_transaction_id_unique index not found (may have different name)")
+            print("  Note: stripe_checkout_session_id_unique index not found (may have different name)")
 
         print("  PASSED")
 
@@ -281,8 +281,8 @@ class TestTransactionStructureViaAPI:
             "cost_per_unit": 0.12,
             "source_language": "en",
             "target_language": "de",
-            "square_transaction_id": test_square_id,
-            "square_payment_id": test_square_id,
+            "stripe_checkout_session_id": test_square_id,
+            "stripe_payment_intent_id": test_square_id,
             "date": datetime.now(timezone.utc).isoformat()
         }
 
@@ -351,8 +351,8 @@ class TestTransactionStructureViaAPI:
             "cost_per_unit": 0.15,
             "source_language": "en",
             "target_language": "es",
-            "square_transaction_id": test_square_id,
-            "square_payment_id": test_square_id,
+            "stripe_checkout_session_id": test_square_id,
+            "stripe_payment_intent_id": test_square_id,
             "date": datetime.now(timezone.utc).isoformat()
         }
 
@@ -366,7 +366,7 @@ class TestTransactionStructureViaAPI:
         assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
 
         # Verify in database if possible
-        transaction = await db.user_transactions.find_one({"square_transaction_id": test_square_id})
+        transaction = await db.user_transactions.find_one({"stripe_checkout_session_id": test_square_id})
         if transaction:
             assert len(transaction.get("documents", [])) == 3, "Should have 3 documents"
             print(f"  Database verified: {len(transaction['documents'])} documents")

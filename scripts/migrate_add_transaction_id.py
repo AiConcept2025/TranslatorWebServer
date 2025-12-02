@@ -64,7 +64,7 @@ async def migrate_transaction_ids():
 
             if result.modified_count > 0:
                 updated += 1
-                square_id = record.get("square_transaction_id", "N/A")
+                square_id = record.get("stripe_checkout_session_id", "N/A")
                 print(f"✅ {updated}/{len(records)}: {transaction_id} (Square: {square_id})")
             else:
                 failed += 1

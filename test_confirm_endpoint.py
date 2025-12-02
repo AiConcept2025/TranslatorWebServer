@@ -53,7 +53,7 @@ def main():
     test_endpoint(
         test_name="Valid Payment Success",
         payload={
-            "square_transaction_id": "sqt_test_123456789",
+            "stripe_checkout_session_id": "sqt_test_123456789",
             "status": True
         },
         headers={
@@ -67,7 +67,7 @@ def main():
     test_endpoint(
         test_name="Valid Payment Failure",
         payload={
-            "square_transaction_id": "sqt_test_987654321",
+            "stripe_checkout_session_id": "sqt_test_987654321",
             "status": False
         },
         headers={
@@ -76,10 +76,10 @@ def main():
         }
     )
 
-    # Test 3: Invalid request - Missing square_transaction_id
-    print("\n### Test 3: Invalid Request - Missing square_transaction_id")
+    # Test 3: Invalid request - Missing stripe_checkout_session_id
+    print("\n### Test 3: Invalid Request - Missing stripe_checkout_session_id")
     test_endpoint(
-        test_name="Missing square_transaction_id",
+        test_name="Missing stripe_checkout_session_id",
         payload={
             "status": True
         },
@@ -94,7 +94,7 @@ def main():
     test_endpoint(
         test_name="Missing status",
         payload={
-            "square_transaction_id": "sqt_test_123456789"
+            "stripe_checkout_session_id": "sqt_test_123456789"
         },
         headers={
             "Content-Type": "application/json",
@@ -107,7 +107,7 @@ def main():
     test_endpoint(
         test_name="Wrong type for status",
         payload={
-            "square_transaction_id": "sqt_test_123456789",
+            "stripe_checkout_session_id": "sqt_test_123456789",
             "status": "true"  # String instead of boolean
         },
         headers={
@@ -132,7 +132,7 @@ def main():
     test_endpoint(
         test_name="Missing Authorization",
         payload={
-            "square_transaction_id": "sqt_test_123456789",
+            "stripe_checkout_session_id": "sqt_test_123456789",
             "status": True
         },
         headers={
@@ -144,7 +144,7 @@ def main():
     print("\n### Test 8: Invalid Request - Wrong Content-Type")
     response = requests.post(
         ENDPOINT,
-        data="square_transaction_id=sqt_test&status=true",  # URL-encoded instead of JSON
+        data="stripe_checkout_session_id=sqt_test&status=true",  # URL-encoded instead of JSON
         headers={
             "Content-Type": "application/x-www-form-urlencoded",
             "Authorization": f"Bearer {TEST_TOKEN}"

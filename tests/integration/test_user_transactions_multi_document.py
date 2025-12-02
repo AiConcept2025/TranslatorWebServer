@@ -70,8 +70,8 @@ def valid_transaction_data_single_document(valid_document_data) -> Dict[str, Any
         "cost_per_unit": 0.15,
         "source_language": "en",
         "target_language": "es",
-        "square_transaction_id": f"TEST-MULTI-{uuid.uuid4().hex[:16].upper()}",
-        "square_payment_id": f"TESTPAY-{uuid.uuid4().hex[:16].upper()}",
+        "stripe_checkout_session_id": f"TEST-MULTI-{uuid.uuid4().hex[:16].upper()}",
+        "stripe_payment_intent_id": f"TESTPAY-{uuid.uuid4().hex[:16].upper()}",
         "amount_cents": 150,
         "currency": "USD",
         "payment_status": "COMPLETED",
@@ -117,8 +117,8 @@ def valid_transaction_data_multiple_documents() -> Dict[str, Any]:
         "cost_per_unit": 0.15,
         "source_language": "en",
         "target_language": "es",
-        "square_transaction_id": f"TEST-MULTI-{uuid.uuid4().hex[:16].upper()}",
-        "square_payment_id": f"TESTPAY-{uuid.uuid4().hex[:16].upper()}",
+        "stripe_checkout_session_id": f"TEST-MULTI-{uuid.uuid4().hex[:16].upper()}",
+        "stripe_payment_intent_id": f"TESTPAY-{uuid.uuid4().hex[:16].upper()}",
         "amount_cents": 450,
         "currency": "USD",
         "payment_status": "COMPLETED",
@@ -133,7 +133,7 @@ async def cleanup_multi_doc_test_data(db):
     # Clean up test transactions (only those with TEST-MULTI- prefix)
     try:
         await db.user_transactions.delete_many({
-            "square_transaction_id": {"$regex": "^TEST-MULTI-"}
+            "stripe_checkout_session_id": {"$regex": "^TEST-MULTI-"}
         })
     except Exception as e:
         print(f"Cleanup warning: {e}")
@@ -318,7 +318,7 @@ class TestAPIEndpoints:
     async def test_get_transaction_by_id_returns_documents(
         self, http_client, db, valid_transaction_data_single_document, cleanup_multi_doc_test_data
     ):
-        """GET by square_transaction_id returns documents array."""
+        """GET by stripe_checkout_session_id returns documents array."""
         # First create a transaction
         create_response = await http_client.post(
             "/api/v1/user-transactions/process",
@@ -326,12 +326,12 @@ class TestAPIEndpoints:
         )
         assert create_response.status_code == 201
 
-        # Use square_transaction_id (the endpoint path param is named square_transaction_id)
-        square_transaction_id = valid_transaction_data_single_document["square_transaction_id"]
+        # Use stripe_checkout_session_id (the endpoint path param is named stripe_checkout_session_id)
+        stripe_checkout_session_id = valid_transaction_data_single_document["stripe_checkout_session_id"]
 
-        # Then retrieve it by square_transaction_id
+        # Then retrieve it by stripe_checkout_session_id
         get_response = await http_client.get(
-            f"/api/v1/user-transactions/{square_transaction_id}"
+            f"/api/v1/user-transactions/{stripe_checkout_session_id}"
         )
 
         assert get_response.status_code == 200
@@ -371,8 +371,8 @@ class TestAPIEndpoints:
 
         # Find our test transaction
         test_txn = next(
-            (t for t in transactions if t.get("square_transaction_id") ==
-             valid_transaction_data_single_document["square_transaction_id"]),
+            (t for t in transactions if t.get("stripe_checkout_session_id") ==
+             valid_transaction_data_single_document["stripe_checkout_session_id"]),
             None
         )
 
@@ -394,7 +394,7 @@ class TestDatabaseVerificationViaAPI:
     ):
         """Documents array properly stored and retrieved via API."""
         data = valid_transaction_data_multiple_documents
-        square_txn_id = data["square_transaction_id"]
+        square_txn_id = data["stripe_checkout_session_id"]
 
         # Create transaction via API
         response = await http_client.post(
@@ -410,7 +410,7 @@ class TestDatabaseVerificationViaAPI:
         assert len(response_data["documents"]) == 3
 
         # Verify in database using test_db
-        db_doc = await db.user_transactions.find_one({"square_transaction_id": square_txn_id})
+        db_doc = await db.user_transactions.find_one({"stripe_checkout_session_id": square_txn_id})
 
         assert db_doc is not None
         assert "documents" in db_doc

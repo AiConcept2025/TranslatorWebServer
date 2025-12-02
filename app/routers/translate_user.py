@@ -85,7 +85,7 @@ class TranslateUserRequest(BaseModel):
 # ============================================================================
 
 
-def generate_square_transaction_id() -> str:
+def generate_stripe_checkout_session_id() -> str:
     """
     Generate Square-compatible transaction ID.
 
@@ -387,7 +387,7 @@ async def translate_user_files(
     print(f"Starting file uploads to Google Drive...")
 
     # ✅ FIX: Generate ONE transaction ID for entire batch (not per file)
-    batch_square_tx_id = generate_square_transaction_id()
+    batch_square_tx_id = generate_stripe_checkout_session_id()
     log_step("BATCH TRANSACTION ID", f"Generated batch Square ID: {batch_square_tx_id}")
     print(f"Generated batch Square transaction ID: {batch_square_tx_id}")
 
@@ -507,7 +507,7 @@ async def translate_user_files(
                     "unit_type": unit_type,
                     "size": file_info.size,
                     "google_drive_url": file_result.get("google_drive_url"),
-                    "square_transaction_id": batch_square_tx_id,  # ✅ FIX: Use batch ID
+                    "stripe_checkout_session_id": batch_square_tx_id,  # ✅ FIX: Use batch ID
                 }
             )
             print(
@@ -566,7 +566,7 @@ async def translate_user_files(
                 cost_per_unit=cost_per_unit,
                 source_language=request.sourceLanguage,
                 target_language=request.targetLanguage,
-                square_transaction_id=batch_square_tx_id,  # ✅ FIX: Single Square ID
+                stripe_checkout_session_id=batch_square_tx_id,  # ✅ FIX: Single Square ID
                 date=datetime.now(timezone.utc),
                 status="processing",
             )

@@ -17,7 +17,7 @@ import asyncio
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit
+from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit, dashboard
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities
@@ -119,6 +119,7 @@ app.include_router(translation_transactions.router)  # Translation transaction m
 app.include_router(company_users.router)  # Company user management API
 app.include_router(companies.router)  # Company management API
 app.include_router(orders.router)  # Orders management API
+app.include_router(dashboard.router)  # Dashboard metrics API
 app.include_router(auth.router)
 app.include_router(subscriptions.router)
 app.include_router(translate_user.router)
@@ -982,7 +983,7 @@ class EnterpriseConfirmRequest(BaseModel):
 class IndividualConfirmRequest(BaseModel):
     """Individual confirmation - includes payment info and file_ids from upload"""
     transaction_id: str = Field(..., description="Transaction ID from upload response")
-    square_transaction_id: Optional[str] = Field(None, description="Square payment transaction ID")
+    stripe_checkout_session_id: Optional[str] = Field(None, description="Square payment transaction ID")
     file_ids: List[str] = Field(..., description="File IDs from upload response - NO SEARCH")
     status: bool = Field(default=True, description="True=confirm, False=cancel")
 
@@ -1660,7 +1661,7 @@ async def confirm_individual_transaction(
     - Finds transaction by transaction_id in user_transactions collection
     - Verifies transaction belongs to current user
     - Uses file_ids from request (NO SEARCH)
-    - If status=True: Stores square_transaction_id, moves files Temp → Inbox, updates transaction to 'completed'
+    - If status=True: Stores stripe_checkout_session_id, moves files Temp → Inbox, updates transaction to 'completed'
     - If status=False: Deletes files from Temp, updates transaction to 'cancelled'
     """
     from app.database import database
@@ -1722,14 +1723,14 @@ async def confirm_individual_transaction(
         if request.status:
             logging.info(f"[CONFIRM-INDIVIDUAL] Confirming transaction {request.transaction_id}")
 
-            # Update transaction with square_transaction_id and status
+            # Update transaction with stripe_checkout_session_id and status
             update_data = {
                 "status": "completed",
                 "updated_at": datetime.now(timezone.utc)
             }
-            if request.square_transaction_id:
-                update_data["square_transaction_id"] = request.square_transaction_id
-                logging.info(f"[CONFIRM-INDIVIDUAL] Storing Square transaction ID: {request.square_transaction_id}")
+            if request.stripe_checkout_session_id:
+                update_data["stripe_checkout_session_id"] = request.stripe_checkout_session_id
+                logging.info(f"[CONFIRM-INDIVIDUAL] Storing Square transaction ID: {request.stripe_checkout_session_id}")
 
             await database.user_transactions.update_one(
                 {"transaction_id": request.transaction_id},
@@ -1771,7 +1772,7 @@ async def confirm_individual_transaction(
                         "message": "Individual transaction confirmed successfully",
                         "data": {
                             "transaction_id": request.transaction_id,
-                            "square_transaction_id": request.square_transaction_id,
+                            "stripe_checkout_session_id": request.stripe_checkout_session_id,
                             "moved_files": moved_count,
                             "failed_files": failed_count,
                             "total_files": len(file_ids)

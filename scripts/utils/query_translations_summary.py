@@ -43,7 +43,7 @@ unit_type               string      Yes       No      "page", "word", "character
 cost_per_unit           decimal     Yes       No      Price per unit in dollars
 source_language         string      Yes       No      Source language
 target_language         string      Yes       No      Target language
-square_transaction_id   string      Yes       Yes     Square payment transaction ID
+stripe_checkout_session_id   string      Yes       Yes     Stripe payment transaction ID
 date                    datetime    Yes       No      Transaction date
 status                  string      Yes       No      "completed", "processing", "failed"
 total_cost              decimal     Yes       No      number_of_units × cost_per_unit
@@ -244,7 +244,7 @@ updated_at              datetime    Yes       No      Last update timestamp
         print(f"  Document: {t['document_url'][:70]}...")
         print(f"  Units: {t['number_of_units']} {t['unit_type']}(s) @ ${t['cost_per_unit']}/{t['unit_type']}")
         print(f"  Languages: {t['source_language']} → {t['target_language']}")
-        print(f"  Square ID: {t['square_transaction_id']}")
+        print(f"  Stripe ID: {t['stripe_checkout_session_id']}")
         print(f"  Date: {t['date'].strftime('%Y-%m-%d %H:%M:%S UTC')}")
         print(f"  Status: {t['status']}")
         print(f"  Total Cost: ${t['total_cost']:.2f}")

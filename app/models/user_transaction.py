@@ -117,7 +117,7 @@ class UserTransactionListItem(BaseModel):
         description="Primary unique transaction identifier (USER + 6-digit number)",
         examples=["USER123456", "USER789012"]
     )
-    square_transaction_id: str = Field(
+    stripe_checkout_session_id: str = Field(
         ...,
         description="Square payment transaction identifier (reference only)",
         examples=["SQR-1EC28E70F10B4D9E"]
@@ -176,7 +176,7 @@ class UserTransactionListItem(BaseModel):
                 "source_language": "en",
                 "target_language": "es",
                 "transaction_id": "USER123456",
-                "square_transaction_id": "SQR-1EC28E70F10B4D9E",
+                "stripe_checkout_session_id": "SQR-1EC28E70F10B4D9E",
                 "date": "2025-10-23T23:56:55.438Z",
                 "status": "completed",
                 "total_cost": 1.5,
@@ -272,7 +272,7 @@ class UserTransactionListResponse(BaseModel):
                             "source_language": "en",
                             "target_language": "es",
                             "transaction_id": "USER123456",
-                            "square_transaction_id": "SQR-1EC28E70F10B4D9E",
+                            "stripe_checkout_session_id": "SQR-1EC28E70F10B4D9E",
                             "date": "2025-10-23T23:56:55.438Z",
                             "status": "completed",
                             "total_cost": 1.5,

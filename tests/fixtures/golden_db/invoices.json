@@ -1,0 +1,29 @@
+[
+  {
+    "_id": {
+      "$oid": "68ec42a48ca6a1781d9fe5c5"
+    },
+    "subscription_id": {
+      "$oid": "68ec42a48ca6a1781d9fe5c4"
+    },
+    "invoice_number": "INV-2025-68EC42A4",
+    "invoice_date": {
+      "$date": "2025-10-08T00:07:00.396Z"
+    },
+    "due_date": {
+      "$date": "2025-11-07T00:07:00.396Z"
+    },
+    "total_amount": {
+      "$numberDecimal": "106.00"
+    },
+    "tax_amount": {
+      "$numberDecimal": "6.00"
+    },
+    "status": "sent",
+    "pdf_url": "https://storage.example.com/invoices/inv-123456.pdf",
+    "created_at": {
+      "$date": "2025-10-08T00:07:00.396Z"
+    },
+    "company_name": "Iris Trading"
+  }
+]

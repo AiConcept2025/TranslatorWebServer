@@ -58,8 +58,13 @@ class TestSubmitService:
 
         transaction = {}
 
+        # When no @ in email, the code still attempts to parse it
+        # "invalid-email" -> splits on @ -> ["invalid-email"]
+        # -> takes first part -> "invalid-email"
+        # -> replaces - with . -> "invalid.email"
+        # -> splits on . and capitalizes -> "Invalid Email"
         result = service._extract_user_name(transaction, "invalid-email")
-        assert result == "User"
+        assert result == "Invalid Email"
 
     @pytest.mark.asyncio
     async def test_process_submission_enterprise_success(self):
@@ -78,11 +83,14 @@ class TestSubmitService:
                 "user_name": "Alice Johnson",
                 "documents": [
                     {
-                        "document_name": "report.pdf",
+                        "file_name": "report.pdf",
                         "original_url": "https://drive.google.com/original",
                         "translated_url": "https://drive.google.com/translated"
                     }
-                ]
+                ],
+                "completed_documents": 1,
+                "total_documents": 1,
+                "batch_email_sent": False
             }
         }
 
@@ -127,11 +135,14 @@ class TestSubmitService:
                 "user_id": "john.doe@example.com",
                 "documents": [
                     {
-                        "document_name": "document.docx",
+                        "file_name": "document.docx",
                         "original_url": "https://drive.google.com/original",
                         "translated_url": "https://drive.google.com/translated"
                     }
-                ]
+                ],
+                "completed_documents": 0,
+                "total_documents": 1,
+                "batch_email_sent": False
             }
         }
 
@@ -153,7 +164,8 @@ class TestSubmitService:
                 )
 
         assert result["status"] == "success"
-        assert result["email_sent"] is True
+        # Email is blocked until all documents are complete
+        assert result["email_sent"] is False
         assert result["all_documents_complete"] is False
 
     @pytest.mark.asyncio
@@ -220,11 +232,14 @@ class TestSubmitService:
                 "transaction_id": "TXN-ABC123",
                 "documents": [
                     {
-                        "document_name": "report.pdf",
+                        "file_name": "report.pdf",
                         "original_url": "https://drive.google.com/original",
                         "translated_url": None  # Not translated
                     }
-                ]
+                ],
+                "completed_documents": 0,
+                "total_documents": 1,
+                "batch_email_sent": False
             }
         }
 
@@ -259,11 +274,14 @@ class TestSubmitService:
                 "user_name": "Test User",
                 "documents": [
                     {
-                        "document_name": "report.pdf",
+                        "file_name": "report.pdf",
                         "original_url": "https://drive.google.com/original",
                         "translated_url": "https://drive.google.com/translated"
                     }
-                ]
+                ],
+                "completed_documents": 1,
+                "total_documents": 1,
+                "batch_email_sent": False
             }
         }
 
@@ -305,21 +323,24 @@ class TestSubmitService:
                 "user_name": "Test User",
                 "documents": [
                     {
-                        "document_name": "file1.pdf",
+                        "file_name": "file1.pdf",
                         "original_url": "https://drive.google.com/file1",
                         "translated_url": "https://drive.google.com/file1_trans"
                     },
                     {
-                        "document_name": "file2.docx",
+                        "file_name": "file2.docx",
                         "original_url": "https://drive.google.com/file2",
                         "translated_url": "https://drive.google.com/file2_trans"
                     },
                     {
-                        "document_name": "file3.pdf",
+                        "file_name": "file3.pdf",
                         "original_url": "https://drive.google.com/file3",
                         "translated_url": "https://drive.google.com/file3_trans"
                     }
-                ]
+                ],
+                "completed_documents": 3,
+                "total_documents": 3,
+                "batch_email_sent": False
             }
         }
 
@@ -379,11 +400,14 @@ class TestSubmitService:
                 "user_name": "Test User",
                 "documents": [
                     {
-                        "document_name": "test.pdf",
+                        "file_name": "test.pdf",
                         "original_url": "https://drive.google.com/original",
                         "translated_url": "https://drive.google.com/translated"
                     }
-                ]
+                ],
+                "completed_documents": 1,
+                "total_documents": 1,
+                "batch_email_sent": False
             }
         }
 

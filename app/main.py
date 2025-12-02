@@ -12,13 +12,12 @@ from contextlib import asynccontextmanager
 import logging
 import time
 import asyncio
-import json
 
 # Import configuration
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit, email_test, dashboard
+from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit, dashboard
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities
@@ -39,13 +38,6 @@ from slowapi.errors import RateLimitExceeded
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle application startup and shutdown events."""
-    # Configure logging FIRST (before any logging calls)
-    logging.basicConfig(
-        level=getattr(logging, settings.log_level.upper(), logging.INFO),
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        force=True  # Override any existing configuration
-    )
-
     # Startup
     logging.info(f"Starting {settings.app_name} v{settings.app_version}")
 
@@ -135,13 +127,13 @@ app.include_router(translate_user.router)
 # Include test helper endpoints only in test/dev mode
 if settings.environment.lower() in ["test", "development"]:
     app.include_router(test_helpers.router)
-    app.include_router(email_test.router)
     print("⚠️  Test helper endpoints enabled (test/dev mode only)")
-    print("⚠️  Email diagnostic endpoints enabled (test/dev mode only)")
 
 # Import models for /translate endpoint
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional, Dict, Any
+
+from app.mongodb_models import TranslationMode
 
 class FileInfo(BaseModel):
     id: str
@@ -150,8 +142,14 @@ class FileInfo(BaseModel):
     type: str
     content: str  # Base64-encoded file content from client
 
+# Per-file translation mode info (for file-level mode selection)
+class FileTranslationModeInfo(BaseModel):
+    fileName: str
+    translationMode: TranslationMode = TranslationMode.AUTOMATIC
+
 class TranslateRequest(BaseModel):
     files: List[FileInfo]
+    fileTranslationModes: Optional[List[FileTranslationModeInfo]] = None  # Per-file translation modes
     sourceLanguage: str
     targetLanguage: str
     email: EmailStr
@@ -159,180 +157,33 @@ class TranslateRequest(BaseModel):
 
 
 # ============================================================================
-# Helper Functions
-# ============================================================================
-def serialize_transaction_for_json(txn: dict) -> dict:
-    """
-    Convert MongoDB transaction document to JSON-serializable dict.
-
-    Handles:
-    - ObjectId → string
-    - Decimal128 → float
-    - datetime → ISO 8601 string (top-level and nested in documents array)
-
-    Args:
-        txn: Transaction document from MongoDB
-
-    Returns:
-        JSON-serializable dict
-    """
-    from bson import Decimal128
-
-    # Convert ObjectId
-    if "_id" in txn:
-        txn["_id"] = str(txn["_id"])
-
-    # Convert Decimal128 fields to float
-    for key, value in list(txn.items()):
-        if isinstance(value, Decimal128):
-            txn[key] = float(value.to_decimal())
-
-    # Convert top-level datetime fields to ISO format strings
-    datetime_fields = ["date", "created_at", "updated_at", "payment_date"]
-    for field in datetime_fields:
-        if field in txn and hasattr(txn[field], "isoformat"):
-            txn[field] = txn[field].isoformat()
-
-    # Convert datetime fields in documents array
-    if "documents" in txn and isinstance(txn["documents"], list):
-        for doc in txn["documents"]:
-            doc_datetime_fields = ["uploaded_at", "translated_at", "processing_started_at"]
-            for field in doc_datetime_fields:
-                if field in doc and doc[field] is not None and hasattr(doc[field], "isoformat"):
-                    doc[field] = doc[field].isoformat()
-
-    return txn
-
-
-# ============================================================================
-# Transaction Helper Functions
+# Transaction Helper Function
 # ============================================================================
 async def create_transaction_record(
-    file_info: dict,
-    user_data: dict,
-    request_data: TranslateRequest,
-    subscription: Optional[dict],
-    company_name: Optional[str],
-    price_per_page: float
-) -> Optional[str]:
-    """
-    Create transaction record for a single file upload.
-
-    STRUCTURE: Uses nested documents[] array instead of flat file fields.
-    Each transaction represents one upload session with potentially multiple documents.
-
-    Args:
-        file_info: Dict with file_id, filename, size, page_count, google_drive_url
-        user_data: Current authenticated user data
-        request_data: Original TranslateRequest
-        subscription: Enterprise subscription (or None for individual)
-        company_name: Enterprise company name (or None for individual)
-        price_per_page: Calculated pricing (subscription or default)
-
-    Returns:
-        transaction_id if successful, None if failed
-    """
-    from app.database import database
-    from bson import ObjectId
-    from datetime import datetime, timezone
-    import uuid
-
-    try:
-        # Generate unique transaction ID
-        transaction_id = f"TXN-{uuid.uuid4().hex[:10].upper()}"
-
-        # Build transaction document with NESTED structure
-        # IMPORTANT: Store actual email, not generated user_id
-        transaction_doc = {
-            # Transaction-level fields
-            "transaction_id": transaction_id,
-            "user_id": request_data.email,  # Use actual email for folder lookup
-            "source_language": request_data.sourceLanguage,
-            "target_language": request_data.targetLanguage,
-            "units_count": file_info.get("page_count", 1),
-            "price_per_unit": price_per_page,
-            "total_price": file_info.get("page_count", 1) * price_per_page,
-            "status": "started",
-            "error_message": "",
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
-
-            # NESTED documents array - one document per file
-            "documents": [
-                {
-                    "file_id": file_info.get("file_id", ""),  # ← CRITICAL FIX: Add file_id from Google Drive upload
-                    "file_name": file_info.get("filename", ""),
-                    "file_size": file_info.get("size", 0),
-                    "original_url": file_info.get("google_drive_url", ""),
-                    "translated_url": None,
-                    "translated_name": None,
-                    "status": "uploaded",
-                    "uploaded_at": datetime.now(timezone.utc),
-                    "translated_at": None,
-                    "processing_started_at": None,
-                    "processing_duration": None
-                }
-            ],
-
-            # Email batching counters - initialized on transaction creation
-            # Note: This function creates 1 transaction per file, so total is always 1
-            "total_documents": 1,  # Single file per transaction
-            "completed_documents": 0,  # No documents translated yet
-            "batch_email_sent": False  # Email not sent yet
-        }
-
-        # Add enterprise-specific fields if applicable
-        if company_name and subscription:
-            transaction_doc["company_name"] = company_name  # Store company name for folder lookup
-            transaction_doc["user_name"] = user_data.get("user_name", "Unknown") if user_data else "Unknown"
-            transaction_doc["subscription_id"] = ObjectId(str(subscription["_id"]))
-            transaction_doc["unit_type"] = subscription.get("subscription_unit", "page")
-        else:
-            # Individual customer (no company or subscription)
-            transaction_doc["company_name"] = None
-            transaction_doc["user_name"] = None
-            transaction_doc["subscription_id"] = None
-            transaction_doc["unit_type"] = "page"
-
-        # Insert into database
-        await database.translation_transactions.insert_one(transaction_doc)
-
-        logging.info(f"[TRANSACTION] Created {transaction_id} for file: {file_info.get('filename')}")
-        print(f"[TRANSACTION] Created {transaction_id} for file: {file_info.get('filename')}")
-        return transaction_id
-
-    except Exception as e:
-        logging.error(f"[TRANSACTION] Failed to create transaction for {file_info.get('filename')}: {e}")
-        print(f"[TRANSACTION] Failed to create transaction for {file_info.get('filename')}: {e}")
-        return None
-
-
-async def create_batch_transaction_record(
-    files_info: list[dict],
+    files_info: List[dict],
     user_data: dict,
     request_data: TranslateRequest,
     subscription: Optional[dict],
     company_name: Optional[str],
     price_per_page: float,
-    transaction_id: str  # ✅ FIX: Accept pre-generated transaction_id
+    file_translation_modes: Optional[Dict[str, TranslationMode]] = None  # Per-file translation modes (fileName -> mode)
 ) -> Optional[str]:
     """
-    Create a SINGLE transaction record for MULTIPLE file uploads (batch).
+    Create ONE transaction record for MULTIPLE file uploads.
 
-    This is the ROOT CAUSE FIX for the "7 emails for 3 documents" problem.
-    Instead of creating separate transactions per file (which triggers separate emails),
-    this creates ONE transaction with ALL files in the documents[] array.
+    IMPORTANT: This creates a SINGLE transaction with ALL files in the documents[] array.
+    This is the correct behavior - one transaction per upload request, not per file.
 
-    STRUCTURE: Uses nested documents[] array with all files.
-    One transaction represents one batch upload session with multiple documents.
+    Uses nested documents[] array structure (TranslationDocumentEmbedded model).
 
     Args:
-        files_info: List of file dicts with file_id, filename, size, page_count, google_drive_url
+        files_info: List of dicts, each with file_id, filename, size, page_count, google_drive_url
         user_data: Current authenticated user data
         request_data: Original TranslateRequest
         subscription: Enterprise subscription (or None for individual)
         company_name: Enterprise company name (or None for individual)
         price_per_page: Calculated pricing (subscription or default)
+        file_translation_modes: Dict mapping fileName to TranslationMode (per-file modes)
 
     Returns:
         transaction_id if successful, None if failed
@@ -342,121 +193,156 @@ async def create_batch_transaction_record(
     from datetime import datetime, timezone
     import uuid
 
+    if not files_info:
+        logging.warning("[TRANSACTION] No files provided - skipping transaction creation")
+        return None
+
     try:
-        logging.info(f"[BATCH-TRANSACTION] ===== BATCH TRANSACTION CREATE START =====")
-        logging.info(f"[BATCH-TRANSACTION] Files count: {len(files_info)}")
-        logging.info(f"[BATCH-TRANSACTION] Company: {company_name or 'Individual'}")
-        logging.info(f"[BATCH-TRANSACTION] User email: {request_data.email}")
+        # Generate unique transaction ID
+        transaction_id = f"TXN-{uuid.uuid4().hex[:10].upper()}"
 
-        # ✅ FIX: Use pre-generated transaction_id (passed as parameter)
-        # Transaction ID was already generated BEFORE file uploads and set in file metadata
-        logging.info(f"[BATCH-TRANSACTION] Using pre-generated transaction_id: {transaction_id}")
-
-        # Calculate total units and price across ALL files
-        total_units = sum(file.get("page_count", 1) for file in files_info)
-        total_price = total_units * price_per_page
-        logging.info(f"[BATCH-TRANSACTION] Total units: {total_units}, Price per unit: ${price_per_page}, Total price: ${total_price}")
+        # ====================================================================
+        # SINGLE TRANSACTION WITH MULTIPLE DOCUMENTS
+        # ====================================================================
+        logging.info(f"[TRANSACTION] ========== CREATING SINGLE TRANSACTION ==========")
+        logging.info(f"[TRANSACTION] Transaction ID: {transaction_id}")
+        logging.info(f"[TRANSACTION] Number of files: {len(files_info)}")
+        print(f"\n📦 [TRANSACTION] Creating SINGLE transaction {transaction_id} with {len(files_info)} document(s)")
 
         # Build documents array with ALL files
         documents = []
+        total_pages = 0
+        file_names = []
+
         for idx, file_info in enumerate(files_info):
-            file_id = file_info.get("file_id", "")
-            file_name = file_info.get("filename", "")
-            original_url = file_info.get("google_drive_url", "")
+            # Get translation mode for this specific file (default to automatic)
+            filename = file_info.get("filename", "")
+            file_mode = TranslationMode.AUTOMATIC
+            if file_translation_modes and filename in file_translation_modes:
+                file_mode = file_translation_modes[filename]
 
-            logging.info(f"[BATCH-TRANSACTION] Building document #{idx}: file_name={file_name}, file_id={file_id}")
-
-            documents.append({
-                "file_id": file_id,  # ← CRITICAL FIX: Add file_id from Google Drive upload
-                "file_name": file_name,
+            document_entry = {
+                "file_name": filename,
                 "file_size": file_info.get("size", 0),
-                "original_url": original_url,
+                "original_url": file_info.get("google_drive_url", ""),
                 "translated_url": None,
                 "translated_name": None,
                 "status": "uploaded",
                 "uploaded_at": datetime.now(timezone.utc),
                 "translated_at": None,
                 "processing_started_at": None,
-                "processing_duration": None
-            })
+                "processing_duration": None,
+                "file_id": file_info.get("file_id"),  # Google Drive file ID for confirm endpoint
+                "translation_mode": file_mode.value  # Per-file translation mode
+            }
+            documents.append(document_entry)
+            total_pages += file_info.get("page_count", 1)
+            file_names.append(filename or f"file_{idx}")
 
-        # Build batch transaction document
+            logging.info(f"[TRANSACTION]   Document {idx + 1}: {filename} ({file_info.get('page_count', 1)} pages, file_id: {file_info.get('file_id')}, mode: {file_mode.value})")
+            print(f"   📄 Document {idx + 1}: {filename} ({file_info.get('page_count', 1)} pages, mode: {file_mode.value})")
+
+        # Log transaction-level translation_mode summary
+        mode_summary = {}
+        for doc in documents:
+            mode = doc.get("translation_mode", "automatic")
+            mode_summary[mode] = mode_summary.get(mode, 0) + 1
+        logging.info(f"[TRANSACTION] Translation mode summary: {mode_summary}")
+        print(f"   🎯 Translation modes: {mode_summary}")
+
+        # Build transaction document with nested documents[] array
+        # IMPORTANT: Store actual email, not generated user_id
+        # NOTE: translation_mode is now per-file (stored in each document entry), not per-transaction
         transaction_doc = {
-            # Transaction-level fields
             "transaction_id": transaction_id,
             "user_id": request_data.email,  # Use actual email for folder lookup
             "source_language": request_data.sourceLanguage,
             "target_language": request_data.targetLanguage,
-            "units_count": total_units,
+            "units_count": total_pages,
             "price_per_unit": price_per_page,
-            "total_price": total_price,
+            "total_price": total_pages * price_per_page,
             "status": "started",
             "error_message": "",
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
-
-            # NESTED documents array - ALL files in this batch
+            # NESTED documents[] array - ALL files in ONE transaction (each with translation_mode)
             "documents": documents,
-
-            # Email batching counters - CRITICAL FIX
-            # total_documents = number of files in batch (prevents multiple transactions)
-            "total_documents": len(files_info),  # Total files in batch
-            "completed_documents": 0,  # No documents translated yet
-            "batch_email_sent": False  # Email not sent yet
+            # Email batching counters
+            "total_documents": len(documents),
+            "completed_documents": 0,
+            "batch_email_sent": False
         }
 
         # Add enterprise-specific fields if applicable
         if company_name and subscription:
-            transaction_doc["company_name"] = company_name
-            transaction_doc["user_name"] = user_data.get("user_name", "Unknown") if user_data else "Unknown"
+            transaction_doc["company_name"] = company_name  # Store company name for folder lookup
             transaction_doc["subscription_id"] = ObjectId(str(subscription["_id"]))
             transaction_doc["unit_type"] = subscription.get("subscription_unit", "page")
+            logging.info(f"[TRANSACTION] Enterprise: {company_name}, Subscription: {subscription.get('_id')}")
         else:
             # Individual customer (no company or subscription)
             transaction_doc["company_name"] = None
-            transaction_doc["user_name"] = None
             transaction_doc["subscription_id"] = None
             transaction_doc["unit_type"] = "page"
+            logging.info(f"[TRANSACTION] Individual customer (no company)")
 
-        # Log transaction data before insertion
-        logging.info(f"[BATCH-TRANSACTION] Transaction data to be stored:")
-        logging.info(f"[BATCH-TRANSACTION] {json.dumps(serialize_transaction_for_json(transaction_doc.copy()), indent=2, default=str)}")
-        logging.info(f"[BATCH-TRANSACTION] Documents count: {len(transaction_doc.get('documents', []))}")
+        # Log the full transaction document before insertion
+        import json
+        logging.info(f"[TRANSACTION] ========== FULL TRANSACTION DOCUMENT ==========")
+        # Create a serializable copy for logging (handle datetime and ObjectId)
+        log_doc = {}
+        for key, value in transaction_doc.items():
+            if key == "documents":
+                # Log documents separately with translation_mode highlighted
+                log_doc["documents"] = []
+                for doc in value:
+                    doc_copy = {}
+                    for dk, dv in doc.items():
+                        if hasattr(dv, 'isoformat'):
+                            doc_copy[dk] = dv.isoformat()
+                        else:
+                            doc_copy[dk] = dv
+                    log_doc["documents"].append(doc_copy)
+            elif hasattr(value, 'isoformat'):
+                log_doc[key] = value.isoformat()
+            elif hasattr(value, '__str__') and 'ObjectId' in str(type(value)):
+                log_doc[key] = str(value)
+            else:
+                log_doc[key] = value
 
-        # Validate all documents have file_id
-        documents = transaction_doc.get("documents", [])
-        missing_file_ids = [doc.get("file_name") for doc in documents if not doc.get("file_id")]
+        # Print formatted transaction document
+        print(f"\n   📋 FULL TRANSACTION DOCUMENT:")
+        print(f"   {json.dumps(log_doc, indent=6, default=str)}")
+        logging.info(f"[TRANSACTION] Document: {json.dumps(log_doc, default=str)}")
+        logging.info(f"[TRANSACTION] ================================================")
 
-        if missing_file_ids:
-            logging.error(f"[BATCH-TRANSACTION] CRITICAL: Documents missing file_id: {missing_file_ids}")
-            raise Exception(f"Failed to store file IDs for: {', '.join(missing_file_ids)}")
+        # Insert into appropriate collection based on user type
+        if company_name:
+            # Enterprise user -> translation_transactions collection
+            await database.translation_transactions.insert_one(transaction_doc)
+            logging.info(f"[TRANSACTION] 📝 Inserted into ENTERPRISE collection: translation_transactions")
+            print(f"   📝 Collection: translation_transactions (Enterprise)")
+        else:
+            # Individual user -> user_transactions collection
+            await database.user_transactions.insert_one(transaction_doc)
+            logging.info(f"[TRANSACTION] 📝 Inserted into INDIVIDUAL collection: user_transactions")
+            print(f"   📝 Collection: user_transactions (Individual)")
 
-        logging.info(f"[BATCH-TRANSACTION] Validation passed: All {len(documents)} documents have file_id")
+        logging.info(f"[TRANSACTION] ✅ SUCCESS: Created {transaction_id}")
+        logging.info(f"[TRANSACTION]   Total documents: {len(documents)}")
+        logging.info(f"[TRANSACTION]   Total pages: {total_pages}")
+        logging.info(f"[TRANSACTION]   Total price: ${total_pages * price_per_page:.2f}")
+        logging.info(f"[TRANSACTION]   Files: {', '.join(file_names)}")
+        logging.info(f"[TRANSACTION] =================================================")
 
-        # Log each document's file_id
-        for idx, doc in enumerate(documents):
-            logging.info(f"[BATCH-TRANSACTION] Document #{idx}: file_id={doc.get('file_id')}, file_name={doc.get('file_name')}")
+        print(f"   ✅ Transaction {transaction_id} created with {len(documents)} document(s), {total_pages} total pages")
+        print(f"   💰 Total price: ${total_pages * price_per_page:.2f}")
 
-        # Insert into database
-        await database.translation_transactions.insert_one(transaction_doc)
-
-        logging.info(
-            f"[BATCH TRANSACTION] Created {transaction_id} for {len(files_info)} files: "
-            f"{', '.join(f.get('filename', '') for f in files_info)}"
-        )
-        logging.info(f"[BATCH-TRANSACTION] ===== BATCH TRANSACTION CREATE COMPLETE =====")
-        print(
-            f"✅ [BATCH TRANSACTION] Created {transaction_id}\n"
-            f"   Files: {len(files_info)}\n"
-            f"   Total pages: {total_units}\n"
-            f"   Total price: ${total_price:.2f}\n"
-            f"   Documents: {', '.join(f.get('filename', '') for f in files_info)}"
-        )
         return transaction_id
 
     except Exception as e:
-        logging.error(f"[BATCH TRANSACTION] Failed to create batch transaction: {e}")
-        print(f"❌ [BATCH TRANSACTION] Failed to create batch transaction: {e}")
+        logging.error(f"[TRANSACTION] ❌ FAILED to create transaction: {e}")
+        print(f"   ❌ [TRANSACTION] Failed to create transaction: {e}")
         return None
 
 
@@ -492,6 +378,12 @@ async def translate_files(
     print(f"[RAW INCOMING DATA]   - Target Language: {request.targetLanguage}")
     print(f"[RAW INCOMING DATA]   - Number of Files: {len(request.files)}")
     print(f"[RAW INCOMING DATA]   - Payment Intent ID: {request.paymentIntentId or 'None'}")
+    print(f"[RAW INCOMING DATA]   - File Translation Modes: {len(request.fileTranslationModes) if request.fileTranslationModes else 0} entries")
+    if request.fileTranslationModes:
+        for mode_info in request.fileTranslationModes:
+            print(f"[RAW INCOMING DATA]     - {mode_info.fileName}: {mode_info.translationMode.value}")
+    else:
+        print(f"[RAW INCOMING DATA]   ⚠️ NO fileTranslationModes received - will use default (automatic)")
     print(f"[RAW INCOMING DATA] Files Details:")
     for i, file_info in enumerate(request.files, 1):
         print(f"[RAW INCOMING DATA]   File {i}: '{file_info.name}' | {file_info.size:,} bytes | Type: {file_info.type} | ID: {file_info.id}")
@@ -597,7 +489,7 @@ async def translate_files(
     # Detect customer type (enterprise with company_name vs individual without)
     # IMPORTANT: Do this BEFORE creating folders so we know which structure to create
     company_name = current_user.get("company_name") if current_user else None
-    is_enterprise = company_name is not None and company_name != ""
+    is_enterprise = company_name is not None
 
     # Enhanced customer type logging
     log_step("CUSTOMER TYPE DETECTED", f"{'Enterprise' if is_enterprise else 'Individual'} (company: {company_name})")
@@ -611,9 +503,7 @@ async def translate_files(
     print(f"\n👤 Customer Type: {'Enterprise' if is_enterprise else 'Individual'}")
     if is_enterprise:
         print(f"   Company: {company_name}")
-
-    # Safely handle current_user which might be None for individual users
-    user_name = current_user.get('user_name', 'N/A') if current_user else 'Individual User'
+    user_name = current_user.get('user_name', 'N/A') if current_user else 'N/A'
     print(f"   User: {user_name} ({request.email})")
 
     # For enterprise users, validate company exists in database
@@ -684,13 +574,6 @@ async def translate_files(
     import uuid
     storage_id = f"store_{uuid.uuid4().hex[:10]}"
 
-    # ✅ FIX: Generate transaction_id BEFORE file uploads
-    # This ensures transaction_id can be set in file metadata
-    transaction_id = f"TXN-{uuid.uuid4().hex[:10].upper()}"
-    log_step("TRANSACTION ID GENERATED", f"{transaction_id}")
-    logging.info(f"[TRANSLATE] Pre-generated transaction_id: {transaction_id}")
-    print(f"Generated transaction ID: {transaction_id} (will be set in file metadata)")
-
     print(f"Created storage job: {storage_id}")
     if is_enterprise and company_name:
         print(f"Target folder: {company_name}/{request.email}/Temp/ (ID: {folder_id})")
@@ -701,6 +584,12 @@ async def translate_files(
     # Store files with enhanced metadata (no sessions)
     stored_files = []
     total_pages = 0
+
+    # Pre-build translation modes dict for file upload logging
+    upload_file_modes: Dict[str, str] = {}
+    if request.fileTranslationModes:
+        for mode_info in request.fileTranslationModes:
+            upload_file_modes[mode_info.fileName] = mode_info.translationMode.value
 
     for i, file_info in enumerate(request.files, 1):
         try:
@@ -739,21 +628,29 @@ async def translate_files(
             )
             log_step(f"FILE {i} GDRIVE UPLOADED", f"File ID: {file_result['file_id']}")
 
+            # Get translation_mode for this file BEFORE metadata update (default to automatic)
+            # Valid values: automatic, human, formats, handwriting
+            file_translation_mode = upload_file_modes.get(file_info.name, "automatic")
+            logging.info(f"[FILE {i}] Translation mode assignment: '{file_info.name}' -> '{file_translation_mode}'")
+
             # Update file with enhanced metadata for payment linking
-            log_step(f"FILE {i} METADATA UPDATE", "Setting file properties")
+            log_step(f"FILE {i} METADATA UPDATE", f"Setting file properties (translation_mode: {file_translation_mode})")
+            file_metadata = {
+                'customer_email': request.email,
+                'source_language': request.sourceLanguage,
+                'target_language': request.targetLanguage,
+                'page_count': str(page_count),
+                'status': 'awaiting_payment',
+                'upload_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'original_filename': file_info.name,
+                'translation_mode': file_translation_mode  # Added translation_mode to file metadata
+            }
+            logging.info(f"[FILE {i}] Metadata to be set: {file_metadata}")
             await google_drive_service.update_file_properties(
                 file_id=file_result['file_id'],
-                properties={
-                    'customer_email': request.email,
-                    'transaction_id': transaction_id,  # ✅ FIX: Add pre-generated transaction_id
-                    'source_language': request.sourceLanguage,
-                    'target_language': request.targetLanguage,
-                    'page_count': str(page_count),
-                    'status': 'awaiting_payment',
-                    'upload_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                    'original_filename': file_info.name
-                }
+                properties=file_metadata
             )
+            logging.info(f"[FILE {i}] ✅ Metadata SET successfully with translation_mode='{file_translation_mode}'")
             log_step(f"FILE {i} COMPLETE", f"URL: {file_result.get('google_drive_url', 'N/A')}")
 
             stored_files.append({
@@ -762,20 +659,24 @@ async def translate_files(
                 "status": "stored",
                 "page_count": page_count,
                 "size": file_info.size,
-                "google_drive_url": file_result.get('google_drive_url')
+                "google_drive_url": file_result.get('google_drive_url'),
+                "translation_mode": file_translation_mode
             })
-            print(f"   Successfully uploaded: '{file_info.name}' -> Google Drive ID: {file_result['file_id']}, Pages: {page_count}")
+            print(f"   Successfully uploaded: '{file_info.name}' -> Google Drive ID: {file_result['file_id']}, Pages: {page_count}, Mode: {file_translation_mode}")
 
         except Exception as e:
             log_step(f"FILE {i} FAILED", f"Error: {str(e)}")
             print(f"   Failed to upload '{file_info.name}': {e}")
+            # Get translation_mode for failed file too (for logging consistency)
+            file_translation_mode = upload_file_modes.get(file_info.name, "automatic")
             stored_files.append({
                 "file_id": None,
                 "filename": file_info.name,
                 "status": "failed",
                 "page_count": 0,
                 "size": file_info.size,
-                "error": str(e)
+                "error": str(e),
+                "translation_mode": file_translation_mode
             })
 
     # Summary of operation
@@ -839,9 +740,20 @@ async def translate_files(
 
             # Calculate availability from current active period only
             if current_period:
+                # Debug: Log period structure
+                logging.debug(f"[SUBSCRIPTION] Period keys: {list(current_period.keys())}")
+
                 units_allocated = current_period.get("units_allocated", 0)
                 units_used = current_period.get("units_used", 0)
                 promotional_units = current_period.get("promotional_units", 0)
+
+                # Validation: Warn if critical fields are missing
+                if units_allocated == 0 and "units_allocated" not in current_period:
+                    logging.warning(
+                        f"[SUBSCRIPTION] ⚠️ units_allocated field not found in period! "
+                        f"Available keys: {list(current_period.keys())}"
+                    )
+
                 total_allocated = units_allocated + promotional_units
                 total_used = units_used
                 total_remaining = total_allocated - units_used
@@ -881,11 +793,13 @@ async def translate_files(
                 print(f"\n⚠️  No active usage period for current date")
                 print(f"   Total usage periods: {len(usage_periods)}")
         else:
-            log_step("SUBSCRIPTION NOT FOUND", f"Using default pricing for company {company_name}")
-            logging.warning(f"[SUBSCRIPTION] ⚠ No active subscription found for company {company_name}, using default pricing")
-            print(f"\n⚠️  No active subscription found - will require payment")
-            # Set default values for when subscription doesn't exist
-            total_remaining = 0
+            # REJECT: Enterprise user must have an active subscription
+            log_step("VALIDATION FAILED", f"No active subscription for company: {company_name}")
+            logging.error(f"[SUBSCRIPTION] REJECTED: No active subscription found for company '{company_name}'")
+            raise HTTPException(
+                status_code=403,
+                detail=f"No active subscription found for company '{company_name}'. Enterprise users must have an active subscription to submit translations. Please contact your administrator."
+            )
 
     # Determine if payment is required based on enterprise subscription
     payment_required = True
@@ -915,46 +829,48 @@ async def translate_files(
         logging.info(f"[PAYMENT] Payment required for {'individual customer' if not is_enterprise else 'enterprise without subscription'}")
         print(f"\n💳 Payment required: {'Individual customer' if not is_enterprise else 'Enterprise without subscription'}")
 
-    # Create SINGLE BATCH transaction record for ALL uploaded files
-    # ROOT CAUSE FIX: Instead of creating separate transactions per file (which caused 7 emails),
-    # create ONE transaction with all files in documents[] array
+    # ========================================================================
+    # CREATE SINGLE TRANSACTION FOR ALL FILES
+    # ========================================================================
+    # IMPORTANT: One transaction per upload request, NOT one per file!
+    # All files are stored in the documents[] array of a single transaction.
     successful_stored_files = [f for f in stored_files if f["status"] == "stored"]
 
-    if successful_stored_files:
-        log_step(
-            "BATCH TRANSACTION CREATE START",
-            f"Creating SINGLE batch transaction for {len(successful_stored_files)} file(s)"
-        )
+    log_step("TRANSACTION CREATE START", f"Creating SINGLE transaction for {len(successful_stored_files)} file(s)")
+    logging.info(f"[TRANSLATE] ========== TRANSACTION CREATION ==========")
+    logging.info(f"[TRANSLATE] Creating ONE transaction with {len(successful_stored_files)} document(s)")
+    logging.info(f"[TRANSLATE] Files: {[f['filename'] for f in successful_stored_files]}")
 
-        # Call batch function with ALL files at once
-        # ✅ FIX: Pass pre-generated transaction_id (already set in file metadata)
-        batch_transaction_id = await create_batch_transaction_record(
-            files_info=successful_stored_files,
+    # Build file-level translation modes dict from request
+    file_translation_modes: Dict[str, TranslationMode] = {}
+    if request.fileTranslationModes:
+        for mode_info in request.fileTranslationModes:
+            file_translation_modes[mode_info.fileName] = mode_info.translationMode
+        logging.info(f"[TRANSLATE] Per-file translation modes: {[(k, v.value) for k, v in file_translation_modes.items()]}")
+    else:
+        logging.info(f"[TRANSLATE] No per-file modes specified, using default (automatic)")
+
+    if successful_stored_files:
+        # Create a SINGLE transaction with ALL files in documents[] array
+        transaction_id = await create_transaction_record(
+            files_info=successful_stored_files,  # Pass ALL files at once
             user_data=current_user,
             request_data=request,
             subscription=subscription if is_enterprise else None,
             company_name=company_name if is_enterprise else None,
             price_per_page=price_per_page,
-            transaction_id=transaction_id  # Use the same ID that's in file metadata
+            file_translation_modes=file_translation_modes if file_translation_modes else None
         )
 
-        if batch_transaction_id:
-            transaction_ids.append(batch_transaction_id)
-            log_step(
-                "BATCH TRANSACTION CREATED",
-                f"ID: {batch_transaction_id} with {len(successful_stored_files)} document(s)"
-            )
+        if transaction_id:
+            transaction_ids = [transaction_id]  # Single transaction ID
+            log_step("TRANSACTION CREATED", f"SINGLE transaction {transaction_id} with {len(successful_stored_files)} document(s)")
+            logging.info(f"[TRANSLATE] ✅ SINGLE transaction created: {transaction_id}")
         else:
-            log_step("BATCH TRANSACTION FAILED", "Failed to create batch transaction")
+            logging.error(f"[TRANSLATE] ❌ Failed to create transaction")
 
-    log_step("TRANSACTION CREATE COMPLETE", f"Created {len(transaction_ids)} batch transaction(s)")
-
-    # CRITICAL ASSERTION: Batch architecture creates exactly 1 transaction for N files
-    # This ensures all files in the batch share the same transaction_id
-    assert len(transaction_ids) == 1, (
-        f"Batch transaction creation failed: Expected 1 transaction for {len(successful_stored_files)} files, "
-        f"but got {len(transaction_ids)} transaction(s). This indicates a critical bug in create_batch_transaction_record()."
-    )
+    logging.info(f"[TRANSLATE] ==============================================")
+    log_step("TRANSACTION CREATE COMPLETE", f"Created {len(transaction_ids)} transaction(s) with {len(successful_stored_files)} total document(s)")
 
     # Extract user information from JWT token (if authenticated)
     user_info = None
@@ -977,9 +893,6 @@ async def translate_files(
     # Prepare and log response
     log_step("RESPONSE PREPARE", f"Success: {successful_uploads}/{len(request.files)} files, {total_pages} pages, ${total_pages * price_per_page:.2f}")
 
-    # Extract uploaded file IDs for payment confirmation (frontend needs these)
-    uploaded_file_ids = [f["file_id"] for f in stored_files if f["status"] == "stored" and f.get("file_id")]
-
     response_data = {
         "success": True,
         "data": {
@@ -987,15 +900,13 @@ async def translate_files(
             "status": "stored",
             "progress": 100,
             "message": f"Files uploaded successfully. Ready for payment.",
-            # File IDs for payment confirmation (frontend sends these to /confirm)
-            "uploaded_file_ids": uploaded_file_ids,
 
-                # Pricing information
+                # Pricing information (conditionally include payment fields)
                 "pricing": {
                     "total_pages": total_pages,
-                    "price_per_page": price_per_page,  # Dynamic: subscription or default
-                    "total_amount": total_pages * price_per_page,  # Dynamic calculation
-                    "currency": "USD",
+                    "price_per_page": None if is_enterprise else price_per_page,
+                    "total_amount": None if is_enterprise else (total_pages * price_per_page),
+                    "currency": None if is_enterprise else "USD",
                     "customer_type": "enterprise" if is_enterprise else "individual",
                     "transaction_ids": transaction_ids  # Transaction IDs for all files
                 },
@@ -1024,6 +935,15 @@ async def translate_files(
                     "customer_email": request.email
                 },
 
+                # Subscription information (enterprise only)
+                "subscription": {
+                    "units_allocated": units_allocated if is_enterprise and subscription else 0,
+                    "units_used": total_used if is_enterprise and subscription else 0,
+                    "units_remaining": total_remaining if is_enterprise and subscription else 0,
+                    "promotional_units": promotional_units if is_enterprise and subscription else 0,
+                    "subscription_unit": subscription_unit if is_enterprise and subscription else "page"
+                } if is_enterprise and subscription else None,
+
                 # User information (permission level and identity)
                 "user": user_info
             },
@@ -1044,9 +964,27 @@ async def translate_files(
     print(f"[RAW OUTGOING DATA] Message: {response_data['data']['message']}")
     print(f"[RAW OUTGOING DATA] Pricing:")
     print(f"[RAW OUTGOING DATA]   - Total Pages: {response_data['data']['pricing']['total_pages']}")
-    print(f"[RAW OUTGOING DATA]   - Price Per Page: ${response_data['data']['pricing']['price_per_page']}")
-    print(f"[RAW OUTGOING DATA]   - Total Amount: ${response_data['data']['pricing']['total_amount']:.2f}")
-    print(f"[RAW OUTGOING DATA]   - Currency: {response_data['data']['pricing']['currency']}")
+
+    # Handle None values for enterprise users
+    price_per_page = response_data['data']['pricing']['price_per_page']
+    total_amount = response_data['data']['pricing']['total_amount']
+    currency = response_data['data']['pricing']['currency']
+
+    if price_per_page is not None:
+        print(f"[RAW OUTGOING DATA]   - Price Per Page: ${price_per_page:.2f}")
+    else:
+        print(f"[RAW OUTGOING DATA]   - Price Per Page: N/A (using subscription)")
+
+    if total_amount is not None:
+        print(f"[RAW OUTGOING DATA]   - Total Amount: ${total_amount:.2f}")
+    else:
+        print(f"[RAW OUTGOING DATA]   - Total Amount: N/A (using subscription)")
+
+    if currency is not None:
+        print(f"[RAW OUTGOING DATA]   - Currency: {currency}")
+    else:
+        print(f"[RAW OUTGOING DATA]   - Currency: N/A (using subscription)")
+
     print(f"[RAW OUTGOING DATA]   - Customer Type: {response_data['data']['pricing']['customer_type']}")
     print(f"[RAW OUTGOING DATA]   - Transaction IDs ({len(response_data['data']['pricing']['transaction_ids'])}): {response_data['data']['pricing']['transaction_ids']}")
     print(f"[RAW OUTGOING DATA] Files:")
@@ -1054,10 +992,17 @@ async def translate_files(
     print(f"[RAW OUTGOING DATA]   - Successful: {response_data['data']['files']['successful_uploads']}")
     print(f"[RAW OUTGOING DATA]   - Failed: {response_data['data']['files']['failed_uploads']}")
     for i, file in enumerate(response_data['data']['files']['stored_files'], 1):
-        print(f"[RAW OUTGOING DATA]   File {i}: '{file['filename']}' | Status: {file['status']} | Pages: {file['page_count']} | GDrive: {file.get('google_drive_url', 'N/A')[:50]}...")
+        print(f"[RAW OUTGOING DATA]   File {i}: '{file['filename']}' | Status: {file['status']} | Pages: {file['page_count']} | Mode: {file.get('translation_mode', 'automatic')} | GDrive: {file.get('google_drive_url', 'N/A')[:50]}...")
     print(f"[RAW OUTGOING DATA] Customer: {response_data['data']['customer']['email']}")
     print(f"[RAW OUTGOING DATA] Payment Required: {response_data['data']['payment']['required']}")
     print(f"[RAW OUTGOING DATA] Payment Amount (cents): {response_data['data']['payment']['amount_cents']}")
+    if response_data['data'].get('subscription'):
+        print(f"[RAW OUTGOING DATA] Subscription Information:")
+        print(f"[RAW OUTGOING DATA]   - Units Allocated: {response_data['data']['subscription']['units_allocated']}")
+        print(f"[RAW OUTGOING DATA]   - Units Used: {response_data['data']['subscription']['units_used']}")
+        print(f"[RAW OUTGOING DATA]   - Units Remaining: {response_data['data']['subscription']['units_remaining']}")
+        print(f"[RAW OUTGOING DATA]   - Promotional Units: {response_data['data']['subscription']['promotional_units']}")
+        print(f"[RAW OUTGOING DATA]   - Subscription Unit: {response_data['data']['subscription']['subscription_unit']}")
     print(f"[RAW OUTGOING DATA] User Information:")
     print(f"[RAW OUTGOING DATA]   - Permission Level: {response_data['data']['user']['permission_level']}")
     print(f"[RAW OUTGOING DATA]   - Email: {response_data['data']['user']['email']}")
@@ -1070,32 +1015,6 @@ async def translate_files(
 # ============================================================================
 # Transaction Confirmation/Decline Models
 # ============================================================================
-class TransactionConfirmRequest(BaseModel):
-    """Request body for confirming Square payment - client sends payment info AND file_ids"""
-    square_transaction_id: Optional[str] = Field(
-        None,
-        description="Square payment ID (optional reference) or 'NONE' if payment failed",
-        example="sqt_3030c9a6c8c94a5180e2"
-    )
-    status: bool = Field(
-        default=True,
-        description="True if payment approved, False if failed"
-    )
-    transaction_id: Optional[str] = Field(
-        None,
-        description="Transaction ID from /translate-user (Individual flow only)",
-        example="USER123456"
-    )
-    file_ids: List[str] = Field(
-        default=[],
-        description="List of Google Drive file IDs to process (from upload response). If empty, falls back to search (enterprise flow)",
-        example=["1abc2def3ghi", "4jkl5mno6pqr"]
-    )
-    # NOTE:
-    # - Individual flow: Client sends file_ids from upload response - server processes only those files
-    # - Enterprise flow: Empty array - server falls back to search by email + status
-
-
 class TransactionActionRequest(BaseModel):
     transaction_ids: List[str]
 
@@ -1109,7 +1028,7 @@ class EnterpriseConfirmRequest(BaseModel):
 class IndividualConfirmRequest(BaseModel):
     """Individual confirmation - includes payment info and file_ids from upload"""
     transaction_id: str = Field(..., description="Transaction ID from upload response")
-    square_transaction_id: Optional[str] = Field(None, description="Square payment transaction ID")
+    stripe_checkout_session_id: Optional[str] = Field(None, description="Square payment transaction ID")
     file_ids: List[str] = Field(..., description="File IDs from upload response - NO SEARCH")
     status: bool = Field(default=True, description="True=confirm, False=cancel")
 
@@ -1126,12 +1045,6 @@ async def process_transaction_confirmation_background(
     """
     Background task to move files from Temp to Inbox and update transaction status.
     Runs asynchronously without blocking HTTP response.
-
-    CRITICAL RACE CONDITION FIX:
-    - Step 1 MUST add transaction_id metadata BEFORE moving files
-    - GoogleTranslator watches Inbox and sends webhooks when files appear
-    - If transaction_id is missing when files are moved, webhooks fail Pydantic validation
-    - Solution: Add metadata first, then move files
     """
     import time
     task_start = time.time()
@@ -1154,42 +1067,8 @@ async def process_transaction_confirmation_background(
         print(f"   Files to move: {len(file_ids)}")
         print("=" * 80)
 
-        # CRITICAL FIX: Add transaction_id metadata BEFORE moving files to Inbox
-        # This prevents race condition where GoogleTranslator sends webhooks with missing transaction_id
-        print(f"\n📝 Step 1: Adding transaction IDs to file metadata (BEFORE moving to Inbox)...")
-        metadata_start = time.time()
-        metadata_updates_successful = 0
-
-        if transaction_ids:
-            # Use the single batch transaction for all files
-            batch_transaction_id = transaction_ids[0]
-            print(f"   Using batch transaction ID: {batch_transaction_id}")
-
-            for i, file_id in enumerate(file_ids):
-                try:
-                    # All files get the SAME batch transaction_id (not transaction_ids[i])
-                    await google_drive_service.update_file_properties(
-                        file_id=file_id,
-                        properties={
-                            'transaction_id': batch_transaction_id,
-                            'status': 'confirmed',
-                            'confirmation_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ')
-                        }
-                    )
-                    metadata_updates_successful += 1
-                    print(f"   ✓ File {file_id[:20]}...: Added transaction_id={batch_transaction_id}")
-                except Exception as e:
-                    print(f"   ⚠️  Failed to update metadata for file {file_id[:20]}...: {e}")
-                    # Continue processing other files even if one fails
-        else:
-            print(f"   ⚠️  No batch transaction IDs found - skipping metadata update")
-
-        metadata_elapsed = (time.time() - metadata_start) * 1000
-        print(f"⏱️  Metadata update completed in {metadata_elapsed:.2f}ms")
-        print(f"✅ Updated: {metadata_updates_successful}/{len(file_ids)} files")
-
-        # NOW move files from Temp to Inbox (files now have transaction_id metadata)
-        print(f"\n📁 Step 2: Moving files from Temp to Inbox (files now have transaction_id)...")
+        # Move files from Temp to Inbox
+        print(f"\n📁 Step 1: Moving files from Temp to Inbox...")
         move_start = time.time()
         move_result = await google_drive_service.move_files_to_inbox_on_payment_success(
             customer_email=customer_email,
@@ -1201,7 +1080,7 @@ async def process_transaction_confirmation_background(
         print(f"✅ Moved: {move_result['moved_successfully']}/{move_result['total_files']} files")
 
         # Verify files in Inbox
-        print(f"\n🔍 Step 3: Verifying files in Inbox...")
+        print(f"\n🔍 Step 2: Verifying files in Inbox...")
         inbox_folder_id = move_result['inbox_folder_id']
         verified_count = 0
 
@@ -1228,8 +1107,34 @@ async def process_transaction_confirmation_background(
 
         print(f"✅ Verified: {verified_count}/{len(move_result.get('moved_files', []))} files")
 
+        # Step 5: Update file properties with transaction_id
+        print(f"\n📝 Step 5: Adding transaction IDs to file metadata...")
+        metadata_start = time.time()
+        metadata_updates_successful = 0
+
+        for i, file_id in enumerate(file_ids):
+            try:
+                transaction_id = transaction_ids[i]
+                await google_drive_service.update_file_properties(
+                    file_id=file_id,
+                    properties={
+                        'transaction_id': transaction_id,
+                        'status': 'confirmed',
+                        'confirmation_timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ')
+                    }
+                )
+                metadata_updates_successful += 1
+                print(f"   ✓ File {file_id[:20]}...: Added transaction_id={transaction_id}")
+            except Exception as e:
+                print(f"   ⚠️  Failed to update metadata for file {file_id[:20]}...: {e}")
+                # Continue processing other files even if one fails
+
+        metadata_elapsed = (time.time() - metadata_start) * 1000
+        print(f"⏱️  Metadata update completed in {metadata_elapsed:.2f}ms")
+        print(f"✅ Updated: {metadata_updates_successful}/{len(file_ids)} files")
+
         # Update transaction status
-        print(f"\n🔄 Step 4: Updating transaction status...")
+        print(f"\n🔄 Step 3: Updating transaction status...")
         for txn_id in transaction_ids:
             await database.translation_transactions.update_one(
                 {"transaction_id": txn_id},
@@ -1243,7 +1148,7 @@ async def process_transaction_confirmation_background(
             print(f"   ✓ Transaction {txn_id} confirmed")
 
         # Update subscription usage
-        print(f"\n💳 Step 5: Updating subscription usage...")
+        print(f"\n💳 Step 4: Updating subscription usage...")
         transactions = []
         for txn_id in transaction_ids:
             txn = await database.translation_transactions.find_one({"transaction_id": txn_id})
@@ -1264,15 +1169,17 @@ async def process_transaction_confirmation_background(
         if subscription_updates:
             for subscription_id_str, total_units in subscription_updates.items():
                 try:
+                    # Batch operations: mark as "mixed" since multiple transactions may have different modes
                     usage_update = UsageUpdate(
                         units_to_add=total_units,
-                        use_promotional_units=False
+                        use_promotional_units=False,
+                        translation_mode="mixed"  # Batch aggregation
                     )
                     await subscription_service.record_usage(
                         subscription_id=subscription_id_str,
                         usage_data=usage_update
                     )
-                    print(f"   ✅ Subscription {subscription_id_str}: +{total_units} units")
+                    print(f"   ✅ Subscription {subscription_id_str}: +{total_units} units (batch mode: mixed)")
                 except Exception as e:
                     print(f"   ⚠️  Subscription update failed for {subscription_id_str}: {e}")
         else:
@@ -1301,535 +1208,246 @@ async def process_transaction_confirmation_background(
 # ============================================================================
 @app.post("/api/transactions/confirm", tags=["Transactions"])
 async def confirm_transactions(
-    request: TransactionConfirmRequest,
+    request: TransactionActionRequest,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    @deprecated Use /api/transactions/confirm-enterprise or /api/transactions/confirm-individual
-
-    Confirm Square payment and update existing transaction OR delete files on failure.
+    Confirm transactions and move files from Temp/ to Inbox/.
 
     This endpoint:
-    - IF payment succeeded (status=True):
-      1. Find customer's files in Temp folder
-      2. Find existing USER###### transaction by Square transaction ID
-      3. Update transaction status to 'processing'
-      4. Update file metadata with transaction_id
-      5. Move files from Temp/ to Inbox/
-      6. Return success with transaction_id (no duplicate creation)
-
-    - IF payment failed (status=False):
-      1. Find customer's files in Temp folder
-      2. Delete all files
-      3. Return failure message
+    1. Updates transaction status from "started" to "confirmed"
+    2. Moves files from customer_email/Temp/ to customer_email/Inbox/
+    3. Returns count of successfully moved files
     """
-    logging.warning("DEPRECATED: Use /confirm-enterprise or /confirm-individual based on flow type")
-    from datetime import datetime, timezone
-    from app.utils.transaction_id_generator import generate_translation_transaction_id
-
-    # ========== REQUEST VALIDATION LOGGING ==========
-    print("\n" + "=" * 80)
-    print("🔔 CONFIRM ENDPOINT - REQUEST RECEIVED")
-    print("=" * 80)
-    logging.info(f"[CONFIRM ENDPOINT] Request received at /api/transactions/confirm")
-
-    print(f"✅ Pydantic body parsing completed successfully!")
-    logging.info(f"[CONFIRM ENDPOINT] Pydantic validation passed")
-
-    # ========== CLIENT REQUEST BODY VERIFICATION ==========
-    print(f"\n📥 CLIENT REQUEST BODY (RAW):")
-    request_dict = request.model_dump()
-    print(f"   {request_dict}")
-
-    # Detailed field verification
-    print(f"\n🔍 FIELD VERIFICATION:")
-    print(f"   transaction_id in request: {'YES ✅' if 'transaction_id' in request_dict and request_dict['transaction_id'] else 'NO ❌ MISSING!'}")
-    print(f"   transaction_id value: {request_dict.get('transaction_id', 'NOT PROVIDED')}")
-    print(f"   square_transaction_id: {request_dict.get('square_transaction_id', 'NOT PROVIDED')}")
-    print(f"   file_ids: {request_dict.get('file_ids', 'NOT PROVIDED')}")
-    print(f"   status: {request_dict.get('status', 'NOT PROVIDED')}")
-
-    logging.info(f"[CONFIRM ENDPOINT] Client sent: {request_dict}")
-    logging.info(f"[CONFIRM ENDPOINT] transaction_id present: {'YES' if request_dict.get('transaction_id') else 'NO'}")
-
-    print(f"\n📋 Request Details:")
-    print(f"   Square Transaction ID: {request.square_transaction_id}")
-    print(f"   Payment Status: {'APPROVED ✅' if request.status else 'FAILED ❌'}")
-    print(f"   Request Type: {type(request).__name__}")
-    print(f"   Status Type: {type(request.status).__name__} = {request.status}")
-    logging.info(f"[CONFIRM ENDPOINT] square_transaction_id={request.square_transaction_id}, status={request.status}")
-
-    print(f"👤 Current User:")
-    print(f"   Email: {current_user.get('email')}")
-    print(f"   User ID: {current_user.get('sub', 'N/A')}")
-    print("=" * 80 + "\n")
-    logging.info(f"[CONFIRM ENDPOINT] Authenticated user: {current_user.get('email')}")
+    print(f"[CONFIRM ENDPOINT] ✅ REACHED! Pydantic body parsing completed successfully!")
+    print(f"[CONFIRM ENDPOINT] Transaction IDs: {request.transaction_ids}")
+    print(f"[CONFIRM ENDPOINT] Current user: {current_user.get('email')}")
 
     from app.database import database
     from app.services.google_drive_service import google_drive_service
+    from datetime import datetime, timezone
 
-    customer_email = current_user.get("email")
+    logging.info(f"[CONFIRM] User {current_user.get('email')} confirming {len(request.transaction_ids)} transactions")
+    print(f"[CONFIRM] Confirming transactions: {request.transaction_ids}")
+
+    if not request.transaction_ids:
+        raise HTTPException(status_code=400, detail="No transaction IDs provided")
 
     try:
-        # ========== SUCCESS FLOW: Payment Approved ==========
-        if request.status:
-            print("\n" + "=" * 80)
-            print("✅ SUCCESS FLOW - Payment Approved")
-            print("=" * 80)
-            print(f"📧 Customer Email: {customer_email}")
-            print(f"💳 Square Transaction ID: {request.square_transaction_id}")
-            logging.info(f"[CONFIRM] Payment APPROVED for {customer_email}, square_txn={request.square_transaction_id}")
-
-            # 1. Fetch files: either by ID (Individual) or by search (Enterprise)
-            if request.file_ids:
-                # INDIVIDUAL FLOW: Fetch specific files by ID (from upload response)
-                print(f"\n📁 Step 1/6: Fetching files by ID (Individual flow)...")
-                print(f"   File IDs to process: {request.file_ids}")
-                logging.info(f"[CONFIRM] Individual flow: Fetching {len(request.file_ids)} files by ID for {customer_email}")
-
-                files_in_temp = []
-                for i, file_id in enumerate(request.file_ids, 1):
-                    try:
-                        print(f"   Fetching file {i}/{len(request.file_ids)}: {file_id}...")
-                        file_info = await google_drive_service.get_file_by_id(file_id)
-
-                        # Security: Verify file belongs to this user
-                        if file_info.get('customer_email') != customer_email:
-                            error_msg = f"File {file_id} does not belong to you"
-                            print(f"   🚫 SECURITY VIOLATION: {error_msg}")
-                            logging.error(f"[CONFIRM] Security violation: {error_msg}")
-                            raise HTTPException(
-                                status_code=403,
-                                detail=error_msg
-                            )
-
-                        # Verify file is awaiting payment
-                        file_status = file_info.get('status')
-                        if file_status != 'awaiting_payment':
-                            error_msg = f"File {file_id} is not awaiting payment (status: {file_status})"
-                            print(f"   ❌ INVALID STATUS: {error_msg}")
-                            logging.error(f"[CONFIRM] Invalid file status: {error_msg}")
-                            raise HTTPException(
-                                status_code=400,
-                                detail=error_msg
-                            )
-
-                        files_in_temp.append(file_info)
-                        print(f"   ✅ File {i}: {file_info.get('filename')}")
-                        logging.info(f"[CONFIRM] File {i} fetched: {file_info.get('filename')}")
-                    except HTTPException:
-                        raise
-                    except Exception as e:
-                        error_msg = f"Failed to fetch file {file_id}: {str(e)}"
-                        print(f"   ❌ ERROR: {error_msg}")
-                        logging.error(f"[CONFIRM] File fetch error: {error_msg}", exc_info=True)
-                        raise HTTPException(
-                            status_code=500,
-                            detail=error_msg
-                        )
-
-                print(f"   ✅ Successfully fetched {len(files_in_temp)} file(s)")
-                for i, file_info in enumerate(files_in_temp, 1):
-                    print(f"      File {i}: {file_info.get('filename')} (ID: {file_info.get('file_id', 'N/A')[:20]}...)")
-                logging.info(f"[CONFIRM] All files fetched: {[f.get('filename') for f in files_in_temp]}")
-
+        # Fetch all transactions
+        transactions = []
+        print(f"[CONFIRM DEBUG] Fetching {len(request.transaction_ids)} transaction(s) from database...")
+        for txn_id in request.transaction_ids:
+            txn = await database.translation_transactions.find_one({"transaction_id": txn_id})
+            if txn:
+                transactions.append(txn)
+                print(f"[CONFIRM DEBUG] Found transaction {txn_id}")
+                print(f"[CONFIRM DEBUG]   - user_id: {txn.get('user_id', 'MISSING')}")
+                print(f"[CONFIRM DEBUG]   - original_file_url: {txn.get('original_file_url', 'MISSING')}")
+                print(f"[CONFIRM DEBUG]   - file_name: {txn.get('file_name', 'MISSING')}")
+                print(f"[CONFIRM DEBUG]   - status: {txn.get('status', 'MISSING')}")
             else:
-                # ENTERPRISE FLOW: Search by email + status (backward compatible)
-                print(f"\n📁 Step 1/6: Searching for files (Enterprise flow)...")
-                print(f"   Searching for: customer_email={customer_email}, status=awaiting_payment")
-                logging.info(f"[CONFIRM] Enterprise flow: Searching Temp folder for {customer_email} with status=awaiting_payment")
+                logging.warning(f"[CONFIRM] Transaction {txn_id} not found")
+                print(f"[CONFIRM DEBUG] ❌ Transaction {txn_id} NOT FOUND in database")
 
-                try:
-                    files_in_temp = await google_drive_service.find_files_by_customer_email(
-                        customer_email=customer_email,
-                        status="awaiting_payment"
-                    )
-                    print(f"   ✅ Search completed successfully")
-                    logging.info(f"[CONFIRM] File search completed, found {len(files_in_temp) if files_in_temp else 0} files")
-                except Exception as e:
-                    print(f"   ❌ File search failed: {e}")
-                    logging.error(f"[CONFIRM] File search error: {e}", exc_info=True)
-                    raise
+        if not transactions:
+            raise HTTPException(status_code=404, detail="No valid transactions found")
 
-                if not files_in_temp:
-                    print(f"   ❌ No files found in Temp folder for {customer_email}")
-                    logging.warning(f"[CONFIRM] No files found in Temp for {customer_email}")
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"No files found in Temp folder for customer {customer_email}"
-                    )
+        # Extract customer email and company name from first transaction
+        first_txn = transactions[0]
+        customer_email = first_txn.get("user_id", "")  # user_id contains email
+        company_name = first_txn.get("company_name")  # company_name for enterprise customers
+        print(f"[CONFIRM DEBUG] Customer email extracted: {customer_email}")
+        print(f"[CONFIRM DEBUG] Company name extracted: {company_name or 'None (individual customer)'}")
 
-                print(f"   ✅ Found {len(files_in_temp)} file(s) in Temp folder")
-                for i, file_info in enumerate(files_in_temp, 1):
-                    print(f"      File {i}: {file_info.get('filename')} (ID: {file_info.get('file_id', 'N/A')[:20]}...)")
-                logging.info(f"[CONFIRM] Found {len(files_in_temp)} files: {[f.get('filename') for f in files_in_temp]}")
+        # Get file IDs from original_file_url (Google Drive URLs contain file ID)
+        file_ids = []
+        print(f"[CONFIRM DEBUG] Extracting file IDs from {len(transactions)} transaction(s)...")
+        for i, txn in enumerate(transactions, 1):
+            url = txn.get("original_file_url", "")
+            print(f"[CONFIRM DEBUG] Transaction {i}/{len(transactions)}: URL = '{url}'")
 
-            # 2. Get transaction_id from request (UNIFIED - Both Individual and Enterprise)
-            print(f"\n🔍 Step 2/6: Getting transaction ID...")
-            from bson.decimal128 import Decimal128
-            from decimal import Decimal
-
-            # Validate authentication
-            if not current_user:
-                error_msg = "Authentication required: current_user is None"
-                print(f"   ❌ CRITICAL: {error_msg}")
-                logging.error(f"[CONFIRM] {error_msg}. This should not happen - check auth middleware.")
-                raise HTTPException(
-                    status_code=401,
-                    detail="Authentication required. Please log in again."
-                )
-
-            # Validate customer_email exists
-            customer_email = current_user.get("email")
-            if not customer_email:
-                error_msg = "Invalid JWT: missing email field"
-                print(f"   ❌ CRITICAL: {error_msg}")
-                logging.error(f"[CONFIRM] {error_msg}. JWT: {current_user}")
-                raise HTTPException(
-                    status_code=401,
-                    detail="Invalid authentication token. Please log in again."
-                )
-
-            print(f"   ✅ Authenticated user: {customer_email}")
-            logging.info(f"[CONFIRM] User authenticated: {customer_email}")
-
-            # transaction_id is REQUIRED - frontend must send it from stored state
-            if not request.transaction_id:
-                error_msg = (
-                    "transaction_id is required. Frontend must send the transaction_id "
-                    "that was returned from /translate-user and stored in browser state."
-                )
-                print(f"   ❌ {error_msg}")
-                logging.error(f"[CONFIRM] {error_msg}")
-                raise HTTPException(
-                    status_code=400,
-                    detail="transaction_id is required"
-                )
-
-            transaction_id = request.transaction_id
-            print(f"   ✅ Using transaction_id from request: {transaction_id}")
-            logging.info(f"[CONFIRM] Using transaction_id from request: {transaction_id}")
-
-            # Determine flow type and collection based on company_name in JWT
-            company_name = current_user.get("company_name")
-            is_enterprise = company_name is not None and company_name != ""
-
-            if is_enterprise:
-                # Verify company exists in database
-                company_doc = await database.company.find_one({"company_name": company_name})
-
-                if not company_doc:
-                    error_msg = f"Invalid company '{company_name}' in JWT token"
-                    print(f"   🚫 SECURITY: {error_msg}")
-                    logging.error(f"[CONFIRM] {error_msg} for user {customer_email}")
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Invalid company credentials. Please re-authenticate."
-                    )
-
-                print(f"   ✅ Company validated: {company_name}")
-                logging.info(f"[CONFIRM] Company validation passed: {company_name}")
-
-                collection = database.translation_transactions
-                flow_type = "Enterprise"
-                print(f"   Flow: {flow_type} (Company: {company_name})")
-                logging.info(f"[CONFIRM] Enterprise flow detected: {company_name}")
+            # Extract file ID from Google Drive URL - handles multiple formats:
+            # - Google Docs: https://docs.google.com/document/d/{file_id}/edit
+            # - Google Sheets: https://docs.google.com/spreadsheets/d/{file_id}/edit
+            # - Google Drive: https://drive.google.com/file/d/{file_id}/view
+            file_id = None
+            if "/document/d/" in url:
+                file_id = url.split("/document/d/")[1].split("/")[0]
+                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /document/d/ pattern: {file_id}")
+            elif "/spreadsheets/d/" in url:
+                file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
+                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /spreadsheets/d/ pattern: {file_id}")
+            elif "/file/d/" in url:
+                file_id = url.split("/file/d/")[1].split("/")[0]
+                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /file/d/ pattern: {file_id}")
             else:
-                collection = database.user_transactions
-                flow_type = "Individual"
-                print(f"   Flow: {flow_type}")
-                logging.info(f"[CONFIRM] Individual flow detected")
+                print(f"[CONFIRM DEBUG]   ❌ URL does not match any known Google Drive pattern - SKIPPED")
 
-            # Find existing transaction in appropriate collection
-            existing_transaction = await collection.find_one({
-                "transaction_id": transaction_id
-            })
+            if file_id:
+                file_ids.append(file_id)
 
-            if not existing_transaction:
-                error_msg = f"No transaction found with transaction_id={transaction_id} in {collection.name}"
-                print(f"   ❌ {error_msg}")
-                logging.error(f"[CONFIRM] {error_msg}")
-                raise HTTPException(
-                    status_code=404,
-                    detail=error_msg
-                )
+        print(f"[CONFIRM DEBUG] Total file IDs extracted: {len(file_ids)}")
+        print(f"[CONFIRM DEBUG] File IDs: {file_ids}")
 
-            print(f"   ✅ Found transaction in {collection.name}")
-            logging.info(f"[CONFIRM] Found transaction {transaction_id} in {collection.name}")
-
-            # Authorization check: Verify user has permission to access this transaction
-            print(f"\n🔒 Verifying authorization...")
-
-            if is_enterprise:
-                # Enterprise: Verify transaction belongs to user's company
-                txn_company = existing_transaction.get("company_name")
-
-                if txn_company != company_name:
-                    error_msg = (
-                        f"Authorization denied: User from company '{company_name}' "
-                        f"attempted to access transaction from company '{txn_company}'"
-                    )
-                    print(f"   🚫 {error_msg}")
-                    logging.error(f"[CONFIRM] SECURITY VIOLATION: {error_msg}. User: {customer_email}, Transaction: {transaction_id}")
-                    raise HTTPException(
-                        status_code=403,
-                        detail="You don't have permission to access this transaction"
-                    )
-
-                print(f"   ✅ Authorization passed: Company '{company_name}' owns transaction")
-                logging.info(f"[CONFIRM] Authorization verified: {company_name} accessing {transaction_id}")
-
-            else:
-                # Individual: Verify transaction belongs to current user
-                txn_user = (existing_transaction.get("user_id") or existing_transaction.get("user_email") or "").lower()
-                current_email = (customer_email or "").lower()
-
-                if not txn_user or txn_user != current_email:
-                    error_msg = (
-                        f"Authorization denied: User '{customer_email}' "
-                        f"attempted to access transaction from user '{txn_user}'"
-                    )
-                    print(f"   🚫 {error_msg}")
-                    logging.error(f"[CONFIRM] SECURITY VIOLATION: {error_msg}. Transaction: {transaction_id}")
-                    raise HTTPException(
-                        status_code=403,
-                        detail="You don't have permission to access this transaction"
-                    )
-
-                print(f"   ✅ Authorization passed: User '{customer_email}' owns transaction")
-                logging.info(f"[CONFIRM] Authorization verified: {customer_email} accessing {transaction_id}")
-
-            # Extract metadata with explicit flow-based field access
-            if is_enterprise:
-                total_units = existing_transaction.get("units_count")
-                total_price_raw = existing_transaction.get("total_price")
-                units_field = "units_count"
-                price_field = "total_price"
-            else:
-                total_units = existing_transaction.get("number_of_units")
-                total_price_raw = existing_transaction.get("total_cost")
-                units_field = "number_of_units"
-                price_field = "total_cost"
-
-            # Validate required fields exist
-            if total_units is None:
-                error_msg = f"Transaction {transaction_id} missing required field '{units_field}'"
-                print(f"   ❌ {error_msg}")
-                logging.error(f"[CONFIRM] {error_msg}. Flow: {flow_type}, Collection: {collection.name}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Transaction data incomplete: missing {units_field}"
-                )
-
-            if total_price_raw is None:
-                error_msg = f"Transaction {transaction_id} missing required field '{price_field}'"
-                print(f"   ❌ {error_msg}")
-                logging.error(f"[CONFIRM] {error_msg}. Flow: {flow_type}, Collection: {collection.name}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Transaction data incomplete: missing {price_field}"
-                )
-
-            # Convert Decimal128 to float (handle MongoDB numeric type)
-            total_price = float(total_price_raw) if isinstance(total_price_raw, Decimal128) else float(total_price_raw)
-
-            print(f"   Transaction details:")
-            print(f"      Transaction ID: {transaction_id}")
-            print(f"      Total Units: {total_units} (field: {units_field})")
-            print(f"      Total Price: ${total_price} (field: {price_field})")
-            logging.info(
-                f"[CONFIRM] Transaction details: id={transaction_id}, units={total_units}, "
-                f"price=${total_price}, flow={flow_type}, fields=({units_field}, {price_field})"
-            )
-
-            # 3. Update transaction with payment/approval confirmation
-            print(f"\n💾 Step 3/6: Updating transaction ({flow_type})...")
-            try:
-                update_fields = {
-                    "status": "processing",
-                    "updated_at": datetime.now(timezone.utc)
-                }
-
-                # Add payment/approval fields based on flow type
-                if is_enterprise:
-                    update_fields["approval_status"] = "APPROVED"
-                    update_fields["approved_at"] = datetime.now(timezone.utc)
-                    print(f"   Setting approval_status=APPROVED")
-                else:
-                    update_fields["square_payment_id"] = request.square_transaction_id
-                    update_fields["payment_status"] = "COMPLETED"
-                    update_fields["payment_date"] = datetime.now(timezone.utc)
-                    print(f"   Setting payment_status=COMPLETED, square_payment_id={request.square_transaction_id}")
-
-                update_result = await collection.update_one(
-                    {"transaction_id": transaction_id},
-                    {"$set": update_fields}
-                )
-
-                if update_result.modified_count > 0:
-                    print(f"   ✅ Transaction updated")
-                    logging.info(f"[CONFIRM] Transaction {transaction_id} updated successfully")
-                else:
-                    print(f"   ⚠️  Transaction not updated (may already be updated)")
-                    logging.warning(f"[CONFIRM] Transaction {transaction_id} not modified")
-
-            except Exception as e:
-                print(f"   ❌ Failed to update transaction: {e}")
-                logging.error(f"[CONFIRM] Transaction update error: {e}", exc_info=True)
-                # Don't raise - continue with file operations
-
-            # 4. Update file metadata
-            print(f"\n🏷️  Step 4/6: Updating file metadata...")
-            metadata_success_count = 0
-            metadata_fail_count = 0
-
-            for i, file_info in enumerate(files_in_temp, 1):
-                file_id = file_info.get('file_id')
-                filename = file_info.get('filename', 'unknown')
-
-                if file_id:
-                    try:
-                        print(f"   Updating file {i}/{len(files_in_temp)}: {filename[:40]}...")
-                        metadata = {
-                            'transaction_id': transaction_id,
-                            'status': 'processing'
-                        }
-
-                        # Add flow-specific timestamp
-                        if is_enterprise:
-                            metadata['approved_at'] = datetime.now(timezone.utc).isoformat()
-                        else:
-                            metadata['payment_date'] = datetime.now(timezone.utc).isoformat()
-
-                        await google_drive_service.update_file_metadata(
-                            file_id=file_id,
-                            metadata=metadata
-                        )
-                        metadata_success_count += 1
-                        print(f"   ✓ Metadata updated for {filename[:40]}")
-                    except Exception as e:
-                        metadata_fail_count += 1
-                        print(f"   ✗ Failed to update metadata for {filename[:40]}: {e}")
-                        logging.error(f"[CONFIRM] Metadata update failed for {file_id}: {e}")
-
-            print(f"   ✅ Updated {metadata_success_count}/{len(files_in_temp)} files")
-            logging.info(f"[CONFIRM] Metadata updates: {metadata_success_count}/{len(files_in_temp)} succeeded")
-
-            # 5. Move files from Temp to Inbox
-            print(f"\n📂 Step 5/6: Moving files from Temp to Inbox...")
-            file_ids_to_move = [file_info.get('file_id') for file_info in files_in_temp if file_info.get('file_id')]
-
-            print(f"   Files to move: {len(file_ids_to_move)}")
-            moved_count = 0
-            if file_ids_to_move:
-                try:
-                    move_result = await google_drive_service.move_files_to_inbox_on_payment_success(
-                        customer_email=customer_email,
-                        file_ids=file_ids_to_move,
-                        company_name=company_name if is_enterprise else None
-                    )
-
-                    moved_count = move_result.get('moved_successfully', 0)
-                    failed_count = move_result.get('failed_moves', 0)
-
-                    print(f"   ✅ Files moved: {moved_count} succeeded, {failed_count} failed")
-                    logging.info(f"[CONFIRM] File movement: {moved_count}/{len(file_ids_to_move)} succeeded")
-
-                    if failed_count > 0:
-                        print(f"   ⚠️  WARNING: {failed_count} files failed to move")
-                        logging.warning(f"[CONFIRM] {failed_count} files failed to move")
-                except Exception as e:
-                    print(f"   ❌ File movement failed: {e}")
-                    logging.error(f"[CONFIRM] File movement error: {e}", exc_info=True)
-                    raise
-
-            print(f"\n✅ CONFIRMATION COMPLETE ({flow_type})")
-            print(f"   Transaction ID: {transaction_id}")
-            print(f"   Files processed: {len(files_in_temp)}")
-            print(f"   Total amount: ${total_price}")
-            if is_enterprise:
-                print(f"   Company: {company_name}")
-            print("=" * 80 + "\n")
-
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "success": True,
-                    "message": "Transaction confirmed successfully",
-                    "data": {
-                        "transaction_id": transaction_id,
-                        "confirmed_transactions": 1,
-                        "moved_files": moved_count,
-                        "total_amount": total_price,
-                        "company_name": company_name,
-                        "customer_email": customer_email,
-                        "flow_type": flow_type
-                    }
-                }
-            )
-
-        # ========== FAILURE FLOW: Payment Failed ==========
+        # Log what we're about to do (fast - logging only)
+        if company_name:
+            logging.info(f"[CONFIRM] Scheduling background task to move {len(file_ids)} files from {company_name}/{customer_email}/Temp/ to Inbox/")
+            print(f"[CONFIRM] Scheduling background task: {len(file_ids)} files from {company_name}/{customer_email}/Temp/ to Inbox/")
         else:
-            print("\n" + "=" * 80)
-            print("❌ FAILURE FLOW - Payment Failed")
-            print("=" * 80)
-            print(f"📧 Customer Email: {customer_email}")
-            print(f"💳 Square Transaction ID: {request.square_transaction_id}")
-            logging.info(f"[CONFIRM] Payment FAILED for {customer_email}, square_txn={request.square_transaction_id}")
+            logging.info(f"[CONFIRM] Scheduling background task to move {len(file_ids)} files from {customer_email}/Temp/ to Inbox/")
+            print(f"[CONFIRM] Scheduling background task: {len(file_ids)} files from {customer_email}/Temp/ to Inbox/")
 
-            # Find and delete files in Temp folder
-            print(f"\n🗑️  Searching for files to delete...")
-            try:
-                files_in_temp = await google_drive_service.find_files_by_customer_email(
-                    customer_email=customer_email,
-                    status="awaiting_payment"
-                )
-                print(f"   Found {len(files_in_temp) if files_in_temp else 0} files to delete")
-            except Exception as e:
-                print(f"   ❌ File search failed: {e}")
-                logging.error(f"[CONFIRM] File search error: {e}", exc_info=True)
-                raise
+        # Schedule background task for file move, verification, and updates
+        print(f"[CONFIRM] Adding background task to queue...")
+        background_tasks.add_task(
+            process_transaction_confirmation_background,
+            transaction_ids=request.transaction_ids,
+            customer_email=customer_email,
+            company_name=company_name,
+            file_ids=file_ids
+        )
+        print(f"[CONFIRM] ✅ Background task scheduled successfully")
 
-            if files_in_temp:
-                file_ids_to_delete = [f.get('file_id') for f in files_in_temp if f.get('file_id')]
-                print(f"   Deleting {len(file_ids_to_delete)} files...")
+        # Return IMMEDIATELY (< 1 second) - background task will handle everything else
+        response = {
+            "success": True,
+            "message": f"Transactions confirmed. Files are being moved to Inbox in the background.",
+            "data": {
+                "confirmed_transactions": len(request.transaction_ids),
+                "total_files": len(file_ids),
+                "status": "processing",
+                "customer_email": customer_email,
+                "company_name": company_name if company_name else None,
+                "processing_note": "Files are being moved and verified in the background. This may take 30-90 seconds to complete."
+            }
+        }
 
-                try:
-                    delete_result = await google_drive_service.delete_files_on_payment_failure(
-                        customer_email=customer_email,
-                        file_ids=file_ids_to_delete
-                    )
-                    deleted_count = delete_result.get('deleted_successfully', 0)
-                    print(f"   ✅ Deleted {deleted_count} files")
-                    logging.info(f"[CONFIRM] Deleted {deleted_count} files after payment failure")
-                except Exception as e:
-                    print(f"   ❌ File deletion failed: {e}")
-                    logging.error(f"[CONFIRM] File deletion error: {e}", exc_info=True)
+        logging.info(f"[CONFIRM] Immediate response sent: {len(request.transaction_ids)} transactions scheduled for processing")
+        print(f"[CONFIRM] ⚡ INSTANT RESPONSE: {len(request.transaction_ids)} transactions scheduled (background processing started)")
 
-            print("\n❌ PAYMENT FAILED - Files deleted")
-            print("=" * 80 + "\n")
-
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "success": False,
-                    "message": "Payment failed. Files have been deleted.",
-                    "data": {
-                        "deleted_files": len(files_in_temp) if files_in_temp else 0,
-                        "customer_email": customer_email
-                    }
-                }
-            )
+        return JSONResponse(content=response)
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"\n❌ UNEXPECTED ERROR: {e}")
-        logging.error(f"[CONFIRM] Unexpected error: {e}", exc_info=True)
+        logging.error(f"[CONFIRM] Failed to confirm transactions: {e}", exc_info=True)
+        print(f"[CONFIRM] Error: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            detail=f"Failed to confirm transactions: {str(e)}"
+        )
+
+
+# ============================================================================
+# Transaction Decline Endpoint
+# ============================================================================
+@app.post("/api/transactions/decline", tags=["Transactions"])
+async def decline_transactions(
+    request: TransactionActionRequest = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Decline transactions and delete files from Temp/.
+
+    This endpoint:
+    1. Updates transaction status from "started" to "declined"
+    2. Deletes files from customer_email/Temp/ folder
+    3. Returns count of successfully deleted files
+    """
+    from app.database import database
+    from app.services.google_drive_service import google_drive_service
+    from datetime import datetime, timezone
+
+    logging.info(f"[DECLINE] User {current_user.get('email')} declining {len(request.transaction_ids)} transactions")
+    print(f"[DECLINE] Declining transactions: {request.transaction_ids}")
+
+    if not request.transaction_ids:
+        raise HTTPException(status_code=400, detail="No transaction IDs provided")
+
+    try:
+        # Fetch all transactions
+        transactions = []
+        for txn_id in request.transaction_ids:
+            txn = await database.translation_transactions.find_one({"transaction_id": txn_id})
+            if txn:
+                transactions.append(txn)
+            else:
+                logging.warning(f"[DECLINE] Transaction {txn_id} not found")
+
+        if not transactions:
+            raise HTTPException(status_code=404, detail="No valid transactions found")
+
+        # Extract customer email from first transaction
+        first_txn = transactions[0]
+        customer_email = first_txn.get("user_id", "")  # user_id contains email
+
+        # Get file IDs from original_file_url (Google Drive URLs contain file ID)
+        file_ids = []
+        for txn in transactions:
+            url = txn.get("original_file_url", "")
+            # Extract file ID from Google Drive URL - handles multiple formats:
+            # - Google Docs: https://docs.google.com/document/d/{file_id}/edit
+            # - Google Sheets: https://docs.google.com/spreadsheets/d/{file_id}/edit
+            # - Google Drive: https://drive.google.com/file/d/{file_id}/view
+            file_id = None
+            if "/document/d/" in url:
+                file_id = url.split("/document/d/")[1].split("/")[0]
+            elif "/spreadsheets/d/" in url:
+                file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
+            elif "/file/d/" in url:
+                file_id = url.split("/file/d/")[1].split("/")[0]
+
+            if file_id:
+                file_ids.append(file_id)
+
+        logging.info(f"[DECLINE] Deleting {len(file_ids)} files from Temp/ for {customer_email}")
+        print(f"[DECLINE] Deleting {len(file_ids)} files from Temp/")
+
+        # Delete files using existing Google Drive service function
+        deleted_count = await google_drive_service.delete_files_on_payment_failure(
+            customer_email=customer_email,
+            file_ids=file_ids
+        )
+
+        # Update transaction status to "declined"
+        for txn_id in request.transaction_ids:
+            await database.translation_transactions.update_one(
+                {"transaction_id": txn_id},
+                {
+                    "$set": {
+                        "status": "declined",
+                        "error_message": "User declined the transaction",
+                        "updated_at": datetime.now(timezone.utc)
+                    }
+                }
+            )
+            logging.info(f"[DECLINE] Transaction {txn_id} status updated to 'declined'")
+            print(f"[DECLINE] Transaction {txn_id} declined")
+
+        response = {
+            "success": True,
+            "message": f"Successfully declined {len(request.transaction_ids)} transaction(s)",
+            "data": {
+                "declined_transactions": len(request.transaction_ids),
+                "deleted_files": deleted_count
+            }
+        }
+
+        logging.info(f"[DECLINE] Success: {len(request.transaction_ids)} transactions declined, {deleted_count} files deleted")
+        print(f"[DECLINE] Complete: {len(request.transaction_ids)} transactions declined, {deleted_count} files deleted")
+
+        return JSONResponse(content=response)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"[DECLINE] Failed to decline transactions: {e}", exc_info=True)
+        print(f"[DECLINE] Error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to decline transactions: {str(e)}"
         )
 
 
@@ -1852,6 +1470,7 @@ async def confirm_enterprise_transaction(
     - If status=True: Moves files Temp → Inbox, updates transaction to 'processing'
     - If status=False: Deletes files from Temp, updates transaction to 'cancelled'
     """
+    import json
     from app.database import database
     from app.services.google_drive_service import google_drive_service
     from datetime import datetime, timezone
@@ -1899,7 +1518,7 @@ async def confirm_enterprise_transaction(
         # Get file_ids from transaction.documents (NO SEARCH)
         documents = transaction.get("documents", [])
 
-        logging.info(f"[CONFIRM-ENTERPRISE] Transaction raw data: {json.dumps(serialize_transaction_for_json(transaction.copy()), indent=2, default=str)}")
+        logging.info(f"[CONFIRM-ENTERPRISE] Transaction ID: {transaction.get('transaction_id')}, Status: {transaction.get('status')}")
         logging.info(f"[CONFIRM-ENTERPRISE] Documents array: {json.dumps(documents, indent=2, default=str)}")
 
         if not documents:
@@ -1918,43 +1537,10 @@ async def confirm_enterprise_transaction(
         if not file_ids:
             logging.error(f"[CONFIRM-ENTERPRISE] No file_ids found in documents")
             logging.error(f"[CONFIRM-ENTERPRISE] Documents structure: {json.dumps(documents, indent=2, default=str)}")
-
-            # Check if original_url exists as fallback
-            original_urls = [doc.get("original_url") for doc in documents if doc.get("original_url")]
-
-            if original_urls:
-                logging.warning(f"[CONFIRM-ENTERPRISE] Found {len(original_urls)} original_urls, attempting to extract file_ids")
-
-                # Extract file_ids from URLs
-                import re
-                extracted_count = 0
-                for doc in documents:
-                    url = doc.get("original_url", "")
-                    if url and not doc.get("file_id"):
-                        # URL format: https://docs.google.com/document/d/FILE_ID/...
-                        match = re.search(r'/d/([a-zA-Z0-9_-]+)', url)
-                        if match:
-                            extracted_file_id = match.group(1)
-                            doc["file_id"] = extracted_file_id  # Add to document
-                            file_ids.append(extracted_file_id)
-                            extracted_count += 1
-                            logging.info(f"[CONFIRM-ENTERPRISE] Extracted file_id {extracted_file_id} from URL: {url}")
-
-                if file_ids:
-                    # Update transaction with extracted file_ids
-                    await database.translation_transactions.update_one(
-                        {"transaction_id": request.transaction_id},
-                        {"$set": {"documents": documents}}
-                    )
-                    logging.info(f"[CONFIRM-ENTERPRISE] Updated transaction with {extracted_count} extracted file_ids")
-                    logging.info(f"[CONFIRM-ENTERPRISE] Final file_ids list: {file_ids}")
-
-            if not file_ids:
-                logging.error(f"[CONFIRM-ENTERPRISE] Failed to extract any file_ids from URLs")
-                raise HTTPException(
-                    status_code=400,
-                    detail="Transaction documents have no file_ids and cannot extract from URLs"
-                )
+            raise HTTPException(
+                status_code=400,
+                detail="Transaction documents have no file_ids"
+            )
 
         logging.info(f"[CONFIRM-ENTERPRISE] Found {len(file_ids)} files in transaction")
 
@@ -2006,6 +1592,12 @@ async def confirm_enterprise_transaction(
                 subscription_id = transaction.get("subscription_id")
                 units_count = transaction.get("units_count", 0)
 
+                # Determine translation mode from documents (mixed if multiple modes)
+                unique_modes = set(doc.get("translation_mode", "automatic") for doc in documents)
+                transaction_mode = "mixed" if len(unique_modes) > 1 else next(iter(unique_modes))
+
+                logging.info(f"[CONFIRM-ENTERPRISE] Subscription tracking - ID: {subscription_id}, Units: {units_count}, Mode: {transaction_mode}")
+
                 if subscription_id and units_count > 0:
                     from app.services.subscription_service import subscription_service
                     from app.models.subscription import UsageUpdate
@@ -2013,17 +1605,23 @@ async def confirm_enterprise_transaction(
                     try:
                         usage_update = UsageUpdate(
                             units_to_add=units_count,
-                            use_promotional_units=False
+                            use_promotional_units=False,
+                            translation_mode=transaction_mode  # Include mode for logging
                         )
                         await subscription_service.record_usage(
                             subscription_id=str(subscription_id),
                             usage_data=usage_update
                         )
-                        logging.info(f"[CONFIRM-ENTERPRISE] Updated subscription usage: +{units_count} units")
+                        logging.info(f"[CONFIRM-ENTERPRISE] Updated subscription usage: +{units_count} units (mode: {transaction_mode})")
                     except Exception as e:
                         logging.error(f"[CONFIRM-ENTERPRISE] Subscription update failed: {e}")
                         # Don't fail the entire operation if usage tracking fails
                         # The files were moved successfully, so we should return success
+                else:
+                    logging.warning(
+                        f"[CONFIRM-ENTERPRISE] Skipping subscription update - "
+                        f"subscription_id: {subscription_id}, units_count: {units_count}"
+                    )
 
                 return JSONResponse(
                     status_code=200,
@@ -2115,7 +1713,7 @@ async def confirm_individual_transaction(
     - Finds transaction by transaction_id in user_transactions collection
     - Verifies transaction belongs to current user
     - Uses file_ids from request (NO SEARCH)
-    - If status=True: Stores square_transaction_id, moves files Temp → Inbox, updates transaction to 'completed'
+    - If status=True: Stores stripe_checkout_session_id, moves files Temp → Inbox, updates transaction to 'completed'
     - If status=False: Deletes files from Temp, updates transaction to 'cancelled'
     """
     from app.database import database
@@ -2177,14 +1775,14 @@ async def confirm_individual_transaction(
         if request.status:
             logging.info(f"[CONFIRM-INDIVIDUAL] Confirming transaction {request.transaction_id}")
 
-            # Update transaction with square_transaction_id and status
+            # Update transaction with stripe_checkout_session_id and status
             update_data = {
                 "status": "completed",
                 "updated_at": datetime.now(timezone.utc)
             }
-            if request.square_transaction_id:
-                update_data["square_transaction_id"] = request.square_transaction_id
-                logging.info(f"[CONFIRM-INDIVIDUAL] Storing Square transaction ID: {request.square_transaction_id}")
+            if request.stripe_checkout_session_id:
+                update_data["stripe_checkout_session_id"] = request.stripe_checkout_session_id
+                logging.info(f"[CONFIRM-INDIVIDUAL] Storing Square transaction ID: {request.stripe_checkout_session_id}")
 
             await database.user_transactions.update_one(
                 {"transaction_id": request.transaction_id},
@@ -2226,7 +1824,7 @@ async def confirm_individual_transaction(
                         "message": "Individual transaction confirmed successfully",
                         "data": {
                             "transaction_id": request.transaction_id,
-                            "square_transaction_id": request.square_transaction_id,
+                            "stripe_checkout_session_id": request.stripe_checkout_session_id,
                             "moved_files": moved_count,
                             "failed_files": failed_count,
                             "total_files": len(file_ids)
@@ -2289,136 +1887,6 @@ async def confirm_individual_transaction(
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
-        )
-
-
-# ============================================================================
-# Transaction Decline Endpoint
-# ============================================================================
-@app.post("/api/transactions/decline", tags=["Transactions"])
-async def decline_transactions(
-    request: TransactionActionRequest = Body(...),
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Decline transactions and delete files from Temp/.
-
-    This endpoint:
-    1. Updates transaction status from "started" to "declined"
-    2. Deletes files from customer_email/Temp/ folder
-    3. Returns count of successfully deleted files
-    """
-    from app.database import database
-    from app.services.google_drive_service import google_drive_service
-    from datetime import datetime, timezone
-
-    logging.info(f"[DECLINE] User {current_user.get('email')} declining {len(request.transaction_ids)} transactions")
-    print(f"[DECLINE] Declining transactions: {request.transaction_ids}")
-
-    if not request.transaction_ids:
-        raise HTTPException(status_code=400, detail="No transaction IDs provided")
-
-    try:
-        # Fetch all transactions
-        transactions = []
-        for txn_id in request.transaction_ids:
-            txn = await database.translation_transactions.find_one({"transaction_id": txn_id})
-            if txn:
-                transactions.append(txn)
-            else:
-                logging.warning(f"[DECLINE] Transaction {txn_id} not found")
-
-        if not transactions:
-            raise HTTPException(status_code=404, detail="No valid transactions found")
-
-        # Extract customer email from first transaction
-        first_txn = transactions[0]
-        customer_email = first_txn.get("user_id", "")  # user_id contains email
-
-        # Get file IDs from documents array (post-migration) or original_file_url (pre-migration fallback)
-        file_ids = []
-        for txn in transactions:
-            # Try nested structure first (post-migration)
-            documents = txn.get("documents", [])
-
-            if documents:
-                # Process all documents in the transaction
-                for doc in documents:
-                    url = doc.get("original_url", "")
-                    # Extract file ID from Google Drive URL - handles multiple formats:
-                    # - Google Docs: https://docs.google.com/document/d/{file_id}/edit
-                    # - Google Sheets: https://docs.google.com/spreadsheets/d/{file_id}/edit
-                    # - Google Drive: https://drive.google.com/file/d/{file_id}/view
-                    file_id = None
-                    if "/document/d/" in url:
-                        file_id = url.split("/document/d/")[1].split("/")[0]
-                    elif "/spreadsheets/d/" in url:
-                        file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
-                    elif "/file/d/" in url:
-                        file_id = url.split("/file/d/")[1].split("/")[0]
-
-                    if file_id:
-                        file_ids.append(file_id)
-            else:
-                # Fallback to flat structure (pre-migration - should not happen but defensive coding)
-                url = txn.get("original_file_url", "")
-                file_id = None
-                if "/document/d/" in url:
-                    file_id = url.split("/document/d/")[1].split("/")[0]
-                elif "/spreadsheets/d/" in url:
-                    file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
-                elif "/file/d/" in url:
-                    file_id = url.split("/file/d/")[1].split("/")[0]
-
-                if file_id:
-                    file_ids.append(file_id)
-
-        logging.info(f"[DECLINE] Deleting {len(file_ids)} files from Temp/ for {customer_email}")
-        print(f"[DECLINE] Deleting {len(file_ids)} files from Temp/")
-
-        # Delete files using existing Google Drive service function
-        deleted_count = await google_drive_service.delete_files_on_payment_failure(
-            customer_email=customer_email,
-            file_ids=file_ids
-        )
-
-        # Update transaction status to "declined"
-        for txn_id in request.transaction_ids:
-            await database.translation_transactions.update_one(
-                {"transaction_id": txn_id},
-                {
-                    "$set": {
-                        "status": "declined",
-                        "error_message": "User declined the transaction",
-                        "updated_at": datetime.now(timezone.utc)
-                    }
-                }
-            )
-            logging.info(f"[DECLINE] Transaction {txn_id} status updated to 'declined'")
-            print(f"[DECLINE] Transaction {txn_id} declined")
-
-        response = {
-            "success": True,
-            "message": f"Successfully declined {len(request.transaction_ids)} transaction(s)",
-            "data": {
-                "declined_transactions": len(request.transaction_ids),
-                "deleted_files": deleted_count
-            }
-        }
-
-        logging.info(f"[DECLINE] Success: {len(request.transaction_ids)} transactions declined, {deleted_count} files deleted")
-        print(f"[DECLINE] Complete: {len(request.transaction_ids)} transactions declined, {deleted_count} files deleted")
-
-        return JSONResponse(content=response)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"[DECLINE] Failed to decline transactions: {e}", exc_info=True)
-        print(f"[DECLINE] Error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to decline transactions: {str(e)}"
         )
 
 
@@ -2504,28 +1972,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     print("🔴 DEBUG: PYDANTIC VALIDATION ERROR!")
     print(f"🔴 DEBUG: Path: {request.url.path}")
     print(f"🔴 DEBUG: Errors: {exc.errors()}")
-
-    # ===================================================================
-    # ENHANCED LOGGING FOR /submit ENDPOINT (GoogleTranslator debugging)
-    # ===================================================================
-    # NOTE: Raw body capture is now handled in EncodingFixMiddleware
-    # (before Pydantic validation) to avoid stream consumption issues
-    if request.url.path == "/submit":
-        print("=" * 80)
-        print("🔍 VALIDATION ERROR ON /submit")
-        print("=" * 80)
-        print(f"📍 Method: {request.method}")
-        print(f"📍 URL: {request.url}")
-        print(f"📍 Client: {request.client.host if request.client else 'Unknown'}")
-        print(f"📍 Validation Errors: {exc.errors()}")
-        print("=" * 80)
-        print("ℹ️  Raw request body was captured in EncodingFixMiddleware (see logs above)")
-        print("=" * 80)
-        logging.error(
-            f"[SUBMIT VALIDATION ERROR] GoogleTranslator sent invalid request. "
-            f"Errors: {exc.errors()}"
-        )
-
     try:
         # Safely serialize validation errors to avoid Unicode decode issues
         safe_errors = []
@@ -2647,17 +2093,6 @@ async def timeout_middleware(request: Request, call_next):
     start_time = time_module.time()
     print(f"[TIMEOUT MIDDLEWARE] START: {request.method} {request.url.path}")
 
-    # Get logger for this middleware
-    logger = logging.getLogger(__name__)
-
-    # Special logging for OPTIONS requests (CORS preflight)
-    if request.method == "OPTIONS":
-        logger.info(f"🌐 [MIDDLEWARE] OPTIONS request detected - CORS preflight")
-        logger.info(f"   - Path: {request.url.path}")
-        logger.info(f"   - Origin: {request.headers.get('origin', 'NOT_SET')}")
-        logger.info(f"   - Access-Control-Request-Method: {request.headers.get('access-control-request-method', 'NOT_SET')}")
-        logger.info(f"   - Access-Control-Request-Headers: {request.headers.get('access-control-request-headers', 'NOT_SET')}")
-
     try:
         # Set timeout based on endpoint
         if "/files/upload" in str(request.url):
@@ -2674,30 +2109,6 @@ async def timeout_middleware(request: Request, call_next):
         print(f"[TIMEOUT MIDDLEWARE] Timeout set to {timeout}s, calling next middleware...")
         response = await asyncio.wait_for(call_next(request), timeout=timeout)
         elapsed = time_module.time() - start_time
-
-        # Log response status
-        status_code = getattr(response, 'status_code', None)
-        if status_code:
-            if 400 <= status_code < 500:
-                logger.error(f"❌ [MIDDLEWARE] Client Error {status_code}:")
-                logger.error(f"   - Method: {request.method}")
-                logger.error(f"   - Path: {request.url.path}")
-                logger.error(f"   - Elapsed: {elapsed:.2f}s")
-                # Try to log response body for debugging
-                try:
-                    if hasattr(response, 'body'):
-                        body_bytes = response.body
-                        if body_bytes:
-                            body_str = body_bytes.decode('utf-8')
-                            logger.error(f"   - Response body: {body_str[:500]}")  # Limit to 500 chars
-                except Exception as e:
-                    logger.error(f"   - Could not read response body: {e}")
-            elif status_code >= 500:
-                logger.error(f"❌ [MIDDLEWARE] Server Error {status_code}:")
-                logger.error(f"   - Method: {request.method}")
-                logger.error(f"   - Path: {request.url.path}")
-                logger.error(f"   - Elapsed: {elapsed:.2f}s")
-
         print(f"[TIMEOUT MIDDLEWARE] COMPLETE: {elapsed:.2f}s - {request.method} {request.url.path}")
         return response
 
@@ -2733,16 +2144,6 @@ async def timeout_middleware(request: Request, call_next):
 
         logging.warning(f"Request timeout: {request.method} {request.url.path} (>{timeout}s)")
         return response
-
-    except Exception as e:
-        elapsed = time_module.time() - start_time
-        logger.error(f"❌ [MIDDLEWARE] Unexpected error:", exc_info=True)
-        logger.error(f"   - Error type: {type(e).__name__}")
-        logger.error(f"   - Error message: {str(e)}")
-        logger.error(f"   - Method: {request.method}")
-        logger.error(f"   - Path: {request.url.path}")
-        logger.error(f"   - Elapsed: {elapsed:.2f}s")
-        raise
 
 
 # Custom OpenAPI schema
@@ -2839,11 +2240,6 @@ async def initialize_services():
     else:
         logging.warning("Stripe payment service not configured")
 
-    # Initialize scheduler service for automated tasks
-    from app.services.scheduler_service import scheduler_service
-    scheduler_service.start()
-    logging.info("Scheduler service started - automated tasks enabled")
-
     # Initialize file service
     try:
         from app.services.file_service import file_service
@@ -2857,14 +2253,6 @@ async def initialize_services():
 async def cleanup_services():
     """Cleanup services on shutdown."""
     logging.info("Cleaning up services...")
-
-    # Stop scheduler service
-    try:
-        from app.services.scheduler_service import scheduler_service
-        scheduler_service.stop()
-        logging.info("Scheduler service stopped")
-    except Exception as e:
-        logging.warning(f"Failed to stop scheduler service: {e}")
 
     # Disconnect from MongoDB
     from app.database import database

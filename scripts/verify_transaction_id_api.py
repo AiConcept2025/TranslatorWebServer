@@ -58,8 +58,8 @@ async def verify_api():
         "cost_per_unit": 0.15,
         "source_language": "en",
         "target_language": "es",
-        "square_transaction_id": test_square_id,
-        "square_payment_id": test_square_id,
+        "stripe_checkout_session_id": test_square_id,
+        "stripe_payment_intent_id": test_square_id,
         "amount_cents": 150,
         "currency": "USD",
         "payment_status": "COMPLETED"
@@ -68,7 +68,7 @@ async def verify_api():
     print("📤 Sending POST request to API...")
     print(f"   Endpoint: POST /api/v1/user-transactions/process")
     print(f"   User Email: {test_email}")
-    print(f"   Square ID: {test_square_id}")
+    print(f"   Stripe ID: {test_square_id}")
     print()
 
     # Make API request
@@ -100,7 +100,7 @@ async def verify_api():
             print("✅ API Response Validation:")
             print(f"   ├─ transaction_id: {transaction_id}")
             print(f"   ├─ Format Valid: {validate_transaction_id_format(transaction_id)}")
-            print(f"   ├─ Square ID: {response_data.get('square_transaction_id')}")
+            print(f"   ├─ Stripe ID: {response_data.get('stripe_checkout_session_id')}")
             print(f"   ├─ User Email: {response_data.get('user_email')}")
             print(f"   ├─ Total Cost: ${response_data.get('total_cost')}")
             print(f"   └─ Status: {response_data.get('status')}")
@@ -124,7 +124,7 @@ async def verify_api():
 
             print("✅ Database Verification:")
             print(f"   ├─ transaction_id: {txn_by_id['transaction_id']}")
-            print(f"   ├─ square_transaction_id: {txn_by_id['square_transaction_id']}")
+            print(f"   ├─ stripe_checkout_session_id: {txn_by_id['stripe_checkout_session_id']}")
             print(f"   ├─ user_email: {txn_by_id['user_email']}")
             print(f"   ├─ total_cost: ${txn_by_id['total_cost']}")
             print(f"   ├─ MongoDB _id: {txn_by_id['_id']}")

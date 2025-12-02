@@ -39,7 +39,7 @@ class Payment(BaseModel):
     """Payment schema for payments collection."""
     company_name: str = Field(..., description="Company name")
     user_email: EmailStr = Field(..., description="User email address")
-    square_payment_id: str = Field(..., description="Square payment ID")
+    stripe_payment_intent_id: str = Field(..., description="Square payment ID")
     amount: int = Field(..., gt=0, description="Payment amount in cents")
     currency: str = Field(default="USD", description="Currency code (ISO 4217)")
     payment_status: str = Field(..., description="Payment status: COMPLETED | PENDING | FAILED | REFUNDED")
@@ -53,7 +53,7 @@ class Payment(BaseModel):
             'example': {
                 'company_name': 'Acme Health LLC',
                 'user_email': 'test5@yahoo.com',
-                'square_payment_id': 'payment_sq_1761244600756_u12vb3tx6',
+                'stripe_payment_intent_id': 'payment_sq_1761244600756_u12vb3tx6',
                 'amount': 1299,
                 'currency': 'USD',
                 'payment_status': 'COMPLETED',
@@ -70,7 +70,7 @@ class PaymentCreate(BaseModel):
     """Schema for creating a new payment."""
     company_name: Optional[str] = None  # Optional: Individual users don't have companies
     user_email: EmailStr
-    square_payment_id: str
+    stripe_payment_intent_id: str
     amount: int = Field(..., gt=0, description="Payment amount in cents")
     currency: str = Field(default="USD")
     payment_status: str = Field(default="PENDING", description="PENDING | COMPLETED | FAILED | REFUNDED")
@@ -81,7 +81,7 @@ class PaymentCreate(BaseModel):
             'example': {
                 'company_name': 'Acme Health LLC',
                 'user_email': 'test5@yahoo.com',
-                'square_payment_id': 'payment_sq_1761244600756_u12vb3tx6',
+                'stripe_payment_intent_id': 'payment_sq_1761244600756_u12vb3tx6',
                 'amount': 1299,
                 'currency': 'USD',
                 'payment_status': 'COMPLETED'
@@ -101,7 +101,7 @@ class PaymentResponse(BaseModel):
     id: str = Field(..., alias="_id")
     company_name: str
     user_email: EmailStr
-    square_payment_id: str
+    stripe_payment_intent_id: str
     amount: int
     currency: str
     payment_status: str
@@ -136,9 +136,9 @@ class SubscriptionPaymentCreate(BaseModel):
     """Schema for manually creating a subscription payment record (admin use)."""
     company_name: str = Field(..., description="Company name")
     subscription_id: str = Field(..., description="Subscription ObjectId")
-    square_payment_id: str = Field(..., description="Square payment ID")
-    square_order_id: Optional[str] = Field(None, description="Square order ID")
-    square_customer_id: Optional[str] = Field(None, description="Square customer ID")
+    stripe_payment_intent_id: str = Field(..., description="Square payment ID")
+    stripe_invoice_id: Optional[str] = Field(None, description="Square order ID")
+    stripe_customer_id: Optional[str] = Field(None, description="Square customer ID")
     user_email: EmailStr = Field(..., description="User email who made payment")
     user_id: Optional[str] = Field(None, description="User ID")
     amount: int = Field(..., gt=0, description="Amount in cents")
@@ -155,9 +155,9 @@ class SubscriptionPaymentCreate(BaseModel):
             'example': {
                 'company_name': 'Acme Translation Corp',
                 'subscription_id': '690023c7eb2bceb90e274133',
-                'square_payment_id': 'sq_payment_e59858fff0794614',
-                'square_order_id': 'sq_order_e4dce86988a847b1',
-                'square_customer_id': 'sq_customer_c7b478ddc7b04f99',
+                'stripe_payment_intent_id': 'sq_payment_e59858fff0794614',
+                'stripe_invoice_id': 'sq_order_e4dce86988a847b1',
+                'stripe_customer_id': 'sq_customer_c7b478ddc7b04f99',
                 'user_email': 'admin@acme.com',
                 'user_id': 'user_9db5a0fbe769442d',
                 'amount': 9000,
@@ -183,7 +183,7 @@ class PaymentListItem(BaseModel):
     id: str = Field(..., alias="_id", description="MongoDB ObjectId of the payment record")
     company_name: str = Field(..., description="Full company name")
     user_email: EmailStr = Field(..., description="Email address of the user who made the payment")
-    square_payment_id: str = Field(..., description="Square payment identifier")
+    stripe_payment_intent_id: str = Field(..., description="Square payment identifier")
     amount: int = Field(..., gt=0, description="Payment amount in cents (e.g., 1299 = $12.99)")
     currency: str = Field(..., description="Currency code (ISO 4217, e.g., USD, EUR)")
     payment_status: str = Field(..., description="Payment status: COMPLETED | PENDING | FAILED | REFUNDED")
@@ -199,7 +199,7 @@ class PaymentListItem(BaseModel):
                 '_id': '68fad3c2a0f41c24037c4810',
                 'company_name': 'Acme Health LLC',
                 'user_email': 'test5@yahoo.com',
-                'square_payment_id': 'payment_sq_1761244600756',
+                'stripe_payment_intent_id': 'payment_sq_1761244600756',
                 'amount': 1299,
                 'currency': 'USD',
                 'payment_status': 'COMPLETED',
@@ -258,7 +258,7 @@ class PaymentListData(BaseModel):
                                 '_id': '68fad3c2a0f41c24037c4810',
                                 'company_name': 'Acme Health LLC',
                                 'user_email': 'test5@yahoo.com',
-                                'square_payment_id': 'payment_sq_1761244600756',
+                                'stripe_payment_intent_id': 'payment_sq_1761244600756',
                                 'amount': 1299,
                                 'currency': 'USD',
                                 'payment_status': 'COMPLETED',
@@ -271,7 +271,7 @@ class PaymentListData(BaseModel):
                                 '_id': '68fad3c2a0f41c24037c4811',
                                 'company_name': 'Acme Health LLC',
                                 'user_email': 'admin@acmehealth.com',
-                                'square_payment_id': 'payment_sq_1761268674',
+                                'stripe_payment_intent_id': 'payment_sq_1761268674',
                                 'amount': 2499,
                                 'currency': 'USD',
                                 'payment_status': 'COMPLETED',
@@ -334,7 +334,7 @@ class PaymentListResponse(BaseModel):
                                     '_id': '68fad3c2a0f41c24037c4810',
                                     'company_name': 'Acme Health LLC',
                                     'user_email': 'test5@yahoo.com',
-                                    'square_payment_id': 'payment_sq_1761244600756',
+                                    'stripe_payment_intent_id': 'payment_sq_1761244600756',
                                     'amount': 1299,
                                     'currency': 'USD',
                                     'payment_status': 'COMPLETED',
@@ -435,7 +435,7 @@ class UserTransactionRefundSchema(BaseModel):
 
 class UserTransactionSchema(BaseModel):
     """
-    Schema for user_transactions collection with Square payment integration.
+    Schema for user_transactions collection with Stripe payment integration.
 
     This model represents individual translation transactions with full payment details.
     Supports multiple documents per transaction.
@@ -450,13 +450,13 @@ class UserTransactionSchema(BaseModel):
     source_language: str = Field(..., description="Source language code")
     target_language: str = Field(..., description="Target language code")
     transaction_id: str = Field(..., description="Primary unique transaction identifier (USER + 6-digit number)")
-    square_transaction_id: str = Field(..., description="Square transaction ID (reference only)")
+    stripe_checkout_session_id: str = Field(..., description="Stripe Checkout Session ID")
     date: datetime = Field(..., description="Transaction date")
     status: str = Field(default="processing", description="Transaction status: processing, completed, failed")
     total_cost: float = Field(..., ge=0, description="Total cost (auto-calculated)")
 
-    # Square payment fields
-    square_payment_id: str = Field(..., description="Square payment ID")
+    # Stripe payment fields
+    stripe_payment_intent_id: str = Field(..., description="Stripe Payment Intent ID")
     amount_cents: int = Field(..., gt=0, description="Payment amount in cents")
     currency: str = Field(default="USD", description="Currency code (ISO 4217)")
     payment_status: str = Field(
@@ -500,11 +500,11 @@ class UserTransactionSchema(BaseModel):
                 'source_language': 'en',
                 'target_language': 'es',
                 'transaction_id': 'USER123456',
-                'square_transaction_id': 'SQR-1EC28E70F10B4D9E',
+                'stripe_checkout_session_id': 'cs_test_1EC28E70F10B4D9E',
                 'date': '2025-10-23T23:56:55.438Z',
                 'status': 'completed',
                 'total_cost': 1.5,
-                'square_payment_id': 'SQR-1EC28E70F10B4D9E',
+                'stripe_payment_intent_id': 'pi_1EC28E70F10B4D9E',
                 'amount_cents': 150,
                 'currency': 'USD',
                 'payment_status': 'COMPLETED',
@@ -527,12 +527,12 @@ class UserTransactionCreate(BaseModel):
     cost_per_unit: float = Field(..., gt=0)
     source_language: str
     target_language: str
-    square_transaction_id: str
+    stripe_checkout_session_id: str
     date: Optional[datetime] = None
     status: str = Field(default="processing", pattern="^(processing|completed|failed)$")
 
     # Square payment fields
-    square_payment_id: str
+    stripe_payment_intent_id: str
     amount_cents: Optional[int] = Field(None, gt=0, description="Payment amount in cents (auto-calculated if not provided)")
     currency: str = Field(default="USD")
     payment_status: str = Field(
@@ -562,8 +562,8 @@ class UserTransactionCreate(BaseModel):
                 'cost_per_unit': 0.15,
                 'source_language': 'en',
                 'target_language': 'es',
-                'square_transaction_id': 'SQR-1EC28E70F10B4D9E',
-                'square_payment_id': 'SQR-1EC28E70F10B4D9E',
+                'stripe_checkout_session_id': 'SQR-1EC28E70F10B4D9E',
+                'stripe_payment_intent_id': 'SQR-1EC28E70F10B4D9E',
                 # Optional fields (with defaults shown)
                 'currency': 'USD',
                 'payment_status': 'COMPLETED',
@@ -589,11 +589,11 @@ class UserTransactionResponse(BaseModel):
     source_language: str
     target_language: str
     transaction_id: str
-    square_transaction_id: str
+    stripe_checkout_session_id: str
     date: datetime
     status: str
     total_cost: float
-    square_payment_id: str
+    stripe_payment_intent_id: str
     amount_cents: int
     currency: str
     payment_status: str
@@ -671,7 +671,7 @@ class AllPaymentsData(BaseModel):
                                 '_id': '68fad3c2a0f41c24037c4810',
                                 'company_name': 'Acme Health LLC',
                                 'user_email': 'test5@yahoo.com',
-                                'square_payment_id': 'payment_sq_1761244600756',
+                                'stripe_payment_intent_id': 'payment_sq_1761244600756',
                                 'amount': 1299,
                                 'currency': 'USD',
                                 'payment_status': 'COMPLETED',
@@ -684,7 +684,7 @@ class AllPaymentsData(BaseModel):
                                 '_id': '68fad3c2a0f41c24037c4811',
                                 'company_name': 'TechCorp Inc',
                                 'user_email': 'admin@techcorp.com',
-                                'square_payment_id': 'payment_sq_1761268674',
+                                'stripe_payment_intent_id': 'payment_sq_1761268674',
                                 'amount': 2499,
                                 'currency': 'USD',
                                 'payment_status': 'COMPLETED',
@@ -731,7 +731,7 @@ class AllPaymentsResponse(BaseModel):
                                     '_id': '68fad3c2a0f41c24037c4810',
                                     'company_name': 'Acme Health LLC',
                                     'user_email': 'test5@yahoo.com',
-                                    'square_payment_id': 'payment_sq_1761244600756',
+                                    'stripe_payment_intent_id': 'payment_sq_1761244600756',
                                     'amount': 1299,
                                     'currency': 'USD',
                                     'payment_status': 'COMPLETED',

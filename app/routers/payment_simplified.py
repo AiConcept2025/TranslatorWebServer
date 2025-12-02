@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any
 import logging
 
 from app.services.google_drive_service import google_drive_service
+from app.services.pricing_service import pricing_service
 
 router = APIRouter(prefix="/api/payment", tags=["Payments"])
 
@@ -21,7 +22,7 @@ class PaymentMetadata(BaseModel):
     created: Optional[str] = None
     simulated: Optional[bool] = None
     customer_email: Optional[EmailStr] = None
-    square_transaction_id: Optional[str] = None
+    stripe_checkout_session_id: Optional[str] = None
 
     model_config = {'populate_by_name': True}
 
@@ -34,7 +35,7 @@ class PaymentSuccessRequest(BaseModel):
     payment_intent_id: Optional[str] = Field(None, alias='paymentIntentId')
 
     # Square transaction ID (for user payments)
-    square_transaction_id: Optional[str] = None
+    stripe_checkout_session_id: Optional[str] = None
 
     # File IDs from upload response (eliminates need for Drive search)
     file_ids: Optional[list[str]] = Field(
@@ -127,7 +128,7 @@ async def process_payment_files_background(
             payment_data = PaymentCreate(
                 company_name=None,  # Individual users don't have companies
                 user_email=customer_email,
-                square_payment_id=payment_intent_id,
+                stripe_payment_intent_id=payment_intent_id,
                 amount=int((amount or 0) * 100) if amount else 0,  # Convert to cents
                 currency=currency or "USD",
                 payment_status="COMPLETED",  # Use schema enum value
@@ -214,10 +215,12 @@ async def process_payment_files_background(
                 }
                 documents.append(doc)
 
-            # Calculate pricing (using dummy $0.01 per page)
+            # Calculate pricing using pricing service (individual user, default mode)
             total_units = sum(file_info.get('page_count', 1) for file_info in files_to_move)
-            price_per_unit = 0.01  # $0.01 per page
-            total_price = round(total_units * price_per_unit, 2)
+            total_price_decimal = pricing_service.calculate_price(total_units, "individual", "default")
+            total_price = float(total_price_decimal)
+            # Back-calculate price per unit for database storage
+            price_per_unit = total_price / total_units if total_units > 0 else 0
 
             # Extract languages from first file (all files should have same languages)
             source_language = files_to_move[0].get('source_language', 'en')
@@ -409,7 +412,7 @@ async def handle_payment_success(
 
 async def process_user_payment_files_background(
     customer_email: str,
-    square_transaction_id: str,
+    stripe_checkout_session_id: str,
     amount: Optional[float] = None,
     currency: Optional[str] = None,
     payment_metadata: Optional[PaymentMetadata] = None
@@ -421,7 +424,7 @@ async def process_user_payment_files_background(
 
     Args:
         customer_email: User email address
-        square_transaction_id: Square payment transaction ID
+        stripe_checkout_session_id: Square payment transaction ID
         amount: Payment amount in dollars
         currency: Currency code (default: USD)
         payment_metadata: Additional payment metadata from Square
@@ -441,7 +444,7 @@ async def process_user_payment_files_background(
         print(f"⏱️  Started at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"📋 Task Details:")
         print(f"   Customer: {customer_email}")
-        print(f"   Square Transaction ID: {square_transaction_id}")
+        print(f"   Square Transaction ID: {stripe_checkout_session_id}")
         print("=" * 80)
 
         # Step 0: Persist payment data to payments collection
@@ -456,7 +459,7 @@ async def process_user_payment_files_background(
             payment_data = PaymentCreate(
                 company_name=None,  # Individual users don't have companies
                 user_email=customer_email,
-                square_payment_id=square_transaction_id,
+                stripe_payment_intent_id=stripe_checkout_session_id,
                 amount=int((amount or 0) * 100) if amount else 0,  # Convert to cents
                 currency=currency or "USD",
                 payment_status="COMPLETED",  # Use schema enum value
@@ -472,22 +475,22 @@ async def process_user_payment_files_background(
             persist_time = (time.time() - persist_start) * 1000
             print(f"⏱️  Payment persistence attempted in {persist_time:.2f}ms")
             print(f"⚠️  Failed to persist payment: {str(e)}")
-            logging.warning(f"Failed to persist user payment {square_transaction_id}: {e}")
+            logging.warning(f"Failed to persist user payment {stripe_checkout_session_id}: {e}")
 
         # Step 1: Get transaction from user_transactions collection
         print(f"\n🔍 Step 1: Fetching user transaction...")
         fetch_start = time.time()
-        transaction = await get_user_transaction(square_transaction_id)
+        transaction = await get_user_transaction(stripe_checkout_session_id)
         fetch_time = (time.time() - fetch_start) * 1000
         print(f"⏱️  Transaction fetch completed in {fetch_time:.2f}ms")
 
         if not transaction:
-            print(f"⚠️  Transaction not found: {square_transaction_id}")
+            print(f"⚠️  Transaction not found: {stripe_checkout_session_id}")
             total_time = (time.time() - task_start) * 1000
             print(f"⏱️  BACKGROUND TASK TOTAL TIME: {total_time:.2f}ms")
             print("=" * 80 + "\n")
             logging.warning(
-                f"User payment background task: Transaction not found - {square_transaction_id}"
+                f"User payment background task: Transaction not found - {stripe_checkout_session_id}"
             )
             return
 
@@ -513,7 +516,7 @@ async def process_user_payment_files_background(
             error_msg = f"Could not extract file_id from document_url: {document_url}"
             print(f"❌ {error_msg}")
             await update_user_transaction_status(
-                square_transaction_id=square_transaction_id,
+                stripe_checkout_session_id=stripe_checkout_session_id,
                 new_status="failed",
                 error_message=error_msg
             )
@@ -547,7 +550,7 @@ async def process_user_payment_files_background(
 
                 print(f"❌ {error_msg}")
                 await update_user_transaction_status(
-                    square_transaction_id=square_transaction_id,
+                    stripe_checkout_session_id=stripe_checkout_session_id,
                     new_status="failed",
                     error_message=error_msg
                 )
@@ -561,7 +564,7 @@ async def process_user_payment_files_background(
             error_msg = f"Google Drive move error: {str(move_error)}"
             print(f"❌ {error_msg}")
             await update_user_transaction_status(
-                square_transaction_id=square_transaction_id,
+                stripe_checkout_session_id=stripe_checkout_session_id,
                 new_status="failed",
                 error_message=error_msg
             )
@@ -576,7 +579,7 @@ async def process_user_payment_files_background(
         update_start = time.time()
 
         success = await update_user_transaction_status(
-            square_transaction_id=square_transaction_id,
+            stripe_checkout_session_id=stripe_checkout_session_id,
             new_status="completed"
         )
 
@@ -596,7 +599,7 @@ async def process_user_payment_files_background(
             await google_drive_service.update_file_status(
                 file_id=file_id,
                 new_status="payment_confirmed",
-                payment_intent_id=square_transaction_id
+                payment_intent_id=stripe_checkout_session_id
             )
             status_time = (time.time() - status_start) * 1000
             print(f"⏱️  File status update completed in {status_time:.2f}ms")
@@ -617,7 +620,7 @@ async def process_user_payment_files_background(
 
         logging.info(
             f"User payment background task completed for {customer_email}: "
-            f"transaction {square_transaction_id} processed in {total_time:.2f}ms"
+            f"transaction {stripe_checkout_session_id} processed in {total_time:.2f}ms"
         )
 
     except Exception as e:
@@ -632,7 +635,7 @@ async def process_user_payment_files_background(
         try:
             from app.utils.user_transaction_helper import update_user_transaction_status
             await update_user_transaction_status(
-                square_transaction_id=square_transaction_id,
+                stripe_checkout_session_id=stripe_checkout_session_id,
                 new_status="failed",
                 error_message=str(e)
             )
@@ -661,12 +664,12 @@ async def handle_user_payment_success(
     Expected request format:
     {
         "customerEmail": "user@example.com",
-        "square_transaction_id": "txn_abc123",  // Can be in root or metadata
+        "stripe_checkout_session_id": "txn_abc123",  // Can be in root or metadata
         "amount": 10.00,
         "currency": "USD",
         "paymentMethod": "square",
         "metadata": {
-            "square_transaction_id": "txn_abc123"  // Alternative location
+            "stripe_checkout_session_id": "txn_abc123"  // Alternative location
         }
     }
     """
@@ -688,16 +691,16 @@ async def handle_user_payment_success(
         print(f"   payment_method: {request.payment_method}")
         print(f"   timestamp: {request.timestamp}")
 
-        # Extract square_transaction_id from request or metadata
-        square_transaction_id = None
+        # Extract stripe_checkout_session_id from request or metadata
+        stripe_checkout_session_id = None
 
-        # Try to get from root level first (check if request has square_transaction_id attribute)
-        if hasattr(request, 'square_transaction_id') and getattr(request, 'square_transaction_id'):
-            square_transaction_id = getattr(request, 'square_transaction_id')
-            print(f"   square_transaction_id (root): {square_transaction_id}")
+        # Try to get from root level first (check if request has stripe_checkout_session_id attribute)
+        if hasattr(request, 'stripe_checkout_session_id') and getattr(request, 'stripe_checkout_session_id'):
+            stripe_checkout_session_id = getattr(request, 'stripe_checkout_session_id')
+            print(f"   stripe_checkout_session_id (root): {stripe_checkout_session_id}")
 
         # Try metadata next
-        if not square_transaction_id and request.metadata:
+        if not stripe_checkout_session_id and request.metadata:
             print(f"\n📋 METADATA:")
             print(f"   status: {request.metadata.status}")
             print(f"   cardBrand: {request.metadata.cardBrand}")
@@ -707,14 +710,14 @@ async def handle_user_payment_success(
             print(f"   simulated: {request.metadata.simulated}")
             print(f"   customer_email (metadata): {request.metadata.customer_email}")
 
-            # Check for square_transaction_id in metadata
-            if hasattr(request.metadata, 'square_transaction_id'):
-                square_transaction_id = getattr(request.metadata, 'square_transaction_id')
-                print(f"   square_transaction_id (metadata): {square_transaction_id}")
+            # Check for stripe_checkout_session_id in metadata
+            if hasattr(request.metadata, 'stripe_checkout_session_id'):
+                stripe_checkout_session_id = getattr(request.metadata, 'stripe_checkout_session_id')
+                print(f"   stripe_checkout_session_id (metadata): {stripe_checkout_session_id}")
 
-        # Validate square_transaction_id
-        if not square_transaction_id:
-            error_msg = "square_transaction_id not found in request or metadata"
+        # Validate stripe_checkout_session_id
+        if not stripe_checkout_session_id:
+            error_msg = "stripe_checkout_session_id not found in request or metadata"
             print(f"❌ VALIDATION ERROR: {error_msg}")
             print("=" * 80 + "\n")
             raise HTTPException(status_code=400, detail=error_msg)
@@ -726,7 +729,7 @@ async def handle_user_payment_success(
 
         print(f"\n✅ EXTRACTED FIELDS (took {parse_time:.2f}ms):")
         print(f"   Customer: {customer_email}")
-        print(f"   Square Transaction ID: {square_transaction_id}")
+        print(f"   Square Transaction ID: {stripe_checkout_session_id}")
         print(f"   Amount: ${request.amount} {request.currency}")
         print(f"   Payment Method: {request.payment_method}")
 
@@ -735,7 +738,7 @@ async def handle_user_payment_success(
         background_tasks.add_task(
             process_user_payment_files_background,
             customer_email=customer_email,
-            square_transaction_id=square_transaction_id,
+            stripe_checkout_session_id=stripe_checkout_session_id,
             amount=request.amount,
             currency=request.currency,
             payment_metadata=request.metadata
@@ -754,7 +757,7 @@ async def handle_user_payment_success(
                 "message": "Payment confirmed. Files are being processed in the background.",
                 "data": {
                     "customer_email": customer_email,
-                    "square_transaction_id": square_transaction_id,
+                    "stripe_checkout_session_id": stripe_checkout_session_id,
                     "status": "processing",
                     "processing_time_ms": round(total_time, 2)
                 }

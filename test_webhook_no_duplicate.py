@@ -52,7 +52,7 @@ async def test_no_duplicate_transactions():
         # Clean up any existing test records
         delete_result = await user_transactions.delete_many({
             "$or": [
-                {"square_transaction_id": test_square_tx_id},
+                {"stripe_checkout_session_id": test_square_tx_id},
                 {"user_email": test_email}
             ]
         })
@@ -60,7 +60,7 @@ async def test_no_duplicate_transactions():
 
         # Verify no records exist
         initial_count = await user_transactions.count_documents({
-            "square_transaction_id": test_square_tx_id
+            "stripe_checkout_session_id": test_square_tx_id
         })
         assert initial_count == 0, f"Expected 0 records, found {initial_count}"
         print(f"   ✅ Verified: 0 records with square_tx_id={test_square_tx_id}")
@@ -113,7 +113,7 @@ async def test_no_duplicate_transactions():
                 }
             ],
             "payment_method": "square",
-            "square_transaction_id": test_square_tx_id,
+            "stripe_checkout_session_id": test_square_tx_id,
             "total_documents": 2,
             "completed_documents": 0,
             "batch_email_sent": False,
@@ -129,17 +129,17 @@ async def test_no_duplicate_transactions():
 
         # Verify record created
         after_create_count = await user_transactions.count_documents({
-            "square_transaction_id": test_square_tx_id
+            "stripe_checkout_session_id": test_square_tx_id
         })
         assert after_create_count == 1, f"Expected 1 record after /translate-user, found {after_create_count}"
         print(f"   ✅ Verified: 1 record exists (USER###### transaction)")
 
         print(f"\n3️⃣  Simulate payment confirmation (what confirm endpoint should do)")
-        print(f"   Finding existing transaction by square_transaction_id...")
+        print(f"   Finding existing transaction by stripe_checkout_session_id...")
 
         # Simulate what the FIXED /api/transactions/confirm endpoint should do
         existing_transaction = await user_transactions.find_one({
-            "square_transaction_id": test_square_tx_id
+            "stripe_checkout_session_id": test_square_tx_id
         })
 
         if not existing_transaction:
@@ -167,9 +167,9 @@ async def test_no_duplicate_transactions():
 
         print(f"\n4️⃣  Verification: Check for duplicate transactions")
 
-        # Count all transactions with this square_transaction_id
+        # Count all transactions with this stripe_checkout_session_id
         final_count = await user_transactions.count_documents({
-            "square_transaction_id": test_square_tx_id
+            "stripe_checkout_session_id": test_square_tx_id
         })
 
         print(f"   Total records with square_tx_id={test_square_tx_id}: {final_count}")
@@ -177,7 +177,7 @@ async def test_no_duplicate_transactions():
         # Retrieve all transactions
         all_transactions = []
         cursor = user_transactions.find({
-            "square_transaction_id": test_square_tx_id
+            "stripe_checkout_session_id": test_square_tx_id
         })
         async for txn in cursor:
             all_transactions.append(txn)
@@ -219,7 +219,7 @@ async def test_no_duplicate_transactions():
 
         print(f"\n5️⃣  Cleanup: Remove test data")
         cleanup_result = await user_transactions.delete_many({
-            "square_transaction_id": test_square_tx_id
+            "stripe_checkout_session_id": test_square_tx_id
         })
         print(f"   ✅ Deleted {cleanup_result.deleted_count} test records")
 
@@ -267,7 +267,7 @@ async def test_old_behavior_creates_duplicate():
         print(f"\n1️⃣  Setup: Clean existing test data")
         await user_transactions.delete_many({
             "$or": [
-                {"square_transaction_id": test_square_tx_id},
+                {"stripe_checkout_session_id": test_square_tx_id},
                 {"user_email": test_email}
             ]
         })
@@ -283,7 +283,7 @@ async def test_old_behavior_creates_duplicate():
         transaction_record = {
             "transaction_id": user_transaction_id,
             "user_email": test_email,
-            "square_transaction_id": test_square_tx_id,
+            "stripe_checkout_session_id": test_square_tx_id,
             "status": "pending",
             "units_count": 5,
             "total_price": Decimal128(Decimal("0.50")),
@@ -302,7 +302,7 @@ async def test_old_behavior_creates_duplicate():
         duplicate_record = {
             "transaction_id": txn_transaction_id,  # Different ID!
             "user_email": test_email,
-            "square_transaction_id": test_square_tx_id,  # SAME Square ID!
+            "stripe_checkout_session_id": test_square_tx_id,  # SAME Square ID!
             "status": "processing",
             "units_count": 5,
             "total_price": Decimal128(Decimal("0.50")),
@@ -317,13 +317,13 @@ async def test_old_behavior_creates_duplicate():
             print(f"\n4️⃣  Result: Check for duplicates")
 
             count = await user_transactions.count_documents({
-                "square_transaction_id": test_square_tx_id
+                "stripe_checkout_session_id": test_square_tx_id
             })
 
             print(f"   ❌ Found {count} transactions (DUPLICATE!)")
 
             cursor = user_transactions.find({
-                "square_transaction_id": test_square_tx_id
+                "stripe_checkout_session_id": test_square_tx_id
             })
             async for txn in cursor:
                 print(f"      - {txn.get('transaction_id')} (status: {txn.get('status')})")
@@ -333,7 +333,7 @@ async def test_old_behavior_creates_duplicate():
 
         except Exception as e:
             if "duplicate key error" in str(e).lower():
-                print(f"   ✅ MongoDB prevented duplicate! (unique index on square_transaction_id)")
+                print(f"   ✅ MongoDB prevented duplicate! (unique index on stripe_checkout_session_id)")
                 print(f"   ✅ Error: {str(e)[:150]}...")
                 print(f"\n🎉 GOOD NEWS: MongoDB has a unique index that prevents duplicates!")
                 print(f"   Even if the OLD code tried to create a duplicate, the database would reject it.")
@@ -346,7 +346,7 @@ async def test_old_behavior_creates_duplicate():
 
         # Cleanup
         await user_transactions.delete_many({
-            "square_transaction_id": test_square_tx_id
+            "stripe_checkout_session_id": test_square_tx_id
         })
         print(f"\n   ✅ Cleaned up demo data")
 

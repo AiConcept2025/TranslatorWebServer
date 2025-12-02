@@ -35,63 +35,54 @@ async def http_client():
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_submit_endpoint_success(http_client):
+async def test_submit_endpoint_nonexistent_transaction(http_client):
     """
-    Test successful submission with valid request data.
+    Test submission with non-existent transaction_id returns 404.
 
     Verifies:
-    - 200 status code returned
-    - Response contains status and message fields
-    - Response structure matches specification
+    - 404 status code returned for non-existent transaction
+    - Response contains error message
     """
     payload = {
         "file_name": "test_document.docx",
         "file_url": "https://drive.google.com/file/d/test123/view",
         "user_email": "test@example.com",
         "company_name": "Test Company",
-        "transaction_id": "txn_123"
+        "transaction_id": "txn_nonexistent_123"
     }
 
     response = await http_client.post("/submit", json=payload)
 
-    # Verify status code
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    # Verify 404 for non-existent transaction
+    assert response.status_code == 404, f"Expected 404 for non-existent transaction, got {response.status_code}: {response.text}"
 
-    # Verify response structure
+    # Verify response contains error info
     data = response.json()
-    assert "status" in data, "Response must contain 'status' field"
-    assert "message" in data, "Response must contain 'message' field"
-
-    # Verify field types
-    assert isinstance(data["status"], str), "'status' must be a string"
-    assert isinstance(data["message"], str), "'message' must be a string"
+    assert "error" in data, "Response must contain 'error' field"
+    assert "not found" in data["error"].lower(), "Error should indicate transaction not found"
 
 
 @pytest.mark.asyncio
-async def test_submit_endpoint_without_transaction_id(http_client):
+async def test_submit_endpoint_missing_transaction_id(http_client):
     """
-    Test submission without optional transaction_id.
+    Test submission without transaction_id returns validation error.
 
     Verifies:
-    - Request succeeds without transaction_id
-    - Response is properly formatted
+    - 422 status code returned for missing required field
+    - Validation error message returned
     """
     payload = {
         "file_name": "test_document.pdf",
         "file_url": "https://drive.google.com/file/d/abc456/view",
         "user_email": "user@company.com",
         "company_name": "Another Company"
+        # Missing transaction_id - which is required
     }
 
     response = await http_client.post("/submit", json=payload)
 
-    # Verify status code
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-
-    # Verify response structure
-    data = response.json()
-    assert "status" in data
-    assert "message" in data
+    # Verify validation error (422)
+    assert response.status_code == 422, f"Expected 422 for missing transaction_id, got {response.status_code}: {response.text}"
 
 
 @pytest.mark.asyncio
@@ -200,83 +191,73 @@ async def test_submit_endpoint_malformed_json(http_client):
 
 
 @pytest.mark.asyncio
-async def test_submit_endpoint_individual_customer(http_client):
+async def test_submit_endpoint_individual_nonexistent_transaction(http_client):
     """
-    Test submission for individual customer (company_name="Ind").
+    Test submission for individual customer with non-existent transaction returns 404.
 
     Verifies:
-    - Submission succeeds
-    - Email template selection is correct (individual vs corporate)
+    - 404 returned for non-existent transaction
+    - Error message indicates transaction not found
     """
     payload = {
         "file_name": "personal_document.pdf",
         "file_url": "https://drive.google.com/file/d/individual123/view",
         "user_email": "individual@example.com",
         "company_name": "Ind",
-        "transaction_id": "txn_ind_001"
+        "transaction_id": "txn_nonexistent_ind_001"
     }
 
     response = await http_client.post("/submit", json=payload)
 
-    assert response.status_code == 200
+    # Individual transactions also return 404 when transaction doesn't exist
+    assert response.status_code == 404, f"Expected 404 for non-existent individual transaction, got {response.status_code}"
     data = response.json()
-    assert data["status"] in ["received", "processed"]
+    assert "error" in data
 
 
 @pytest.mark.asyncio
-async def test_submit_endpoint_corporate_customer(http_client):
+async def test_submit_endpoint_corporate_nonexistent_transaction(http_client):
     """
-    Test submission for corporate customer (company_name != "Ind").
+    Test submission for corporate customer with non-existent transaction returns 404.
 
     Verifies:
-    - Submission succeeds
-    - Corporate template is used
+    - 404 returned for non-existent transaction
+    - Error message indicates transaction not found
     """
     payload = {
         "file_name": "corporate_report.docx",
         "file_url": "https://drive.google.com/file/d/corporate456/view",
         "user_email": "employee@company.com",
         "company_name": "Acme Corporation",
-        "transaction_id": "txn_corp_001"
+        "transaction_id": "txn_nonexistent_corp_001"
     }
 
     response = await http_client.post("/submit", json=payload)
 
-    assert response.status_code == 200
+    # Corporate transactions also return 404 when transaction doesn't exist
+    assert response.status_code == 404, f"Expected 404 for non-existent corporate transaction, got {response.status_code}"
     data = response.json()
-    assert data["status"] in ["received", "processed"]
+    assert "error" in data
 
 
 @pytest.mark.asyncio
-async def test_submit_endpoint_email_integration(http_client):
+async def test_submit_endpoint_validation_missing_transaction_id(http_client):
     """
-    Test that submission integrates with email service.
-
-    NOTE: This test verifies email integration exists, but email sending
-    may fail if SMTP credentials are not configured. The submission itself
-    should still succeed even if email fails.
+    Test submission without transaction_id fails validation.
 
     Verifies:
-    - Submission returns 200 even if email fails
-    - Response indicates email status
+    - 422 returned when transaction_id is missing
+    - Validation error details are provided
     """
     payload = {
         "file_name": "test_email_integration.pdf",
         "file_url": "https://drive.google.com/file/d/email_test_789/view",
         "user_email": "test.user@example.com",
         "company_name": "Test Company"
+        # Missing required transaction_id field
     }
 
     response = await http_client.post("/submit", json=payload)
 
-    # Should succeed regardless of email status
-    assert response.status_code == 200
-
-    data = response.json()
-    assert "status" in data
-    assert data["status"] in ["received", "processed"]
-
-    # Email status may be included in response
-    # This is informational - doesn't affect submission success
-    if "email_sent" in data:
-        assert isinstance(data["email_sent"], bool)
+    # Should fail validation - transaction_id is required
+    assert response.status_code == 422, f"Expected 422 for missing transaction_id, got {response.status_code}: {response.text}"

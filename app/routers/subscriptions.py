@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from typing import Optional, List
 import logging
 from datetime import datetime, timezone
+from pymongo.errors import DuplicateKeyError
 
 from app.services.subscription_service import subscription_service, SubscriptionError
 from app.models.subscription import (
@@ -95,6 +96,12 @@ async def create_subscription(
     except SubscriptionError as e:
         logger.error(f"❌ Subscription creation failed: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
+    except DuplicateKeyError as e:
+        logger.warning(f"⚠️ Duplicate subscription attempted for company '{subscription_data.company_name}': {e}")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Subscription already exists for company '{subscription_data.company_name}'. Only one subscription per company is allowed."
+        )
     except Exception as e:
         logger.error(f"❌ Unexpected error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to create subscription")

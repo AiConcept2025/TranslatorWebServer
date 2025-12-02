@@ -56,9 +56,9 @@ async def create_dummy_transaction():
         source_language = "en"  # English
         target_language = "es"  # Spanish
 
-        # Square payment details
-        square_transaction_id = f"SQR-{uuid.uuid4().hex[:16].upper()}"
-        square_payment_id = f"SQR-PAY-{uuid.uuid4().hex[:12].upper()}"
+        # Stripe payment details
+        stripe_checkout_session_id = f"STRIPE-{uuid.uuid4().hex[:16].upper()}"
+        stripe_payment_intent_id = f"STRIPE-PAY-{uuid.uuid4().hex[:12].upper()}"
 
         # Transaction metadata
         date = datetime.now(timezone.utc)
@@ -68,7 +68,7 @@ async def create_dummy_transaction():
         total_cost = number_of_units * cost_per_unit
         amount_cents = int(total_cost * 100)
 
-        # Square payment fields
+        # Stripe payment fields
         currency = "USD"
         payment_status = "COMPLETED"  # Valid: "APPROVED", "COMPLETED", "CANCELED", "FAILED"
         payment_date = datetime.now(timezone.utc)
@@ -83,8 +83,8 @@ async def create_dummy_transaction():
         print(f"  Total Cost:              ${total_cost:.2f}")
         print(f"  Source Language:         {source_language}")
         print(f"  Target Language:         {target_language}")
-        print(f"  Square Transaction ID:   {square_transaction_id}")
-        print(f"  Square Payment ID:       {square_payment_id}")
+        print(f"  Stripe Transaction ID:   {stripe_checkout_session_id}")
+        print(f"  Stripe Payment ID:       {stripe_payment_intent_id}")
         print(f"  Amount (cents):          {amount_cents}")
         print(f"  Currency:                {currency}")
         print(f"  Payment Status:          {payment_status}")
@@ -105,11 +105,11 @@ async def create_dummy_transaction():
             cost_per_unit=cost_per_unit,
             source_language=source_language,
             target_language=target_language,
-            square_transaction_id=square_transaction_id,
+            stripe_checkout_session_id=stripe_checkout_session_id,
             date=date,
             status=status,
-            # Square payment fields
-            square_payment_id=square_payment_id,
+            # Stripe payment fields
+            stripe_payment_intent_id=stripe_payment_intent_id,
             amount_cents=amount_cents,
             currency=currency,
             payment_status=payment_status,
@@ -128,14 +128,14 @@ async def create_dummy_transaction():
         print("\n[4/4] Verifying insertion...")
         from app.utils.user_transaction_helper import get_user_transaction
 
-        verified_transaction = await get_user_transaction(square_transaction_id)
+        verified_transaction = await get_user_transaction(stripe_checkout_session_id)
 
         if verified_transaction:
             print("✓ Transaction verified in database")
             print("\nVerified Transaction Data:")
             print("-" * 80)
-            print(f"  Transaction ID:    {verified_transaction['square_transaction_id']}")
-            print(f"  Payment ID:        {verified_transaction.get('square_payment_id', 'N/A')}")
+            print(f"  Transaction ID:    {verified_transaction['stripe_checkout_session_id']}")
+            print(f"  Payment ID:        {verified_transaction.get('stripe_payment_intent_id', 'N/A')}")
             print(f"  User Email:        {verified_transaction['user_email']}")
             print(f"  User Name:         {verified_transaction['user_name']}")
             print(f"  Units:             {verified_transaction['number_of_units']} {verified_transaction['unit_type']}s")
@@ -166,8 +166,8 @@ async def create_dummy_transaction():
         # Show query examples
         print("\nQuery Examples:")
         print("-" * 80)
-        print("1. Find by square_transaction_id:")
-        print(f"   db.user_transactions.find_one({{'square_transaction_id': '{square_transaction_id}'}})")
+        print("1. Find by stripe_checkout_session_id:")
+        print(f"   db.user_transactions.find_one({{'stripe_checkout_session_id': '{stripe_checkout_session_id}'}})")
         print("\n2. Find by user email:")
         print(f"   db.user_transactions.find({{'user_email': '{user_email}'}})")
         print("\n3. Find by status:")

@@ -1,0 +1,872 @@
+[
+  {
+    "_id": {
+      "$oid": "68fa6add22b0c739f4f4b274"
+    },
+    "company_name": "Tech Solutions",
+    "subscription_unit": "page",
+    "units_per_subscription": 1000,
+    "price_per_unit": 0.01,
+    "promotional_units": 0,
+    "discount": 0,
+    "subscription_price": 10.0,
+    "start_date": {
+      "$date": "2025-11-04T00:59:01.603Z"
+    },
+    "end_date": {
+      "$date": "2026-12-31T23:59:59Z"
+    },
+    "status": "active",
+    "usage_periods": [
+      {
+        "period_start": {
+          "$date": "2025-11-04T00:59:01.603Z"
+        },
+        "period_end": {
+          "$date": "2026-12-31T23:59:59Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "last_updated": {
+          "$date": "2025-11-04T00:59:01.603Z"
+        },
+        "promotional_units": 0
+      }
+    ],
+    "created_at": {
+      "$date": "2025-11-04T00:59:01.603Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-04T00:59:01.603Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6918fc93e2728f2e684a8f88"
+    },
+    "company_name": "Acme Translation Corp",
+    "subscription_unit": "page",
+    "units_per_subscription": 1000,
+    "price_per_unit": 0.1,
+    "promotional_units": 100,
+    "discount": 0.9,
+    "subscription_price": 90.0,
+    "start_date": {
+      "$date": "2025-01-01T00:00:00Z"
+    },
+    "end_date": {
+      "$date": "2025-12-31T00:00:00Z"
+    },
+    "status": "active",
+    "usage_periods": [
+      {
+        "period_start": {
+          "$date": "2025-01-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-02-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1100,
+        "promotional_units": 100,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-02-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-03-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-03-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-04-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-04-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-05-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-05-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-06-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-06-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-07-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-07-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-08-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-08-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-09-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-09-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-10-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-10-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-11-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-11-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-12-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-12-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-12-31T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.558Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2025-11-15T22:20:03.976Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T00:33:59.558Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6918fc93e2728f2e684a8f8a"
+    },
+    "company_name": "Global Corp",
+    "subscription_unit": "page",
+    "units_per_subscription": 1000,
+    "price_per_unit": 0.1,
+    "promotional_units": 100,
+    "discount": 0.9,
+    "subscription_price": 90.0,
+    "start_date": {
+      "$date": "2025-01-01T00:00:00Z"
+    },
+    "end_date": {
+      "$date": "2025-12-31T00:00:00Z"
+    },
+    "status": "active",
+    "usage_periods": [
+      {
+        "period_start": {
+          "$date": "2025-01-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-02-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1100,
+        "promotional_units": 100,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-02-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-03-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-03-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-04-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-04-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-05-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-05-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-06-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-06-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-07-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-07-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-08-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-08-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-09-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-09-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-10-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-10-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-11-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-11-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-12-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-12-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-12-31T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.559Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2025-11-15T22:20:03.979Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T00:33:59.559Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6918fc93e2728f2e684a8f8c"
+    },
+    "company_name": "Acme Corporation",
+    "subscription_unit": "page",
+    "units_per_subscription": 1000,
+    "price_per_unit": 0.1,
+    "promotional_units": 100,
+    "discount": 0.9,
+    "subscription_price": 90.0,
+    "start_date": {
+      "$date": "2025-01-01T00:00:00Z"
+    },
+    "end_date": {
+      "$date": "2025-12-31T00:00:00Z"
+    },
+    "status": "active",
+    "usage_periods": [
+      {
+        "period_start": {
+          "$date": "2025-01-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-02-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1100,
+        "promotional_units": 100,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-02-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-03-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-03-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-04-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-04-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-05-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-05-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-06-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-06-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-07-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-07-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-08-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-08-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-09-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-09-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-10-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-10-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-11-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-11-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-12-01T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-12-01T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-12-31T00:00:00Z"
+        },
+        "units_allocated": 1000,
+        "units_used": 0,
+        "units_remaining": 1000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2025-11-15T22:20:03.981Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T00:33:59.560Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6918fc93e2728f2e684a8f8d"
+    },
+    "company_name": "Global Translation Inc",
+    "subscription_unit": "page",
+    "units_per_subscription": 2000,
+    "price_per_unit": 0.12,
+    "promotional_units": 200,
+    "discount": 0.88,
+    "subscription_price": 211.2,
+    "start_date": {
+      "$date": "2025-01-15T00:00:00Z"
+    },
+    "end_date": {
+      "$date": "2025-12-31T00:00:00Z"
+    },
+    "status": "active",
+    "usage_periods": [
+      {
+        "period_start": {
+          "$date": "2025-01-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-02-15T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2200,
+        "promotional_units": 200,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-02-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-03-15T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-03-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-04-15T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-04-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-05-15T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-05-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-06-15T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-06-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-07-15T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-07-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-08-15T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-08-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-09-15T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-09-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-10-15T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-10-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-11-15T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-11-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-12-15T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      },
+      {
+        "period_start": {
+          "$date": "2025-12-15T00:00:00Z"
+        },
+        "period_end": {
+          "$date": "2025-12-31T00:00:00Z"
+        },
+        "units_allocated": 2000,
+        "units_used": 0,
+        "units_remaining": 2000,
+        "promotional_units": 0,
+        "last_updated": {
+          "$date": "2025-11-16T00:33:59.560Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2025-11-15T22:20:03.983Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T00:33:59.560Z"
+    }
+  }
+]

@@ -87,6 +87,14 @@ class TransactionStatus(str, Enum):
     FAILED = "failed"
 
 
+class TranslationMode(str, Enum):
+    """Translation mode selection for translation workflow."""
+    AUTOMATIC = "automatic"
+    HUMAN = "human"
+    FORMATS = "formats"
+    HANDWRITING = "handwriting"
+
+
 # ==============================================================================
 # EMBEDDED DOCUMENT MODELS
 # ==============================================================================
@@ -135,6 +143,7 @@ class TranslationDocumentEmbedded(BaseModel):
     processing_started_at: Optional[datetime] = None
     processing_duration: Optional[float] = None
     transaction_id: Optional[str] = None  # MongoDB _id for enterprise
+    translation_mode: TranslationMode = TranslationMode.AUTOMATIC  # Per-file translation mode
 
 
 class Address(BaseModel):
@@ -256,13 +265,13 @@ class Invoice(BaseModel):
 
 
 class Payment(BaseModel):
-    """Square payment transactions."""
+    """Stripe payment transactions."""
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
     company_name: str = Field(..., max_length=255)
     subscription_id: Optional[PyObjectId] = None
-    square_payment_id: str = Field(..., max_length=255)
-    square_order_id: Optional[str] = None
-    square_receipt_url: Optional[str] = None
+    stripe_payment_intent_id: str = Field(..., max_length=255)
+    stripe_invoice_id: Optional[str] = None
+    stripe_customer_id: Optional[str] = None
     amount: float
     currency: str = Field(default="USD", max_length=3)
     payment_status: PaymentStatus

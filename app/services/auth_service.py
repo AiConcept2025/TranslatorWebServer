@@ -368,10 +368,11 @@ class AuthService:
             raise AuthenticationError("Service temporarily unavailable")
 
         # Step 1: Find or create individual user
+        # Individual users do NOT have company_name field at all (not even null)
         logger.info(f"[AUTH INDIVIDUAL] Step 1: Looking up individual user by email...")
         user = await database.users.find_one({
             "email": email,
-            "company_name": None  # Individual users have no company
+            "company_name": {"$exists": False}  # Individual users have NO company_name field
         })
 
         if user:
@@ -450,12 +451,13 @@ class AuthService:
         from datetime import timedelta
 
         # Include both internal JWT fields and frontend-facing fields
+        # Individual users do NOT have company or company_name fields at all
         user_token_data = {
             "user_id": user.get("user_id"),  # Required by JWT service
             "email": user.get("email"),
             "fullName": user.get("user_name"),  # Frontend expects this
-            "company": None,  # No company for individual users
             "permission_level": "user"  # Individual users are regular users
+            # NO company or company_name field - individual users have no company
         }
 
         # Create JWT token with 8-hour expiration

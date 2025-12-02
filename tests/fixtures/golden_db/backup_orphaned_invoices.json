@@ -1,0 +1,54 @@
+[
+  {
+    "_id": {
+      "$oid": "68feb85abbe06bb1e4d6845e"
+    },
+    "subscription_id": "68ec42a48ca6a1781d9fe5c4",
+    "invoice_number": "INV-2025-68EC42A5",
+    "invoice_date": {
+      "$date": "2025-11-15T00:00:00Z"
+    },
+    "due_date": {
+      "$date": "2025-11-30T00:00:00Z"
+    },
+    "total_amount": 2000.0,
+    "tax_amount": 200.0,
+    "status": "paid",
+    "pdf_url": "https://updated.com/invoice.pdf",
+    "payment_applications": [
+      {
+        "payment_id": "68fad3c2a0f41c24037c4810",
+        "amount_applied": 106.0,
+        "applied_date": {
+          "$date": "2025-09-15T10:30:00Z"
+        }
+      }
+    ],
+    "created_at": {
+      "$date": "2025-09-08T00:07:00Z"
+    },
+    "company_name": "Acme Translation Corp"
+  },
+  {
+    "_id": {
+      "$oid": "68feb85abbe06bb1e4d6845f"
+    },
+    "subscription_id": "68ec42a48ca6a1781d9fe5c4",
+    "invoice_number": "INV-2025-68EC42A6",
+    "invoice_date": {
+      "$date": "2025-08-08T00:07:00Z"
+    },
+    "due_date": {
+      "$date": "2025-09-08T00:07:00Z"
+    },
+    "total_amount": 106.0,
+    "tax_amount": 6.0,
+    "status": "paid",
+    "pdf_url": "https://storage.example.com/invoices/inv-68ec42a6.pdf",
+    "payment_applications": [],
+    "created_at": {
+      "$date": "2025-08-08T00:07:00Z"
+    },
+    "company_name": "Acme Translation Corp"
+  }
+]

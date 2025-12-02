@@ -35,19 +35,14 @@ DATABASE_NAME = "translation_test"
 # ============================================================================
 
 @pytest.fixture(scope="function")
-def db():
+async def db(test_db):
     """
     Connect to test MongoDB database.
 
     CRITICAL: Uses test database 'translation_test', NOT production 'translation'.
+    Uses test_db fixture from conftest.py to ensure translation_test is used.
     """
-    mongo_client = AsyncIOMotorClient(MONGODB_URI)
-    database = mongo_client[DATABASE_NAME]
-
-    yield database
-
-    # Cleanup: Don't drop database, just close connection
-    mongo_client.close()
+    yield test_db
 
 
 @pytest.fixture(scope="function")
@@ -264,7 +259,9 @@ class TestCreateCompanyUser:
         # Verify 400 error
         assert response.status_code == 400
         data = response.json()
-        assert "already exists" in data["detail"].lower()
+        # Server returns error in format: {"error": {"message": "..."}}
+        error_message = data.get("error", {}).get("message", "") or data.get("detail", "")
+        assert "already exists" in error_message.lower(), f"Expected 'already exists' in error message, got: {data}"
 
         print(f"✅ Test passed: 400 returned for duplicate email")
 
@@ -311,7 +308,9 @@ class TestCreateCompanyUser:
         # Verify 400 error
         assert response.status_code == 400
         data = response.json()
-        assert "company not found" in data["detail"].lower()
+        # Server returns error in format: {"error": {"message": "..."}}
+        error_message = data.get("error", {}).get("message", "") or data.get("detail", "")
+        assert "company not found" in error_message.lower(), f"Expected 'company not found' in error message, got: {data}"
 
         print(f"✅ Test passed: 400 returned for non-existent company")
 
@@ -410,7 +409,9 @@ class TestGetCompanyUsers:
         # Verify 400 error
         assert response.status_code == 400
         data = response.json()
-        assert "company not found" in data["detail"].lower()
+        # Server returns error in format: {"error": {"message": "..."}}
+        error_message = data.get("error", {}).get("message", "") or data.get("detail", "")
+        assert "company not found" in error_message.lower(), f"Expected 'company not found' in error message, got: {data}"
 
         print(f"✅ Test passed: 400 returned for non-existent company filter")
 
@@ -565,14 +566,14 @@ class TestDeleteCompanyUser:
             print(f"⚠️ Test skipped: DELETE endpoint not implemented (404)")
             return
 
-        # Verify response
-        assert response.status_code == 200
+        # Verify response - 204 No Content is the correct REST standard for DELETE
+        assert response.status_code in [200, 204], f"Expected 200 or 204, got {response.status_code}"
 
         # Verify database - user should be deleted
         user_after = await db.company_users.find_one({"user_id": user_id})
         assert user_after is None
 
-        print(f"✅ Test passed: User deleted successfully")
+        print(f"✅ Test passed: User deleted successfully (status {response.status_code})")
 
 
     async def test_delete_nonexistent_user(self, http_client):

@@ -68,8 +68,8 @@ pytest tests/integration/test_confirm_square_payment.py::test_1_valid_success_re
 # Test 2: Valid failure request
 pytest tests/integration/test_confirm_square_payment.py::test_2_valid_failure_request -v -s
 
-# Test 3a: Missing square_transaction_id
-pytest tests/integration/test_confirm_square_payment.py::test_3a_missing_square_transaction_id -v -s
+# Test 3a: Missing stripe_checkout_session_id
+pytest tests/integration/test_confirm_square_payment.py::test_3a_missing_stripe_checkout_session_id -v -s
 
 # Test 3b: Missing status field
 pytest tests/integration/test_confirm_square_payment.py::test_3b_missing_status_field -v -s
@@ -171,7 +171,7 @@ Tests automatically clean up:
 ```
 tests/integration/test_confirm_square_payment.py::test_1_valid_success_request PASSED [ 12%]
 tests/integration/test_confirm_square_payment.py::test_2_valid_failure_request PASSED [ 25%]
-tests/integration/test_confirm_square_payment.py::test_3a_missing_square_transaction_id PASSED [ 37%]
+tests/integration/test_confirm_square_payment.py::test_3a_missing_stripe_checkout_session_id PASSED [ 37%]
 tests/integration/test_confirm_square_payment.py::test_3b_missing_status_field PASSED [ 50%]
 tests/integration/test_confirm_square_payment.py::test_4_transaction_creation_on_success PASSED [ 62%]
 tests/integration/test_confirm_square_payment.py::test_5_no_transaction_on_failure PASSED [ 75%]
@@ -204,7 +204,7 @@ After running tests, verify:
 - [ ] All 8 tests passed
 - [ ] No TEST- transactions in MongoDB
   ```bash
-  mongosh translation --eval 'db.user_transactions.find({square_transaction_id: /^TEST-/}).count()'
+  mongosh translation --eval 'db.user_transactions.find({stripe_checkout_session_id: /^TEST-/}).count()'
   ```
   Should show: `0`
 

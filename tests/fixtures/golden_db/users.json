@@ -1,0 +1,36 @@
+[
+  {
+    "_id": {
+      "$oid": "690352602bc38f34544450b1"
+    },
+    "user_id": "admin_test_8bfeea117493",
+    "user_name": "Vladimir Danishevsky",
+    "email": "danishevsky@gmail.com",
+    "permission_level": "admin",
+    "created_at": {
+      "$date": "2025-10-30T11:56:16.610Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T01:32:31.295Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6912363110cb2af8f8095920"
+    },
+    "user_id": "user_fa24138d576c46ea",
+    "user_name": "Test Individual User",
+    "email": "testindividual@example.com",
+    "permission_level": "user",
+    "status": "active",
+    "created_at": {
+      "$date": "2025-11-10T19:00:01.239Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-16T01:32:31.295Z"
+    },
+    "last_login": {
+      "$date": "2025-11-10T19:00:01.239Z"
+    }
+  }
+]

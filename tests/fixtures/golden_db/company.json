@@ -1,0 +1,148 @@
+[
+  {
+    "_id": {
+      "$oid": "68ec42a48ca6a1781d9fe5c9"
+    },
+    "description": "Trading company based in Hoboken",
+    "company_name": "Iris Trading",
+    "address": {
+      "address0": "1325 Adams Street",
+      "address1": "",
+      "postal_code": "07030",
+      "state": "NJ",
+      "city": "Hoboken",
+      "country": "USA"
+    },
+    "contact_person": {
+      "name": "Contact Name",
+      "type": "Primary Contact"
+    },
+    "phone_number": [
+      "267-987-6305"
+    ],
+    "company_url": [],
+    "line_of_business": "Trading Services",
+    "created_at": {
+      "$date": "2025-10-13T00:07:00.396Z"
+    },
+    "updated_at": {
+      "$date": "2025-10-13T00:07:00.396Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "692b63167db4a0485060ea3b"
+    },
+    "company_name": "NEW-COMPANY-D8787752",
+    "description": "New test company",
+    "address": {
+      "address0": "456 New Street",
+      "address1": "",
+      "postal_code": "54321",
+      "state": "CA",
+      "city": "New City",
+      "country": "USA"
+    },
+    "contact_person": {
+      "name": "New Contact",
+      "type": "Primary Contact"
+    },
+    "phone_number": [
+      "555-5555"
+    ],
+    "company_url": [
+      "https://newcompany.example.com"
+    ],
+    "line_of_business": "New Business",
+    "created_at": {
+      "$date": "2025-11-29T21:18:14.196Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-29T21:18:14.196Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "692b63167db4a0485060ea3c"
+    },
+    "company_name": "MINIMAL-B451866B",
+    "description": "Minimal company",
+    "created_at": {
+      "$date": "2025-11-29T21:18:14.213Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-29T21:18:14.213Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "692b63167db4a0485060ea3d"
+    },
+    "company_name": "TEST-COMPANY-EC996423",
+    "description": "Duplicate company",
+    "created_at": {
+      "$date": "2025-11-29T21:18:14.231Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-29T21:18:14.231Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "692b649c7db4a0485060ea3f"
+    },
+    "company_name": "NEW-COMPANY-66EFA18F",
+    "description": "New test company",
+    "address": {
+      "address0": "456 New Street",
+      "address1": "",
+      "postal_code": "54321",
+      "state": "CA",
+      "city": "New City",
+      "country": "USA"
+    },
+    "contact_person": {
+      "name": "New Contact",
+      "type": "Primary Contact"
+    },
+    "phone_number": [
+      "555-5555"
+    ],
+    "company_url": [
+      "https://newcompany.example.com"
+    ],
+    "line_of_business": "New Business",
+    "created_at": {
+      "$date": "2025-11-29T21:24:44.859Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-29T21:24:44.859Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "692b649c7db4a0485060ea40"
+    },
+    "company_name": "MINIMAL-2275054D",
+    "description": "Minimal company",
+    "created_at": {
+      "$date": "2025-11-29T21:24:44.877Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-29T21:24:44.877Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "692b649c7db4a0485060ea41"
+    },
+    "company_name": "TEST-COMPANY-C64EA128",
+    "description": "Duplicate company",
+    "created_at": {
+      "$date": "2025-11-29T21:24:44.894Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-29T21:24:44.894Z"
+    }
+  }
+]

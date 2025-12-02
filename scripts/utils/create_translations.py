@@ -65,9 +65,9 @@ UNIT_CONFIGS = {
 STATUS_DISTRIBUTION = ["completed"] * 12 + ["processing"] * 2 + ["failed"] * 1
 
 
-def generate_square_transaction_id() -> str:
-    """Generate a realistic Square transaction ID."""
-    # Square transaction IDs are typically 24 characters: sqt_ + 20 random chars
+def generate_stripe_checkout_session_id() -> str:
+    """Generate a realistic Stripe transaction ID."""
+    # Stripe transaction IDs are typically 24 characters: sqt_ + 20 random chars
     chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     random_part = ''.join(random.choice(chars) for _ in range(20))
     return f"sqt_{random_part}"
@@ -128,7 +128,7 @@ def create_translation_transaction(user: Dict[str, str], days_ago: int) -> Dict[
         "cost_per_unit": cost_per_unit,
         "source_language": source_lang,
         "target_language": target_lang,
-        "square_transaction_id": generate_square_transaction_id(),
+        "stripe_checkout_session_id": generate_stripe_checkout_session_id(),
         "date": transaction_date,
         "status": status,
         "total_cost": total_cost,
@@ -197,11 +197,13 @@ def create_indexes(collection) -> List[str]:
     indexes.append(date_index)
     print(f"  ✓ Created index: {date_index}")
 
-    # Unique index on square_transaction_id for payment verification
+    # Unique index on stripe_checkout_session_id for payment verification
+    # Sparse allows multiple null values (before payment), but enforces uniqueness on non-null
     square_index = collection.create_index(
-        [("square_transaction_id", ASCENDING)],
+        [("stripe_checkout_session_id", ASCENDING)],
         unique=True,
-        name="idx_square_transaction_id_unique"
+        sparse=True,  # Allow multiple documents with null stripe_checkout_session_id
+        name="idx_stripe_checkout_session_id_unique"
     )
     indexes.append(square_index)
     print(f"  ✓ Created unique index: {square_index}")
@@ -290,7 +292,7 @@ unit_type               string      Yes       No      "page", "word", "character
 cost_per_unit           decimal     Yes       No      Price per unit in dollars
 source_language         string      Yes       No      Source language
 target_language         string      Yes       No      Target language
-square_transaction_id   string      Yes       Yes     Square payment transaction ID
+stripe_checkout_session_id   string      Yes       Yes     Stripe payment transaction ID
 date                    datetime    Yes       No      Transaction date
 status                  string      Yes       No      "completed", "processing", "failed"
 total_cost              decimal     Yes       No      number_of_units × cost_per_unit
@@ -312,7 +314,7 @@ def display_sample_transactions(transactions: List[Dict[str, Any]]):
         print(f"  Document: {t['document_url']}")
         print(f"  Units: {t['number_of_units']} {t['unit_type']}(s) @ ${t['cost_per_unit']}/{t['unit_type']}")
         print(f"  Languages: {t['source_language']} → {t['target_language']}")
-        print(f"  Square ID: {t['square_transaction_id']}")
+        print(f"  Stripe ID: {t['stripe_checkout_session_id']}")
         print(f"  Date: {t['date'].strftime('%Y-%m-%d %H:%M:%S UTC')}")
         print(f"  Status: {t['status']}")
         print(f"  Total Cost: ${t['total_cost']:.2f}")

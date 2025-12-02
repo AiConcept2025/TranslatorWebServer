@@ -40,7 +40,7 @@ async def delete_old_records():
     for idx, record in enumerate(old_records, 1):
         print(f"\nRecord #{idx}:")
         print(f"  _id: {record['_id']}")
-        print(f"  square_payment_id: {record.get('square_payment_id', 'N/A')}")
+        print(f"  stripe_payment_intent_id: {record.get('stripe_payment_intent_id', 'N/A')}")
         print(f"  user_email: {record.get('user_email', 'N/A')}")
         print(f"  amount: {record.get('amount', 0)} cents")
         print(f"  created_at: {record.get('created_at', 'N/A')}")
@@ -48,7 +48,7 @@ async def delete_old_records():
         # Show what fields are present
         extra_fields = [k for k in record.keys() if k not in [
             '_id', 'company_id', 'company_name', 'user_email',
-            'square_payment_id', 'amount', 'currency', 'payment_status',
+            'stripe_payment_intent_id', 'amount', 'currency', 'payment_status',
             'refunds', 'created_at', 'updated_at', 'payment_date'
         ]]
         if extra_fields:
@@ -84,7 +84,7 @@ async def delete_old_records():
             print(f"  company_id: {record.get('company_id', '❌ MISSING')}")
             print(f"  company_name: {record.get('company_name', '❌ MISSING')}")
             print(f"  user_email: {record['user_email']}")
-            print(f"  square_payment_id: {record['square_payment_id']}")
+            print(f"  stripe_payment_intent_id: {record['stripe_payment_intent_id']}")
             print(f"  amount: ${record['amount'] / 100:.2f}")
             print(f"  payment_status: {record['payment_status']}")
             print(f"  refunds: {len(record.get('refunds', []))} refund(s)")

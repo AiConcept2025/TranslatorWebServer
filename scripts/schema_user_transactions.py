@@ -4,7 +4,7 @@ User Transactions Collection Schema Definition and Verification
 Creates a dummy user transaction record for individual user translations.
 
 COLLECTION: user_transactions
-PURPOSE: Track individual user translation transactions with Square payments
+PURPOSE: Track individual user translation transactions with Stripe payments
 
 SCHEMA FIELDS:
   _id (ObjectId, auto): MongoDB document ID
@@ -17,13 +17,13 @@ SCHEMA FIELDS:
   cost_per_unit (float, required): Cost per unit in dollars
   source_language (str, required): Source language code (ISO 639-1)
   target_language (str, required): Target language code (ISO 639-1)
-  square_transaction_id (str, required, unique indexed): Square transaction ID
+  stripe_checkout_session_id (str, required, unique indexed): Stripe transaction ID
   date (datetime, required): Transaction date
   status (str, default "processing"): processing | completed | failed
   total_cost (float, required): Total cost (auto-calculated: number_of_units * cost_per_unit)
   created_at (datetime, auto, indexed): Record creation timestamp
   updated_at (datetime, auto): Last update timestamp
-  square_payment_id (str, required): Square payment ID
+  stripe_payment_intent_id (str, required): Stripe payment ID
   amount_cents (int, required): Payment amount in cents
   currency (str, default "USD"): Currency code (ISO 4217)
   payment_status (str, default "COMPLETED"): APPROVED | COMPLETED | CANCELED | FAILED
@@ -31,7 +31,7 @@ SCHEMA FIELDS:
   payment_date (datetime, required): Payment processing date
 
 INDEXES:
-  - square_transaction_id (unique)
+  - stripe_checkout_session_id (unique)
   - user_email
   - date (descending)
   - user_email + date (compound)
@@ -71,13 +71,13 @@ async def create_schema_and_dummy_record():
         "cost_per_unit": "float (required) - Cost per unit in dollars",
         "source_language": "str (required) - Source language code (ISO 639-1)",
         "target_language": "str (required) - Target language code (ISO 639-1)",
-        "square_transaction_id": "str (required, unique indexed) - Square transaction ID",
+        "stripe_checkout_session_id": "str (required, unique indexed) - Stripe transaction ID",
         "date": "datetime (required) - Transaction date",
         "status": "str (default 'processing') - processing | completed | failed",
         "total_cost": "float (required) - Total cost (number_of_units * cost_per_unit)",
         "created_at": "datetime (auto, indexed) - Record creation timestamp",
         "updated_at": "datetime (auto) - Last update timestamp",
-        "square_payment_id": "str (required) - Square payment ID",
+        "stripe_payment_intent_id": "str (required) - Stripe payment ID",
         "amount_cents": "int (required) - Payment amount in cents",
         "currency": "str (default 'USD') - Currency code (ISO 4217)",
         "payment_status": "str (default 'COMPLETED') - APPROVED | COMPLETED | CANCELED | FAILED",
@@ -106,8 +106,8 @@ async def create_schema_and_dummy_record():
         print("\n[2/4] Generating dummy user transaction record...")
 
         now = datetime.now(timezone.utc)
-        square_transaction_id = f"SQR-{uuid.uuid4().hex[:16].upper()}"
-        square_payment_id = f"SQR-{uuid.uuid4().hex[:16].upper()}"
+        stripe_checkout_session_id = f"STRIPE-{uuid.uuid4().hex[:16].upper()}"
+        stripe_payment_intent_id = f"STRIPE-{uuid.uuid4().hex[:16].upper()}"
 
         # Transaction details
         number_of_units = 10
@@ -125,13 +125,13 @@ async def create_schema_and_dummy_record():
             "cost_per_unit": cost_per_unit,
             "source_language": "en",
             "target_language": "es",
-            "square_transaction_id": square_transaction_id,
+            "stripe_checkout_session_id": stripe_checkout_session_id,
             "date": now,
             "status": "completed",
             "total_cost": total_cost,
             "created_at": now,
             "updated_at": now,
-            "square_payment_id": square_payment_id,
+            "stripe_payment_intent_id": stripe_payment_intent_id,
             "amount_cents": amount_cents,
             "currency": "USD",
             "payment_status": "COMPLETED",
@@ -178,8 +178,8 @@ async def create_schema_and_dummy_record():
             print(f"  Total Cost:               ${verified_transaction['total_cost']:.2f}")
             print(f"  Source Language:          {verified_transaction['source_language']}")
             print(f"  Target Language:          {verified_transaction['target_language']}")
-            print(f"  Square Transaction ID:    {verified_transaction['square_transaction_id']}")
-            print(f"  Square Payment ID:        {verified_transaction['square_payment_id']}")
+            print(f"  Stripe Transaction ID:    {verified_transaction['stripe_checkout_session_id']}")
+            print(f"  Stripe Payment ID:        {verified_transaction['stripe_payment_intent_id']}")
             print(f"  Amount (cents):           {verified_transaction['amount_cents']}")
             print(f"  Currency:                 {verified_transaction['currency']}")
             print(f"  Payment Status:           {verified_transaction['payment_status']}")
@@ -214,8 +214,8 @@ async def create_schema_and_dummy_record():
         # Show query examples
         print("\nQuery Examples:")
         print("-" * 80)
-        print("1. Find by square_transaction_id:")
-        print(f"   db.user_transactions.find_one({{'square_transaction_id': '{square_transaction_id}'}})")
+        print("1. Find by stripe_checkout_session_id:")
+        print(f"   db.user_transactions.find_one({{'stripe_checkout_session_id': '{stripe_checkout_session_id}'}})")
         print("\n2. Find by user email:")
         print(f"   db.user_transactions.find({{'user_email': 'john.doe@example.com'}})")
         print("\n3. Find by status:")

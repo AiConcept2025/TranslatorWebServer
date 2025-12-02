@@ -74,7 +74,7 @@ async def real_test_files(real_test_user: Dict[str, Any]) -> List[str]:
 **Test Count:** 8 tests
 - test_1_valid_success_request
 - test_2_valid_failure_request
-- test_3a_missing_square_transaction_id
+- test_3a_missing_stripe_checkout_session_id
 - test_3b_missing_status_field
 - test_4_transaction_creation_on_success
 - test_5_no_transaction_on_failure
@@ -139,7 +139,7 @@ transaction = await database.user_transactions.find_one({
 
 # Cleanup real test data
 await database.user_transactions.delete_many({
-    "square_transaction_id": {"$regex": "^TEST-"}
+    "stripe_checkout_session_id": {"$regex": "^TEST-"}
 })
 ```
 
@@ -170,7 +170,7 @@ await google_drive_service.delete_file(file_id)
 async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=30.0) as client:
     response = await client.post(
         "/api/transactions/confirm",
-        json={"square_transaction_id": "TEST-sqt_123", "status": True},
+        json={"stripe_checkout_session_id": "TEST-sqt_123", "status": True},
         headers={"Authorization": f"Bearer {token}"}
     )
 ```
@@ -182,7 +182,7 @@ async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=30.0) as 
 ### Test Data Identification
 All test data uses **TEST-** prefix:
 ```python
-"square_transaction_id": "TEST-sqt_test123"  # Test transaction
+"stripe_checkout_session_id": "TEST-sqt_test123"  # Test transaction
 "user_email": "test-confirm@example.com"      # Test user
 "filename": "TEST_integration_test.pdf"       # Test file
 ```
@@ -195,7 +195,7 @@ All test data uses **TEST-** prefix:
 async def cleanup_test_transactions():
     # Clean up leftover TEST- transactions
     await database.user_transactions.delete_many({
-        "square_transaction_id": {"$regex": "^TEST-"}
+        "stripe_checkout_session_id": {"$regex": "^TEST-"}
     })
     yield
 ```
@@ -204,7 +204,7 @@ async def cleanup_test_transactions():
 ```python
     # Clean up TEST- transactions created during test
     await database.user_transactions.delete_many({
-        "square_transaction_id": {"$regex": "^TEST-"}
+        "stripe_checkout_session_id": {"$regex": "^TEST-"}
     })
 ```
 
@@ -223,7 +223,7 @@ async def real_test_files(real_test_user: Dict[str, Any]) -> List[str]:
 ### Data Safety Guarantees
 
 ✅ **ONLY TEST DATA DELETED:**
-- Transactions: Only `square_transaction_id` matching `^TEST-`
+- Transactions: Only `stripe_checkout_session_id` matching `^TEST-`
 - Users: Only `test-confirm@example.com`
 - Files: Only files with `TEST_` prefix
 
@@ -316,7 +316,7 @@ collected 8 items
 
 tests/integration/test_confirm_square_payment.py::test_1_valid_success_request PASSED [ 12%]
 tests/integration/test_confirm_square_payment.py::test_2_valid_failure_request PASSED [ 25%]
-tests/integration/test_confirm_square_payment.py::test_3a_missing_square_transaction_id PASSED [ 37%]
+tests/integration/test_confirm_square_payment.py::test_3a_missing_stripe_checkout_session_id PASSED [ 37%]
 tests/integration/test_confirm_square_payment.py::test_3b_missing_status_field PASSED [ 50%]
 tests/integration/test_confirm_square_payment.py::test_4_transaction_creation_on_success PASSED [ 62%]
 tests/integration/test_confirm_square_payment.py::test_5_no_transaction_on_failure PASSED [ 75%]
@@ -333,13 +333,13 @@ tests/integration/test_confirm_square_payment.py::test_6b_failure_response_forma
 ### Request Validation
 - ✅ Valid success request (200 status)
 - ✅ Valid failure request (200 status)
-- ✅ Missing square_transaction_id (422 error)
+- ✅ Missing stripe_checkout_session_id (422 error)
 - ✅ Missing status field (422 error)
 
 ### Transaction Creation
 - ✅ Transaction created with TXN- format ID
 - ✅ Transaction saved to MongoDB
-- ✅ Transaction has square_transaction_id
+- ✅ Transaction has stripe_checkout_session_id
 - ✅ Transaction has correct user_id, status, documents
 
 ### Success Flow

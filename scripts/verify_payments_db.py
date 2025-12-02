@@ -71,7 +71,7 @@ async def verify_database():
         "company_id",
         "company_name",
         "user_email",
-        "square_payment_id",
+        "stripe_payment_intent_id",
         "amount",
         "currency",
         "payment_status",

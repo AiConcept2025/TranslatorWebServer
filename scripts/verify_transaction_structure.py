@@ -64,7 +64,7 @@ async def verify_structure():
             print(f"  Parent Level:")
             print(f"    transaction_id: ❌ MISSING (should exist at parent level)")
 
-        print(f"    square_transaction_id: {txn.get('square_transaction_id', 'N/A')}")
+        print(f"    stripe_checkout_session_id: {txn.get('stripe_checkout_session_id', 'N/A')}")
         print(f"    user_email: {txn.get('user_email', 'N/A')}")
         print(f"    status: {txn.get('status', 'N/A')}")
         print(f"    total_cost: ${txn.get('total_cost', 0)}")
@@ -133,20 +133,20 @@ async def verify_structure():
     print()
 
 
-async def verify_single_transaction(square_transaction_id: str):
-    """Verify structure of a specific transaction by square_transaction_id."""
+async def verify_single_transaction(stripe_checkout_session_id: str):
+    """Verify structure of a specific transaction by stripe_checkout_session_id."""
     print("=" * 80)
-    print(f"VERIFYING TRANSACTION: {square_transaction_id}")
+    print(f"VERIFYING TRANSACTION: {stripe_checkout_session_id}")
     print("=" * 80)
     print()
 
     await database.connect()
 
     collection = database.user_transactions
-    txn = await collection.find_one({"square_transaction_id": square_transaction_id})
+    txn = await collection.find_one({"stripe_checkout_session_id": stripe_checkout_session_id})
 
     if not txn:
-        print(f"❌ Transaction not found: {square_transaction_id}\n")
+        print(f"❌ Transaction not found: {stripe_checkout_session_id}\n")
         return
 
     print("📋 Transaction Found")
@@ -156,7 +156,7 @@ async def verify_single_transaction(square_transaction_id: str):
     print("\n  Parent Level Fields:")
     print(f"    • _id: {txn['_id']}")
     print(f"    • transaction_id: {txn.get('transaction_id', 'MISSING')}")
-    print(f"    • square_transaction_id: {txn.get('square_transaction_id')}")
+    print(f"    • stripe_checkout_session_id: {txn.get('stripe_checkout_session_id')}")
     print(f"    • user_email: {txn.get('user_email')}")
 
     # Validate format

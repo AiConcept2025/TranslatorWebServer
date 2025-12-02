@@ -330,8 +330,8 @@ class SubmitService:
             )
 
             # Extract transaction metadata for email context
-            # Get transaction_id from transaction (square_transaction_id for individuals, transaction_id for enterprise)
-            txn_id = transaction.get("square_transaction_id") or transaction.get("transaction_id") or transaction_id
+            # Get transaction_id from transaction (stripe_checkout_session_id for individuals, transaction_id for enterprise)
+            txn_id = transaction.get("stripe_checkout_session_id") or transaction.get("transaction_id") or transaction_id
             # Get completion timestamp as current time (when all documents are done)
             completed_at = datetime.now(timezone.utc)
             # Get total document count

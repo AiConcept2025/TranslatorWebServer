@@ -94,10 +94,12 @@ class JWTService:
             )
 
             # Extract user data
+            # Note: JWT token stores name as "fullName" (from auth_service.py)
+            # but we expose it as "user_name" for backward compatibility
             user_data = {
                 "user_id": payload.get("user_id"),
                 "email": payload.get("email"),
-                "user_name": payload.get("user_name"),
+                "user_name": payload.get("fullName") or payload.get("user_name"),
                 "company_name": payload.get("company_name"),
                 "permission_level": payload.get("permission_level", "user")
             }

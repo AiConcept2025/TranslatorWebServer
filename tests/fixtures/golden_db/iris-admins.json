@@ -1,0 +1,33 @@
+[
+  {
+    "_id": {
+      "$oid": "6903a4be176040c6c8b4f1e7"
+    },
+    "user_name": "Vladimir Danishevsky",
+    "user_email": "danishevsky@gmail.com",
+    "password": "$2b$12$S/.Kt9hFmx.NONg/ltmLUuhCV3S8D6..jQjNNCoeEZHv3gd13Vomm",
+    "login_date": {
+      "$date": "2025-11-22T18:56:51.495Z"
+    },
+    "created_at": {
+      "$date": "2025-10-30T17:47:42Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-29T22:42:44.450692Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "692b1bff865d69c889fa3fab"
+    },
+    "user_name": "Sam Danishevsky",
+    "user_email": "sam.danishevsky@iris-translation.com",
+    "password": "$2b$12$agi5RJaWXbeM9al55OTlBeFq4EjAIOXkG4VpfPdOorjRFhzg8sPq.",
+    "created_at": {
+      "$date": "2025-11-29T16:14:55.669Z"
+    },
+    "updated_at": {
+      "$date": "2025-11-29T16:14:55.669Z"
+    }
+  }
+]

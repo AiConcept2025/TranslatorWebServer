@@ -27,8 +27,10 @@ class Settings(BaseSettings):
     
     # Database Configuration
     database_url: str = "sqlite:///./translator.db"
-    mongodb_uri: str = "mongodb://iris:Sveta87201120@localhost:27017/translation?authSource=translation"
-    mongodb_database: str = "translation"
+    mongodb_uri: str  # Required - must be set in .env file (no hardcoded credentials)
+    mongodb_database_production: str = "translation"
+    mongodb_database_test: str = "translation_test"
+    database_mode: str = "production"  # "production" or "test"
 
     # Redis Configuration
     redis_url: str = "redis://localhost:6379/0"
@@ -112,6 +114,23 @@ class Settings(BaseSettings):
         if len(v) < 32:
             raise ValueError("SECRET_KEY must be at least 32 characters long")
         return v
+
+    @validator('mongodb_uri')
+    def validate_mongodb_uri(cls, v):
+        if not v:
+            raise ValueError("MONGODB_URI must be set in .env file")
+        # Check for placeholder values
+        placeholder_values = ['user:password', 'your-', 'changeme', 'placeholder']
+        for placeholder in placeholder_values:
+            if placeholder in v.lower():
+                raise ValueError(
+                    f"MONGODB_URI contains placeholder value '{placeholder}'. "
+                    "Please set actual MongoDB credentials in .env file"
+                )
+        # Basic format validation
+        if not v.startswith(('mongodb://', 'mongodb+srv://')):
+            raise ValueError("MONGODB_URI must start with 'mongodb://' or 'mongodb+srv://'")
+        return v
     
     @validator('allowed_file_types')
     def validate_file_types(cls, v):
@@ -141,7 +160,18 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         """Check if running in development environment."""
         return self.environment.lower() == "development"
-    
+
+    @property
+    def active_mongodb_database(self) -> str:
+        """Get the active MongoDB database based on database_mode."""
+        if self.database_mode.lower() == "test":
+            return self.mongodb_database_test
+        return self.mongodb_database_production
+
+    def is_test_mode(self) -> bool:
+        """Check if running in test mode."""
+        return self.database_mode.lower() == "test"
+
     @property
     def log_config(self) -> dict:
         """Get logging configuration."""

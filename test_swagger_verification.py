@@ -6,7 +6,7 @@ Run this to verify all endpoints are properly documented.
 def verify_payments_schema():
     """Verify payments collection schema."""
     expected_fields = [
-        'company_id', 'company_name', 'user_email', 'square_payment_id',
+        'company_id', 'company_name', 'user_email', 'stripe_payment_intent_id',
         'amount', 'currency', 'payment_status', 'refunds',
         'created_at', 'updated_at', 'payment_date'
     ]
@@ -26,8 +26,8 @@ def verify_user_transactions_schema():
     expected_fields = [
         'user_name', 'user_email', 'document_url', 'translated_url',
         'number_of_units', 'unit_type', 'cost_per_unit',
-        'source_language', 'target_language', 'square_transaction_id',
-        'date', 'status', 'total_cost', 'square_payment_id',
+        'source_language', 'target_language', 'stripe_checkout_session_id',
+        'date', 'status', 'total_cost', 'stripe_payment_intent_id',
         'amount_cents', 'currency', 'payment_status', 'refunds',
         'payment_date', 'created_at', 'updated_at'
     ]

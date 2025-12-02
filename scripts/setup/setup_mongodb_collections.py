@@ -307,8 +307,8 @@ def extract_collection_schemas(content):
             "fields": {
                 "customer_id": {"type": "ObjectId", "required": True},
                 "subscription_id": {"type": "ObjectId"},
-                "square_payment_id": {"type": "String", "required": True, "maxLength": 255},
-                "square_order_id": {"type": "String"},
+                "stripe_payment_intent_id": {"type": "String", "required": True, "maxLength": 255},
+                "stripe_invoice_id": {"type": "String"},
                 "square_receipt_url": {"type": "String"},
                 "amount": {"type": "Decimal", "required": True},
                 "currency": {"type": "String", "maxLength": 3},
@@ -325,7 +325,7 @@ def extract_collection_schemas(content):
                 "updated_at": {"type": "Date"}
             },
             "indexes": [
-                {"fields": {"square_payment_id": 1}, "unique": True},
+                {"fields": {"stripe_payment_intent_id": 1}, "unique": True},
                 {"fields": {"customer_id": 1}},
                 {"fields": {"subscription_id": 1}},
                 {"fields": {"payment_date": -1}},

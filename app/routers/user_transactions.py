@@ -41,38 +41,42 @@ def serialize_transaction_for_json(txn: dict) -> dict:
     Handles:
     - ObjectId → string
     - Decimal128 → float
-    - datetime → ISO 8601 string (top-level and nested in documents array)
+    - datetime → ISO 8601 string (all fields at all levels)
 
     Args:
         txn: Transaction document from MongoDB
 
     Returns:
         JSON-serializable dict
+
+    Note:
+        This function is backward compatible - it preserves all existing fields
+        and only converts non-JSON-serializable types to their string/float equivalents.
     """
-    # Convert ObjectId
-    if "_id" in txn:
-        txn["_id"] = str(txn["_id"])
+    import copy
+    from bson import ObjectId
 
-    # Convert Decimal128 fields to float
-    for key, value in list(txn.items()):
+    def serialize_value(value):
+        """Recursively serialize a value to JSON-compatible format."""
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, ObjectId):
+            return str(value)
         if isinstance(value, Decimal128):
-            txn[key] = float(value.to_decimal())
+            return float(value.to_decimal())
+        if isinstance(value, dict):
+            return {k: serialize_value(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [serialize_value(item) for item in value]
+        return value
 
-    # Convert top-level datetime fields to ISO format strings
-    datetime_fields = ["date", "created_at", "updated_at", "payment_date"]
-    for field in datetime_fields:
-        if field in txn and hasattr(txn[field], "isoformat"):
-            txn[field] = txn[field].isoformat()
+    # Create a deep copy to avoid modifying the original
+    txn = copy.deepcopy(txn)
 
-    # Convert datetime fields in documents array
-    if "documents" in txn and isinstance(txn["documents"], list):
-        for doc in txn["documents"]:
-            doc_datetime_fields = ["uploaded_at", "translated_at"]
-            for field in doc_datetime_fields:
-                if field in doc and doc[field] is not None and hasattr(doc[field], "isoformat"):
-                    doc[field] = doc[field].isoformat()
-
-    return txn
+    # Recursively serialize all values
+    return {key: serialize_value(value) for key, value in txn.items()}
 
 router = APIRouter(prefix="/api/v1/user-transactions", tags=["User Transaction Payments"])
 
@@ -94,8 +98,8 @@ async def process_payment_transaction(request: Request, transaction_data: UserTr
     - `cost_per_unit`: Cost per single unit
     - `source_language`: Source language code (e.g., "en")
     - `target_language`: Target language code (e.g., "es")
-    - `square_transaction_id`: Unique Square transaction ID
-    - `square_payment_id`: Square payment ID
+    - `stripe_checkout_session_id`: Unique Square transaction ID
+    - `stripe_payment_intent_id`: Square payment ID
 
     **Optional Fields (with defaults):**
     - `currency`: "USD"
@@ -133,8 +137,8 @@ async def process_payment_transaction(request: Request, transaction_data: UserTr
         "cost_per_unit": 0.15,
         "source_language": "en",
         "target_language": "es",
-        "square_transaction_id": "SQR-1EC28E70F10B4D9E",
-        "square_payment_id": "SQR-1EC28E70F10B4D9E",
+        "stripe_checkout_session_id": "SQR-1EC28E70F10B4D9E",
+        "stripe_payment_intent_id": "SQR-1EC28E70F10B4D9E",
         "amount_cents": 150,
         "currency": "USD",
         "payment_status": "COMPLETED",
@@ -172,11 +176,11 @@ async def process_payment_transaction(request: Request, transaction_data: UserTr
         "source_language": "en",
         "target_language": "es",
         "transaction_id": "USER123456",
-        "square_transaction_id": "SQR-1EC28E70F10B4D9E",
+        "stripe_checkout_session_id": "SQR-1EC28E70F10B4D9E",
         "date": "2025-10-23T23:56:55.438Z",
         "status": "processing",
         "total_cost": 1.5,
-        "square_payment_id": "SQR-1EC28E70F10B4D9E",
+        "stripe_payment_intent_id": "SQR-1EC28E70F10B4D9E",
         "amount_cents": 150,
         "currency": "USD",
         "payment_status": "COMPLETED",
@@ -214,8 +218,8 @@ async def process_payment_transaction(request: Request, transaction_data: UserTr
            "cost_per_unit": 0.15,
            "source_language": "en",
            "target_language": "es",
-           "square_transaction_id": "SQR-1EC28E70F10B4D9E",
-           "square_payment_id": "SQR-1EC28E70F10B4D9E",
+           "stripe_checkout_session_id": "SQR-1EC28E70F10B4D9E",
+           "stripe_payment_intent_id": "SQR-1EC28E70F10B4D9E",
            "amount_cents": 150
          }'
     ```
@@ -247,7 +251,7 @@ async def process_payment_transaction(request: Request, transaction_data: UserTr
 
         logger.info(f"📥 Request Data:")
         logger.info(f"   - user_email: {transaction_data.user_email}")
-        logger.info(f"   - square_transaction_id: {transaction_data.square_transaction_id}")
+        logger.info(f"   - stripe_checkout_session_id: {transaction_data.stripe_checkout_session_id}")
         logger.info(f"   - number_of_units: {transaction_data.number_of_units}")
         logger.info(f"   - unit_type: {transaction_data.unit_type}")
         logger.info(f"   - documents_count: {len(transaction_data.documents)}")
@@ -272,10 +276,10 @@ async def process_payment_transaction(request: Request, transaction_data: UserTr
             cost_per_unit=transaction_data.cost_per_unit,
             source_language=transaction_data.source_language,
             target_language=transaction_data.target_language,
-            square_transaction_id=transaction_data.square_transaction_id,
+            stripe_checkout_session_id=transaction_data.stripe_checkout_session_id,
             date=transaction_date,
             status=transaction_data.status,
-            square_payment_id=transaction_data.square_payment_id,
+            stripe_payment_intent_id=transaction_data.stripe_payment_intent_id,
             amount_cents=transaction_data.amount_cents,
             currency=transaction_data.currency,
             payment_status=transaction_data.payment_status,
@@ -291,8 +295,8 @@ async def process_payment_transaction(request: Request, transaction_data: UserTr
             )
 
         # Retrieve created transaction
-        logger.info(f"🔄 Calling get_user_transaction({transaction_data.square_transaction_id})...")
-        transaction_doc = await get_user_transaction(transaction_data.square_transaction_id)
+        logger.info(f"🔄 Calling get_user_transaction({transaction_data.stripe_checkout_session_id})...")
+        transaction_doc = await get_user_transaction(transaction_data.stripe_checkout_session_id)
         logger.info(f"🔎 Database Result: found={transaction_doc is not None}")
 
         if not transaction_doc:
@@ -303,7 +307,7 @@ async def process_payment_transaction(request: Request, transaction_data: UserTr
             )
 
         logger.info(f"✅ Transaction creation successful:")
-        logger.info(f"   - square_transaction_id: {transaction_data.square_transaction_id}")
+        logger.info(f"   - stripe_checkout_session_id: {transaction_data.stripe_checkout_session_id}")
         logger.info(f"   - user_email: {transaction_data.user_email}")
         logger.info(f"   - status: {transaction_data.status}")
         logger.info(f"   - payment_status: {transaction_data.payment_status}")
@@ -323,17 +327,17 @@ async def process_payment_transaction(request: Request, transaction_data: UserTr
         logger.error(f"❌ Failed to process payment transaction:", exc_info=True)
         logger.error(f"   - Error: {str(e)}")
         logger.error(f"   - Error type: {type(e).__name__}")
-        logger.error(f"   - Context: user_email={transaction_data.user_email}, square_transaction_id={transaction_data.square_transaction_id}")
+        logger.error(f"   - Context: user_email={transaction_data.user_email}, stripe_checkout_session_id={transaction_data.stripe_checkout_session_id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process transaction: {str(e)}"
         )
 
 
-@router.post("/{square_transaction_id}/refund", status_code=status.HTTP_200_OK)
+@router.post("/{stripe_checkout_session_id}/refund", status_code=status.HTTP_200_OK)
 async def process_transaction_refund(
     request: Request,
-    square_transaction_id: str = Path(..., description="Square transaction ID"),
+    stripe_checkout_session_id: str = Path(..., description="Square transaction ID"),
     refund_request: UserTransactionRefundRequest = None
 ):
     """
@@ -342,7 +346,7 @@ async def process_transaction_refund(
     Adds refund information to the transaction's refunds array and updates payment status if needed.
 
     **Path Parameters:**
-    - `square_transaction_id`: Square transaction ID (e.g., "SQR-1EC28E70F10B4D9E")
+    - `stripe_checkout_session_id`: Square transaction ID (e.g., "SQR-1EC28E70F10B4D9E")
 
     **Request Body:**
     ```json
@@ -361,7 +365,7 @@ async def process_transaction_refund(
         "success": true,
         "message": "Refund processed successfully",
         "data": {
-            "square_transaction_id": "SQR-1EC28E70F10B4D9E",
+            "stripe_checkout_session_id": "SQR-1EC28E70F10B4D9E",
             "refund_id": "rfn_01J2M9ABCD",
             "amount_cents": 50,
             "total_refunds": 1
@@ -391,9 +395,9 @@ async def process_transaction_refund(
     try:
         # Request Start
         timestamp = datetime.now(timezone.utc).isoformat()
-        logger.info(f"🔍 [{timestamp}] POST /api/v1/user-transactions/{square_transaction_id}/refund - START")
+        logger.info(f"🔍 [{timestamp}] POST /api/v1/user-transactions/{stripe_checkout_session_id}/refund - START")
         logger.info(f"📥 Request Parameters:")
-        logger.info(f"   - square_transaction_id (path): {square_transaction_id}")
+        logger.info(f"   - stripe_checkout_session_id (path): {stripe_checkout_session_id}")
 
         # Raw Request Body
         try:
@@ -418,15 +422,15 @@ async def process_transaction_refund(
         logger.info(f"   - currency: {refund_request.currency}")
 
         # Check if transaction exists
-        logger.info(f"🔄 Calling get_user_transaction({square_transaction_id})...")
-        transaction = await get_user_transaction(square_transaction_id)
+        logger.info(f"🔄 Calling get_user_transaction({stripe_checkout_session_id})...")
+        transaction = await get_user_transaction(stripe_checkout_session_id)
         logger.info(f"🔎 Database Result: found={transaction is not None}")
 
         if not transaction:
-            logger.error(f"❌ Transaction not found: {square_transaction_id}")
+            logger.error(f"❌ Transaction not found: {stripe_checkout_session_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Transaction not found: {square_transaction_id}"
+                detail=f"Transaction not found: {stripe_checkout_session_id}"
             )
 
         # Prepare refund data
@@ -447,7 +451,7 @@ async def process_transaction_refund(
 
         # Add refund to transaction
         logger.info(f"🔄 Calling add_refund_to_transaction()...")
-        success = await add_refund_to_transaction(square_transaction_id, refund_data)
+        success = await add_refund_to_transaction(stripe_checkout_session_id, refund_data)
         logger.info(f"🔎 Database Result: success={success}")
 
         if not success:
@@ -459,12 +463,12 @@ async def process_transaction_refund(
 
         # Retrieve updated transaction
         logger.info(f"🔄 Calling get_user_transaction() to verify refund...")
-        updated_transaction = await get_user_transaction(square_transaction_id)
+        updated_transaction = await get_user_transaction(stripe_checkout_session_id)
         total_refunds = len(updated_transaction.get("refunds", []))
         logger.info(f"🔎 Database Result: total_refunds={total_refunds}")
 
         logger.info(f"✅ Refund processing successful:")
-        logger.info(f"   - square_transaction_id: {square_transaction_id}")
+        logger.info(f"   - stripe_checkout_session_id: {stripe_checkout_session_id}")
         logger.info(f"   - refund_id: {refund_request.refund_id}")
         logger.info(f"   - amount_cents: {refund_request.amount_cents}")
         logger.info(f"   - total_refunds: {total_refunds}")
@@ -474,7 +478,7 @@ async def process_transaction_refund(
             "success": True,
             "message": "Refund processed successfully",
             "data": {
-                "square_transaction_id": square_transaction_id,
+                "stripe_checkout_session_id": stripe_checkout_session_id,
                 "refund_id": refund_request.refund_id,
                 "amount_cents": refund_request.amount_cents,
                 "total_refunds": total_refunds
@@ -491,7 +495,7 @@ async def process_transaction_refund(
         logger.error(f"❌ Failed to process refund:", exc_info=True)
         logger.error(f"   - Error: {str(e)}")
         logger.error(f"   - Error type: {type(e).__name__}")
-        logger.error(f"   - Context: square_transaction_id={square_transaction_id}")
+        logger.error(f"   - Context: stripe_checkout_session_id={stripe_checkout_session_id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process refund: {str(e)}"
@@ -532,7 +536,7 @@ async def get_all_user_transactions(
                     "cost_per_unit": 0.15,
                     "source_language": "en",
                     "target_language": "es",
-                    "square_transaction_id": "SQR-1EC28E70F10B4D9E",
+                    "stripe_checkout_session_id": "SQR-1EC28E70F10B4D9E",
                     "date": "2025-10-23T23:56:55.438Z",
                     "status": "completed",
                     "total_cost": 1.5,
@@ -703,7 +707,7 @@ async def get_user_transaction_history(
                     "cost_per_unit": 0.15,
                     "source_language": "en",
                     "target_language": "es",
-                    "square_transaction_id": "SQR-1EC28E70F10B4D9E",
+                    "stripe_checkout_session_id": "SQR-1EC28E70F10B4D9E",
                     "date": "2025-10-23T23:56:55.438Z",
                     "status": "completed",
                     "total_cost": 1.5,
@@ -828,10 +832,10 @@ async def get_user_transaction_history(
         )
 
 
-@router.get("/{square_transaction_id}")
+@router.get("/{stripe_checkout_session_id}")
 async def get_transaction_by_id(
     request: Request,
-    square_transaction_id: str = Path(..., description="Square transaction ID")
+    stripe_checkout_session_id: str = Path(..., description="Square transaction ID")
 ):
     """
     Get transaction details by Square transaction ID.
@@ -839,7 +843,7 @@ async def get_transaction_by_id(
     Retrieves complete transaction record including all 22 fields from the users_transactions collection.
 
     **Path Parameters:**
-    - `square_transaction_id`: Square transaction ID (e.g., "SQR-1EC28E70F10B4D9E")
+    - `stripe_checkout_session_id`: Square transaction ID (e.g., "SQR-1EC28E70F10B4D9E")
 
     **Response Example:**
     ```json
@@ -856,11 +860,11 @@ async def get_transaction_by_id(
             "cost_per_unit": 0.15,
             "source_language": "en",
             "target_language": "es",
-            "square_transaction_id": "SQR-1EC28E70F10B4D9E",
+            "stripe_checkout_session_id": "SQR-1EC28E70F10B4D9E",
             "date": "2025-10-23T23:56:55.438Z",
             "status": "completed",
             "total_cost": 1.5,
-            "square_payment_id": "SQR-1EC28E70F10B4D9E",
+            "stripe_payment_intent_id": "SQR-1EC28E70F10B4D9E",
             "amount_cents": 150,
             "currency": "USD",
             "payment_status": "COMPLETED",
@@ -885,27 +889,27 @@ async def get_transaction_by_id(
     try:
         # Request Start
         timestamp = datetime.now(timezone.utc).isoformat()
-        logger.info(f"🔍 [{timestamp}] GET /api/v1/user-transactions/{square_transaction_id} - START")
+        logger.info(f"🔍 [{timestamp}] GET /api/v1/user-transactions/{stripe_checkout_session_id} - START")
         logger.info(f"📥 Request Parameters:")
-        logger.info(f"   - square_transaction_id (path): {square_transaction_id}")
+        logger.info(f"   - stripe_checkout_session_id (path): {stripe_checkout_session_id}")
 
         # Database Operations
-        logger.info(f"🔄 Calling get_user_transaction({square_transaction_id})...")
-        transaction = await get_user_transaction(square_transaction_id)
+        logger.info(f"🔄 Calling get_user_transaction({stripe_checkout_session_id})...")
+        transaction = await get_user_transaction(stripe_checkout_session_id)
         logger.info(f"🔎 Database Result: found={transaction is not None}")
 
         if not transaction:
-            logger.error(f"❌ Transaction not found: {square_transaction_id}")
+            logger.error(f"❌ Transaction not found: {stripe_checkout_session_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Transaction not found: {square_transaction_id}"
+                detail=f"Transaction not found: {stripe_checkout_session_id}"
             )
 
-        # Convert ObjectId to string
-        transaction["_id"] = str(transaction["_id"])
+        # Serialize transaction for JSON (handles ObjectId, datetime, Decimal128)
+        transaction = serialize_transaction_for_json(transaction)
 
         logger.info(f"✅ Retrieval successful:")
-        logger.info(f"   - square_transaction_id: {square_transaction_id}")
+        logger.info(f"   - stripe_checkout_session_id: {stripe_checkout_session_id}")
         logger.info(f"   - user_email: {transaction.get('user_email')}")
         logger.info(f"   - status: {transaction.get('status')}")
         logger.info(f"📤 Response: success=True, transaction data included")
@@ -925,17 +929,17 @@ async def get_transaction_by_id(
         logger.error(f"❌ Failed to retrieve transaction:", exc_info=True)
         logger.error(f"   - Error: {str(e)}")
         logger.error(f"   - Error type: {type(e).__name__}")
-        logger.error(f"   - Context: square_transaction_id={square_transaction_id}")
+        logger.error(f"   - Context: stripe_checkout_session_id={stripe_checkout_session_id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve transaction: {str(e)}"
         )
 
 
-@router.patch("/{square_transaction_id}/payment-status")
+@router.patch("/{stripe_checkout_session_id}/payment-status")
 async def update_transaction_payment_status(
     request: Request,
-    square_transaction_id: str = Path(..., description="Square transaction ID"),
+    stripe_checkout_session_id: str = Path(..., description="Square transaction ID"),
     payment_status: str = Query(..., description="New payment status (APPROVED, COMPLETED, CANCELED, FAILED)")
 ):
     """
@@ -944,7 +948,7 @@ async def update_transaction_payment_status(
     Updates the payment_status field in the users_transactions collection.
 
     **Path Parameters:**
-    - `square_transaction_id`: Square transaction ID (e.g., "SQR-1EC28E70F10B4D9E")
+    - `stripe_checkout_session_id`: Square transaction ID (e.g., "SQR-1EC28E70F10B4D9E")
 
     **Query Parameters:**
     - `payment_status`: New payment status (APPROVED | COMPLETED | CANCELED | FAILED)
@@ -955,7 +959,7 @@ async def update_transaction_payment_status(
         "success": true,
         "message": "Payment status updated successfully",
         "data": {
-            "square_transaction_id": "SQR-1EC28E70F10B4D9E",
+            "stripe_checkout_session_id": "SQR-1EC28E70F10B4D9E",
             "payment_status": "COMPLETED",
             "updated_at": "2025-10-24T01:20:00.000Z"
         }
@@ -976,26 +980,26 @@ async def update_transaction_payment_status(
     try:
         # Request Start
         timestamp = datetime.now(timezone.utc).isoformat()
-        logger.info(f"🔍 [{timestamp}] PATCH /api/v1/user-transactions/{square_transaction_id}/payment-status - START")
+        logger.info(f"🔍 [{timestamp}] PATCH /api/v1/user-transactions/{stripe_checkout_session_id}/payment-status - START")
         logger.info(f"📥 Request Parameters:")
-        logger.info(f"   - square_transaction_id (path): {square_transaction_id}")
+        logger.info(f"   - stripe_checkout_session_id (path): {stripe_checkout_session_id}")
         logger.info(f"   - payment_status (query): {payment_status}")
 
         # Check if transaction exists
-        logger.info(f"🔄 Calling get_user_transaction({square_transaction_id})...")
-        transaction = await get_user_transaction(square_transaction_id)
+        logger.info(f"🔄 Calling get_user_transaction({stripe_checkout_session_id})...")
+        transaction = await get_user_transaction(stripe_checkout_session_id)
         logger.info(f"🔎 Database Result: found={transaction is not None}")
 
         if not transaction:
-            logger.error(f"❌ Transaction not found: {square_transaction_id}")
+            logger.error(f"❌ Transaction not found: {stripe_checkout_session_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Transaction not found: {square_transaction_id}"
+                detail=f"Transaction not found: {stripe_checkout_session_id}"
             )
 
         # Update payment status
-        logger.info(f"🔄 Calling update_payment_status({square_transaction_id}, {payment_status})...")
-        success = await update_payment_status(square_transaction_id, payment_status)
+        logger.info(f"🔄 Calling update_payment_status({stripe_checkout_session_id}, {payment_status})...")
+        success = await update_payment_status(stripe_checkout_session_id, payment_status)
         logger.info(f"🔎 Database Result: success={success}")
 
         if not success:
@@ -1006,7 +1010,7 @@ async def update_transaction_payment_status(
             )
 
         logger.info(f"✅ Payment status update successful:")
-        logger.info(f"   - square_transaction_id: {square_transaction_id}")
+        logger.info(f"   - stripe_checkout_session_id: {stripe_checkout_session_id}")
         logger.info(f"   - new_payment_status: {payment_status}")
         logger.info(f"   - updated_at: {datetime.utcnow().isoformat()}")
         logger.info(f"📤 Response: success=True, message='Payment status updated successfully'")
@@ -1015,7 +1019,7 @@ async def update_transaction_payment_status(
             "success": True,
             "message": "Payment status updated successfully",
             "data": {
-                "square_transaction_id": square_transaction_id,
+                "stripe_checkout_session_id": stripe_checkout_session_id,
                 "payment_status": payment_status,
                 "updated_at": datetime.utcnow().isoformat()
             }
@@ -1031,7 +1035,7 @@ async def update_transaction_payment_status(
         logger.error(f"❌ Failed to update payment status:", exc_info=True)
         logger.error(f"   - Error: {str(e)}")
         logger.error(f"   - Error type: {type(e).__name__}")
-        logger.error(f"   - Context: square_transaction_id={square_transaction_id}, payment_status={payment_status}")
+        logger.error(f"   - Context: stripe_checkout_session_id={stripe_checkout_session_id}, payment_status={payment_status}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update payment status: {str(e)}"

@@ -77,8 +77,8 @@ def seed():
     payment = {
         "customer_id": company_id,
         "subscription_id": subscription_id,
-        "square_payment_id": f"sq_pay_{ObjectId()}",
-        "square_order_id": f"sq_ord_{ObjectId()}",
+        "stripe_payment_intent_id": f"stripe_pi_{ObjectId()}",
+        "stripe_invoice_id": f"stripe_inv_{ObjectId()}",
         "square_receipt_url": "https://square.com/receipt/123",
         "amount": Decimal128("106.00"),
         "currency": "USD",

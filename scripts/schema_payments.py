@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
 Payments Collection Schema Definition and Verification
-Creates a dummy payment record with Square integration and refunds array.
+Creates a dummy payment record with Stripe integration and refunds array.
 
 COLLECTION: payments
-PURPOSE: Track company payments with Square payment integration
+PURPOSE: Track company payments with Stripe payment integration
 
 SCHEMA FIELDS:
   _id (ObjectId, auto): MongoDB document ID
   company_id (str, required, indexed): Company identifier (e.g., "cmp_00123")
   company_name (str, required): Company name
   user_email (str, required, indexed): User email address
-  square_payment_id (str, required, indexed): Square payment ID
+  stripe_payment_intent_id (str, required, indexed): Stripe payment ID
   amount (int, required): Payment amount in cents
   currency (str, default "USD"): Currency code (ISO 4217)
   payment_status (str, required, indexed): COMPLETED | PENDING | FAILED | REFUNDED
@@ -25,11 +25,11 @@ REFUND OBJECT SCHEMA:
   amount (int, required): Refund amount in cents
   currency (str, required): Currency code
   status (str, required): COMPLETED | PENDING | FAILED
-  idempotency_key (str, required): Idempotency key for Square API
+  idempotency_key (str, required): Idempotency key for Stripe API
   created_at (datetime, required): Refund creation timestamp
 
 INDEXES:
-  - square_payment_id (non-unique for stub implementation)
+  - stripe_payment_intent_id (non-unique for stub implementation)
   - company_id
   - subscription_id
   - user_id
@@ -38,8 +38,8 @@ INDEXES:
   - user_email
   - company_id + payment_status (compound)
   - user_id + payment_date (compound)
-  - square_order_id
-  - square_customer_id
+  - stripe_invoice_id
+  - stripe_customer_id
   - created_at
 
 Usage:
@@ -69,7 +69,7 @@ async def create_schema_and_dummy_record():
         "company_id": "str (required, indexed) - Company identifier",
         "company_name": "str (required) - Company name",
         "user_email": "str (required, indexed) - User email address",
-        "square_payment_id": "str (required, indexed) - Square payment ID",
+        "stripe_payment_intent_id": "str (required, indexed) - Stripe payment ID",
         "amount": "int (required) - Payment amount in cents",
         "currency": "str (default 'USD') - Currency code ISO 4217",
         "payment_status": "str (required, indexed) - COMPLETED | PENDING | FAILED | REFUNDED",
@@ -84,7 +84,7 @@ async def create_schema_and_dummy_record():
         "amount": "int (required) - Refund amount in cents",
         "currency": "str (required) - Currency code",
         "status": "str (required) - COMPLETED | PENDING | FAILED",
-        "idempotency_key": "str (required) - Idempotency key for Square API",
+        "idempotency_key": "str (required) - Idempotency key for Stripe API",
         "created_at": "datetime (required) - Refund creation timestamp",
     }
 
@@ -131,7 +131,7 @@ async def create_schema_and_dummy_record():
             "company_id": "cmp_00123",
             "company_name": "Acme Health LLC",
             "user_email": "test5@yahoo.com",
-            "square_payment_id": payment_id,
+            "stripe_payment_intent_id": payment_id,
             "amount": 1299,  # $12.99
             "currency": "USD",
             "payment_status": "COMPLETED",
@@ -169,7 +169,7 @@ async def create_schema_and_dummy_record():
             print(f"  Company ID:         {verified_payment['company_id']}")
             print(f"  Company Name:       {verified_payment['company_name']}")
             print(f"  User Email:         {verified_payment['user_email']}")
-            print(f"  Square Payment ID:  {verified_payment['square_payment_id']}")
+            print(f"  Stripe Payment ID:  {verified_payment['stripe_payment_intent_id']}")
             print(f"  Amount:             ${verified_payment['amount'] / 100:.2f}")
             print(f"  Currency:           {verified_payment['currency']}")
             print(f"  Payment Status:     {verified_payment['payment_status']}")
@@ -207,8 +207,8 @@ async def create_schema_and_dummy_record():
         # Show query examples
         print("\nQuery Examples:")
         print("-" * 80)
-        print("1. Find by square_payment_id:")
-        print(f"   db.payments.find_one({{'square_payment_id': '{payment_id}'}})")
+        print("1. Find by stripe_payment_intent_id:")
+        print(f"   db.payments.find_one({{'stripe_payment_intent_id': '{payment_id}'}})")
         print("\n2. Find by company_id:")
         print(f"   db.payments.find({{'company_id': 'cmp_00123'}})")
         print("\n3. Find by payment_status:")

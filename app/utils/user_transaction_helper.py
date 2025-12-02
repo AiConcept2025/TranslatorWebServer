@@ -27,11 +27,11 @@ async def create_user_transaction(
     cost_per_unit: float,
     source_language: str,
     target_language: str,
-    square_transaction_id: str,
+    stripe_checkout_session_id: str,
     date: datetime,
     status: str = "processing",
     # New Square payment parameters
-    square_payment_id: Optional[str] = None,
+    stripe_payment_intent_id: Optional[str] = None,
     amount_cents: Optional[int] = None,
     currency: str = "USD",
     payment_status: str = "COMPLETED",
@@ -52,10 +52,10 @@ async def create_user_transaction(
         cost_per_unit: Cost per single unit (decimal)
         source_language: Source language code
         target_language: Target language code
-        square_transaction_id: Unique Square payment transaction ID
+        stripe_checkout_session_id: Unique Square payment transaction ID
         date: Transaction date
         status: Transaction status ("processing", "completed", "failed")
-        square_payment_id: Square payment ID (defaults to square_transaction_id if not provided)
+        stripe_payment_intent_id: Square payment ID (defaults to stripe_checkout_session_id if not provided)
         amount_cents: Payment amount in cents (auto-calculated if not provided)
         currency: Currency code (default: "USD")
         payment_status: Payment status ("APPROVED", "COMPLETED", "CANCELED", "FAILED")
@@ -109,9 +109,9 @@ async def create_user_transaction(
         if amount_cents is None:
             amount_cents = int(total_cost * 100)
 
-        # Default square_payment_id to square_transaction_id if not provided
-        if square_payment_id is None:
-            square_payment_id = square_transaction_id
+        # Default stripe_payment_intent_id to stripe_checkout_session_id if not provided
+        if stripe_payment_intent_id is None:
+            stripe_payment_intent_id = stripe_checkout_session_id
 
         # Get current UTC time
         current_time = datetime.now(timezone.utc)
@@ -149,12 +149,12 @@ async def create_user_transaction(
             "source_language": source_language,
             "target_language": target_language,
             "transaction_id": transaction_id,
-            "square_transaction_id": square_transaction_id,
+            "stripe_checkout_session_id": stripe_checkout_session_id,
             "date": date,
             "status": status,
             "total_cost": total_cost,
             # Square payment fields
-            "square_payment_id": square_payment_id,
+            "stripe_payment_intent_id": stripe_payment_intent_id,
             "amount_cents": amount_cents,
             "currency": currency,
             "payment_status": payment_status,
@@ -173,12 +173,12 @@ async def create_user_transaction(
             inserted_id = str(result.inserted_id)
 
             logger.info(
-                f"[UserTransaction] Created transaction {transaction_id} (Square: {square_transaction_id}) "
+                f"[UserTransaction] Created transaction {transaction_id} (Square: {stripe_checkout_session_id}) "
                 f"for user {user_email} with status {status}, payment_status {payment_status}, "
                 f"MongoDB ID: {inserted_id}",
                 extra={
                     "transaction_id": transaction_id,
-                    "square_transaction_id": square_transaction_id,
+                    "stripe_checkout_session_id": stripe_checkout_session_id,
                     "mongodb_id": inserted_id,
                     "user_email": user_email,
                     "documents_count": len(documents),
@@ -190,11 +190,29 @@ async def create_user_transaction(
             print(f"✅ Created user transaction with {len(documents)} document(s)")
             print(f"   📋 Transaction Details:")
             print(f"      • transaction_id: {transaction_id} (USER format)")
-            print(f"      • square_transaction_id: {square_transaction_id}")
+            print(f"      • stripe_checkout_session_id: {stripe_checkout_session_id}")
             print(f"      • user_email: {user_email}")
             print(f"      • total_cost: ${total_cost}")
             print(f"      • status: {status}")
-            print(f"   📄 Documents: {', '.join([d.get('file_name') or d.get('document_name', 'unknown') for d in documents])}")
+            # Log each document with its translation mode (matching Enterprise flow format)
+            for idx, doc in enumerate(documents, 1):
+                doc_name = doc.get('file_name') or doc.get('document_name', 'unknown')
+                doc_mode = doc.get('translation_mode', 'automatic')
+                doc_pages = doc.get('page_count', 1)  # Get page count from document, default to 1
+                print(f"   📄 Document {idx}: {doc_name} ({doc_pages} pages, mode: {doc_mode})")
+
+            # Full transaction record logging (for debugging and verification)
+            print("=" * 80)
+            print("📋 FULL TRANSACTION RECORD CREATED IN DATABASE:")
+            print("=" * 80)
+            for key, value in transaction_doc.items():
+                if key == "documents":
+                    print(f"   • {key}: [{len(value)} documents]")
+                    for idx, doc in enumerate(value, 1):
+                        print(f"      📄 Doc {idx}: {doc}")
+                else:
+                    print(f"   • {key}: {value}")
+            print("=" * 80)
 
             # Structured logging for production
             logger.info(
@@ -202,7 +220,7 @@ async def create_user_transaction(
                 extra={
                     "transaction_id": transaction_id,
                     "transaction_id_format": "USER######",
-                    "square_transaction_id": square_transaction_id,
+                    "stripe_checkout_session_id": stripe_checkout_session_id,
                     "mongodb_id": inserted_id,
                     "user_email": user_email,
                     "total_cost": total_cost,
@@ -214,20 +232,20 @@ async def create_user_transaction(
             )
 
             # Debug: Verify insert by querying back
-            verification = await collection.find_one({"square_transaction_id": square_transaction_id})
+            verification = await collection.find_one({"stripe_checkout_session_id": stripe_checkout_session_id})
             if verification:
                 logger.info(
-                    f"[UserTransaction] VERIFIED: Transaction {square_transaction_id} "
+                    f"[UserTransaction] VERIFIED: Transaction {stripe_checkout_session_id} "
                     f"exists in database with ID {verification.get('_id')}"
                 )
             else:
                 logger.warning(
-                    f"[UserTransaction] WARNING: Transaction {square_transaction_id} "
+                    f"[UserTransaction] WARNING: Transaction {stripe_checkout_session_id} "
                     f"was reported as inserted but cannot be found in database!"
                 )
         except Exception as db_error:
             logger.error(
-                f"[UserTransaction] FAILED to insert transaction {square_transaction_id}: {type(db_error).__name__}: {str(db_error)}",
+                f"[UserTransaction] FAILED to insert transaction {stripe_checkout_session_id}: {type(db_error).__name__}: {str(db_error)}",
                 exc_info=True
             )
             raise
@@ -236,7 +254,7 @@ async def create_user_transaction(
 
     except DuplicateKeyError:
         logger.error(
-            f"[UserTransaction] Duplicate transaction_id or square_transaction_id: {transaction_id} / {square_transaction_id}"
+            f"[UserTransaction] Duplicate transaction_id or stripe_checkout_session_id: {transaction_id} / {stripe_checkout_session_id}"
         )
         return None
     except PyMongoError as e:
@@ -254,17 +272,17 @@ async def create_user_transaction(
 
 
 async def update_user_transaction_status(
-    square_transaction_id: str,
+    stripe_checkout_session_id: str,
     new_status: str,
     error_message: Optional[str] = None,
 ) -> bool:
     """
-    Update transaction status by square_transaction_id.
+    Update transaction status by stripe_checkout_session_id.
 
     Updates the status and updated_at timestamp. Optionally adds error_message.
 
     Args:
-        square_transaction_id: Unique Square transaction ID
+        stripe_checkout_session_id: Unique Square transaction ID
         new_status: New status ("processing", "completed", "failed")
         error_message: Optional error message (added only if provided)
 
@@ -304,25 +322,25 @@ async def update_user_transaction_status(
 
         # Update transaction
         result = await collection.update_one(
-            {"square_transaction_id": square_transaction_id},
+            {"stripe_checkout_session_id": stripe_checkout_session_id},
             update_doc,
         )
 
         if result.matched_count == 0:
             logger.warning(
-                f"[UserTransaction] Transaction not found: {square_transaction_id}"
+                f"[UserTransaction] Transaction not found: {stripe_checkout_session_id}"
             )
             return False
 
         if result.modified_count == 0:
             logger.info(
-                f"[UserTransaction] Transaction {square_transaction_id} "
+                f"[UserTransaction] Transaction {stripe_checkout_session_id} "
                 "already had the same status"
             )
             return True
 
         logger.info(
-            f"[UserTransaction] Updated transaction {square_transaction_id} "
+            f"[UserTransaction] Updated transaction {stripe_checkout_session_id} "
             f"to status {new_status}"
         )
         return True
@@ -416,13 +434,13 @@ async def get_user_transactions_by_email(
 
 
 async def get_user_transaction(
-    square_transaction_id: str,
+    stripe_checkout_session_id: str,
 ) -> Optional[Dict[str, Any]]:
     """
     Get single transaction by Square transaction ID.
 
     Args:
-        square_transaction_id: Unique Square transaction ID
+        stripe_checkout_session_id: Unique Square transaction ID
 
     Returns:
         dict: Transaction dictionary if found, None otherwise
@@ -439,12 +457,12 @@ async def get_user_transaction(
 
         # Query database
         transaction = await collection.find_one(
-            {"square_transaction_id": square_transaction_id}
+            {"stripe_checkout_session_id": stripe_checkout_session_id}
         )
 
         if transaction is None:
             logger.info(
-                f"[UserTransaction] Transaction not found: {square_transaction_id}"
+                f"[UserTransaction] Transaction not found: {stripe_checkout_session_id}"
             )
             return None
 
@@ -453,7 +471,7 @@ async def get_user_transaction(
             transaction["_id"] = str(transaction["_id"])
 
         logger.info(
-            f"[UserTransaction] Retrieved transaction {square_transaction_id}"
+            f"[UserTransaction] Retrieved transaction {stripe_checkout_session_id}"
         )
 
         return transaction
@@ -473,14 +491,14 @@ async def get_user_transaction(
 
 
 async def add_refund_to_transaction(
-    square_transaction_id: str,
+    stripe_checkout_session_id: str,
     refund_data: Dict[str, Any],
 ) -> bool:
     """
     Add a refund to an existing user transaction.
 
     Args:
-        square_transaction_id: Unique Square transaction ID
+        stripe_checkout_session_id: Unique Square transaction ID
         refund_data: Dictionary containing refund information:
             - refund_id: Square refund ID
             - amount_cents: Refund amount in cents
@@ -522,7 +540,7 @@ async def add_refund_to_transaction(
 
         # Add refund to array and update timestamp
         result = await collection.update_one(
-            {"square_transaction_id": square_transaction_id},
+            {"stripe_checkout_session_id": stripe_checkout_session_id},
             {
                 "$push": {"refunds": refund_data},
                 "$set": {"updated_at": datetime.now(timezone.utc)},
@@ -531,20 +549,20 @@ async def add_refund_to_transaction(
 
         if result.matched_count == 0:
             logger.warning(
-                f"[UserTransaction] Transaction not found: {square_transaction_id}"
+                f"[UserTransaction] Transaction not found: {stripe_checkout_session_id}"
             )
             return False
 
         if result.modified_count == 0:
             logger.warning(
-                f"[UserTransaction] Transaction {square_transaction_id} "
+                f"[UserTransaction] Transaction {stripe_checkout_session_id} "
                 "was not modified (possible duplicate refund)"
             )
             return False
 
         logger.info(
             f"[UserTransaction] Added refund {refund_data['refund_id']} "
-            f"to transaction {square_transaction_id}"
+            f"to transaction {stripe_checkout_session_id}"
         )
         return True
 
@@ -563,14 +581,14 @@ async def add_refund_to_transaction(
 
 
 async def update_payment_status(
-    square_transaction_id: str,
+    stripe_checkout_session_id: str,
     new_payment_status: str,
 ) -> bool:
     """
     Update payment status for a user transaction.
 
     Args:
-        square_transaction_id: Unique Square transaction ID
+        stripe_checkout_session_id: Unique Square transaction ID
         new_payment_status: New payment status (APPROVED, COMPLETED, CANCELED, FAILED)
 
     Returns:
@@ -597,7 +615,7 @@ async def update_payment_status(
 
         # Update payment status
         result = await collection.update_one(
-            {"square_transaction_id": square_transaction_id},
+            {"stripe_checkout_session_id": stripe_checkout_session_id},
             {
                 "$set": {
                     "payment_status": new_payment_status,
@@ -608,20 +626,20 @@ async def update_payment_status(
 
         if result.matched_count == 0:
             logger.warning(
-                f"[UserTransaction] Transaction not found: {square_transaction_id}"
+                f"[UserTransaction] Transaction not found: {stripe_checkout_session_id}"
             )
             return False
 
         if result.modified_count == 0:
             logger.info(
-                f"[UserTransaction] Transaction {square_transaction_id} "
+                f"[UserTransaction] Transaction {stripe_checkout_session_id} "
                 "already had the same payment status"
             )
             return True
 
         logger.info(
             f"[UserTransaction] Updated payment status for transaction "
-            f"{square_transaction_id} to {new_payment_status}"
+            f"{stripe_checkout_session_id} to {new_payment_status}"
         )
         return True
 

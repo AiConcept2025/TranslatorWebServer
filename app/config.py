@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # Database Configuration
     database_url: str = "sqlite:///./translator.db"
     mongodb_uri: str  # Required - must be set in .env file (no hardcoded credentials)
-    mongodb_database: str = "translation"
+    mongodb_database_production: str = "translation"
     mongodb_database_test: str = "translation_test"
     database_mode: str = "production"  # "production" or "test"
 
@@ -166,7 +166,7 @@ class Settings(BaseSettings):
         """Get the active MongoDB database based on database_mode."""
         if self.database_mode.lower() == "test":
             return self.mongodb_database_test
-        return self.mongodb_database
+        return self.mongodb_database_production
 
     def is_test_mode(self) -> bool:
         """Check if running in test mode."""

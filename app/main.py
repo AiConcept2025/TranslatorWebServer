@@ -740,12 +740,23 @@ async def translate_files(
 
             # Calculate availability from current active period only
             if current_period:
-                subscription_units = current_period.get("subscription_units", 0)
-                used_units = current_period.get("used_units", 0)
+                # Debug: Log period structure
+                logging.debug(f"[SUBSCRIPTION] Period keys: {list(current_period.keys())}")
+
+                units_allocated = current_period.get("units_allocated", 0)
+                units_used = current_period.get("units_used", 0)
                 promotional_units = current_period.get("promotional_units", 0)
-                total_allocated = subscription_units + promotional_units
-                total_used = used_units
-                total_remaining = total_allocated - used_units
+
+                # Validation: Warn if critical fields are missing
+                if units_allocated == 0 and "units_allocated" not in current_period:
+                    logging.warning(
+                        f"[SUBSCRIPTION] ⚠️ units_allocated field not found in period! "
+                        f"Available keys: {list(current_period.keys())}"
+                    )
+
+                total_allocated = units_allocated + promotional_units
+                total_used = units_used
+                total_remaining = total_allocated - units_used
             else:
                 # No active period found - cannot use subscription
                 total_allocated = 0
@@ -762,7 +773,7 @@ async def translate_files(
                 logging.info(f"[SUBSCRIPTION]   Current Period: {current_period_idx}")
                 logging.info(f"[SUBSCRIPTION]   Period Start: {current_period.get('period_start')}")
                 logging.info(f"[SUBSCRIPTION]   Period End: {current_period.get('period_end')}")
-                logging.info(f"[SUBSCRIPTION]   Subscription Units: {subscription_units}")
+                logging.info(f"[SUBSCRIPTION]   Units Allocated: {units_allocated}")
                 logging.info(f"[SUBSCRIPTION]   Promotional Units: {promotional_units}")
                 logging.info(f"[SUBSCRIPTION]   Total Allocated: {total_allocated} {subscription_unit}s")
                 logging.info(f"[SUBSCRIPTION]   Used Units: {total_used} {subscription_unit}s")
@@ -771,7 +782,7 @@ async def translate_files(
                 print(f"\n📊 Current Subscription Period:")
                 print(f"   Status: {status}")
                 print(f"   Period: {current_period_idx} ({current_period.get('period_start')} to {current_period.get('period_end')})")
-                print(f"   Subscription Units: {subscription_units} {subscription_unit}s")
+                print(f"   Units Allocated: {units_allocated} {subscription_unit}s")
                 print(f"   Promotional Units: {promotional_units} {subscription_unit}s")
                 print(f"   Total Allocated: {total_allocated} {subscription_unit}s")
                 print(f"   Used Units: {total_used} {subscription_unit}s")

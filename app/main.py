@@ -759,6 +759,8 @@ async def translate_files(
                 total_remaining = total_allocated - units_used
             else:
                 # No active period found - cannot use subscription
+                units_allocated = 0
+                promotional_units = 0
                 total_allocated = 0
                 total_used = 0
                 total_remaining = 0
@@ -866,6 +868,21 @@ async def translate_files(
             transaction_ids = [transaction_id]  # Single transaction ID
             log_step("TRANSACTION CREATED", f"SINGLE transaction {transaction_id} with {len(successful_stored_files)} document(s)")
             logging.info(f"[TRANSLATE] ✅ SINGLE transaction created: {transaction_id}")
+
+            # Update all uploaded files with transaction_id in their metadata
+            log_step("FILE METADATA UPDATE", f"Adding transaction_id to {len(successful_stored_files)} file(s)")
+            for file_info in successful_stored_files:
+                file_id = file_info.get("file_id")
+                if file_id:
+                    try:
+                        await google_drive_service.update_file_properties(
+                            file_id=file_id,
+                            properties={"transaction_id": transaction_id}
+                        )
+                        logging.info(f"[FILE {file_id[:20]}...] ✅ Added transaction_id={transaction_id}")
+                    except Exception as e:
+                        logging.error(f"[FILE {file_id[:20]}...] ❌ Failed to add transaction_id: {e}")
+            log_step("FILE METADATA UPDATED", f"All files now have transaction_id={transaction_id}")
         else:
             logging.error(f"[TRANSLATE] ❌ Failed to create transaction")
 

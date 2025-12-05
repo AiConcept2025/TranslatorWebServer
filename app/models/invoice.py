@@ -4,7 +4,81 @@ Invoice models for invoice management and tracking.
 
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, computed_field
+
+
+# ============================================================================
+# Invoice Supporting Models
+# ============================================================================
+
+class BillingPeriod(BaseModel):
+    """Billing period for quarterly invoices."""
+    period_numbers: List[int] = Field(..., description="Period numbers (e.g., [1, 2, 3] for Q1)")
+    period_start: datetime = Field(..., description="Start date of billing period")
+    period_end: datetime = Field(..., description="End date of billing period")
+
+    @field_validator('period_numbers')
+    @classmethod
+    def validate_period_numbers(cls, v):
+        """Validate period numbers are 1-12 and sorted."""
+        if not v:
+            raise ValueError('period_numbers cannot be empty')
+        if not all(1 <= p <= 12 for p in v):
+            raise ValueError('Period numbers must be between 1 and 12')
+        if v != sorted(v):
+            raise ValueError('Period numbers must be sorted')
+        return v
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'period_numbers': [1, 2, 3],
+                'period_start': '2025-01-01T00:00:00Z',
+                'period_end': '2025-03-31T23:59:59Z'
+            }
+        }
+    }
+
+
+class LineItem(BaseModel):
+    """Line item for invoice."""
+    description: str = Field(..., description="Line item description")
+    period_numbers: List[int] = Field(..., description="Periods this line item applies to")
+    quantity: int = Field(..., gt=0, description="Quantity")
+    unit_price: float = Field(..., ge=0, description="Unit price")
+    amount: float = Field(..., ge=0, description="Total amount (quantity × unit_price)")
+
+    @field_validator('amount')
+    @classmethod
+    def validate_amount(cls, v, info):
+        """Validate amount equals quantity × unit_price."""
+        if 'quantity' in info.data and 'unit_price' in info.data:
+            expected = info.data['quantity'] * info.data['unit_price']
+            if abs(v - expected) > 0.01:
+                raise ValueError(f'amount must equal quantity × unit_price (expected {expected}, got {v})')
+        return v
+
+    @field_validator('period_numbers')
+    @classmethod
+    def validate_period_numbers(cls, v):
+        """Validate period numbers are 1-12."""
+        if not v:
+            raise ValueError('period_numbers cannot be empty')
+        if not all(1 <= p <= 12 for p in v):
+            raise ValueError('Period numbers must be between 1 and 12')
+        return v
+
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                'description': 'Base Subscription Charge',
+                'period_numbers': [1, 2, 3],
+                'quantity': 3,
+                'unit_price': 100.00,
+                'amount': 300.00
+            }
+        }
+    }
 
 
 # ============================================================================
@@ -31,6 +105,19 @@ class InvoiceListItem(BaseModel):
     pdf_url: Optional[str] = Field(None, description="URL to the invoice PDF document")
     payment_applications: List[dict] = Field(default_factory=list, description="Array of payment applications (optional)")
     created_at: str = Field(..., description="Record creation timestamp in ISO 8601 format")
+
+    # New billing enhancement fields
+    billing_period: Optional[BillingPeriod] = Field(None, description="Billing period for quarterly invoices")
+    line_items: List[LineItem] = Field(default_factory=list, description="Line items for detailed billing")
+    subtotal: float = Field(default=0.0, ge=0, description="Subtotal before tax")
+    amount_paid: float = Field(default=0.0, ge=0, description="Amount paid towards this invoice")
+    stripe_invoice_id: Optional[str] = Field(None, description="Stripe invoice ID (if applicable)")
+
+    @computed_field
+    @property
+    def amount_due(self) -> float:
+        """Calculate amount due (total_amount - amount_paid)."""
+        return max(0.0, self.total_amount - self.amount_paid)
 
     model_config = {
         'populate_by_name': True,

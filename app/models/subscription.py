@@ -18,6 +18,7 @@ class UsagePeriod(BaseModel):
     units_remaining: int = Field(ge=0)
     promotional_units: int = Field(default=0, ge=0)
     last_updated: datetime = Field(default_factory=datetime.utcnow)
+    period_number: Optional[int] = Field(None, ge=1, le=12, description="Period number within the year (1-12)")
 
     # New fields requested by user
     start_period: Optional[datetime] = None  # Alternative naming for period_start
@@ -53,6 +54,8 @@ class SubscriptionCreate(BaseModel):
     start_date: datetime
     end_date: Optional[datetime] = None
     status: Literal["active", "inactive", "expired"] = "active"
+    billing_frequency: Literal["monthly", "quarterly", "yearly"] = Field(default="monthly", description="Billing frequency")
+    payment_terms_days: int = Field(default=30, ge=1, le=90, description="Payment terms in days (Net 30, Net 60, etc.)")
 
     @field_validator('end_date')
     @classmethod
@@ -75,6 +78,8 @@ class SubscriptionUpdate(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     status: Optional[Literal["active", "inactive", "expired"]] = None
+    billing_frequency: Optional[Literal["monthly", "quarterly", "yearly"]] = None
+    payment_terms_days: Optional[int] = Field(None, ge=1, le=90)
 
 
 class UsagePeriodCreate(BaseModel):

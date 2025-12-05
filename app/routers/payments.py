@@ -33,6 +33,7 @@ from app.models.payment import (
     SubscriptionPaymentCreate
 )
 from app.services.payment_repository import payment_repository
+from app.services.payment_application_service import payment_application_service, PaymentApplicationError
 from app.middleware.auth_middleware import get_admin_user
 from app.database.mongodb import database
 
@@ -1867,4 +1868,144 @@ async def get_company_payment_stats(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve payment statistics: {str(e)}"
+        )
+
+
+@router.post(
+    "/{payment_id}/apply-to-invoice",
+    status_code=status.HTTP_200_OK,
+    summary="Apply Payment to Invoice",
+    description="Apply a payment to an invoice, updating invoice status and payment linkage (Admin only)"
+)
+async def apply_payment_to_invoice(
+    payment_id: str = Path(..., description="Payment ID"),
+    invoice_id: str = Query(..., description="Invoice ID to apply payment to"),
+    admin: Dict[str, Any] = Depends(get_admin_user)
+):
+    """
+    Apply a payment to an invoice.
+
+    This endpoint links a completed payment to an invoice and updates:
+    1. invoice.amount_paid += payment.amount
+    2. invoice.status (sent → partially_paid → paid)
+    3. payment.invoice_id = invoice_id
+    4. invoice.payment_applications with payment record
+
+    **Authentication:** Admin only
+
+    **Request:**
+    ```
+    POST /api/v1/payments/{payment_id}/apply-to-invoice?invoice_id={invoice_id}
+    Authorization: Bearer {admin_token}
+    ```
+
+    **Success Response (200):**
+    ```json
+    {
+        "success": true,
+        "message": "Payment applied to invoice successfully",
+        "data": {
+            "invoice_id": "507f1f77bcf86cd799439011",
+            "invoice_number": "INV-2025-Q1-abc123",
+            "amount_paid": 339.20,
+            "amount_due": 0.00,
+            "status": "paid"
+        }
+    }
+    ```
+
+    **Error Responses:**
+    - 400: Payment already applied to another invoice
+    - 400: Payment status not COMPLETED or APPROVED
+    - 404: Payment or invoice not found
+    - 500: Application failed
+
+    **Example:**
+    ```bash
+    curl -X POST "http://localhost:8000/api/v1/payments/507f191e810c19729de860ea/apply-to-invoice?invoice_id=507f1f77bcf86cd799439011" \\
+      -H "Authorization: Bearer {admin_token}"
+    ```
+    """
+    try:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(f"🔄 [{timestamp}] POST /api/v1/payments/{payment_id}/apply-to-invoice - START")
+        logger.info(f"📥 Request Parameters:")
+        logger.info(f"   - payment_id: {payment_id}")
+        logger.info(f"   - invoice_id: {invoice_id}")
+        logger.info(f"   - admin_email: {admin.get('email')}")
+
+        logger.info(f"🔄 Calling payment_application_service.apply_payment_to_invoice()...")
+
+        # Apply payment to invoice
+        updated_invoice = await payment_application_service.apply_payment_to_invoice(
+            payment_id=payment_id,
+            invoice_id=invoice_id
+        )
+
+        logger.info(f"✅ Payment applied successfully")
+
+        # Serialize datetime fields for JSON response
+        if "_id" in updated_invoice:
+            updated_invoice["_id"] = str(updated_invoice["_id"])
+        if "subscription_id" in updated_invoice and updated_invoice["subscription_id"]:
+            updated_invoice["subscription_id"] = str(updated_invoice["subscription_id"])
+
+        datetime_fields = ["invoice_date", "due_date", "created_at", "updated_at"]
+        for field in datetime_fields:
+            if field in updated_invoice and updated_invoice[field] is not None:
+                if hasattr(updated_invoice[field], "isoformat"):
+                    updated_invoice[field] = updated_invoice[field].isoformat()
+
+        # Serialize billing_period dates
+        if "billing_period" in updated_invoice and updated_invoice["billing_period"]:
+            bp = updated_invoice["billing_period"]
+            if "period_start" in bp and hasattr(bp["period_start"], "isoformat"):
+                bp["period_start"] = bp["period_start"].isoformat()
+            if "period_end" in bp and hasattr(bp["period_end"], "isoformat"):
+                bp["period_end"] = bp["period_end"].isoformat()
+
+        # Serialize payment_applications
+        if "payment_applications" in updated_invoice and updated_invoice["payment_applications"]:
+            for app in updated_invoice["payment_applications"]:
+                if "applied_at" in app and hasattr(app["applied_at"], "isoformat"):
+                    app["applied_at"] = app["applied_at"].isoformat()
+
+        # Calculate amount_due
+        total_amount = updated_invoice.get("total_amount", 0.0)
+        amount_paid = updated_invoice.get("amount_paid", 0.0)
+        amount_due = max(0.0, total_amount - amount_paid)
+
+        response_data = {
+            "success": True,
+            "message": "Payment applied to invoice successfully",
+            "data": {
+                "invoice_id": str(updated_invoice["_id"]),
+                "invoice_number": updated_invoice.get("invoice_number"),
+                "amount_paid": amount_paid,
+                "amount_due": amount_due,
+                "status": updated_invoice.get("status")
+            }
+        }
+
+        logger.info(f"📤 Response: success=True, invoice_id={response_data['data']['invoice_id']}, status={response_data['data']['status']}")
+
+        return JSONResponse(content=response_data)
+
+    except PaymentApplicationError as e:
+        logger.error(f"❌ Payment application error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to apply payment:", exc_info=True)
+        logger.error(f"   - Error: {str(e)}")
+        logger.error(f"   - Error type: {type(e).__name__}")
+        logger.error(f"   - Payment ID: {payment_id}")
+        logger.error(f"   - Invoice ID: {invoice_id}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to apply payment to invoice: {str(e)}"
         )

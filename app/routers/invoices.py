@@ -2,9 +2,9 @@
 Invoice management router for retrieving company invoices.
 """
 
-from fastapi import APIRouter, Path, Query, HTTPException, status
+from fastapi import APIRouter, Path, Query, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
-from typing import Optional
+from typing import Optional, Dict, Any
 import logging
 import json
 from bson import ObjectId
@@ -15,8 +15,11 @@ from app.models.invoice import (
     InvoiceCreate,
     InvoiceUpdate,
     InvoiceCreateResponse,
-    InvoiceUpdateResponse
+    InvoiceUpdateResponse,
+    InvoiceListItem
 )
+from app.middleware.auth_middleware import get_admin_user
+from app.services.invoice_generation_service import invoice_generation_service, InvoiceGenerationError
 
 logger = logging.getLogger(__name__)
 
@@ -999,4 +1002,149 @@ async def update_invoice(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update invoice: {str(e)}"
+        )
+
+
+@router.post(
+    "/generate-quarterly",
+    response_model=InvoiceCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Generate Quarterly Invoice",
+    description="Generate a quarterly invoice for a subscription with line items (Admin only)",
+    responses={
+        201: {
+            "description": "Invoice generated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Q1 invoice generated successfully",
+                        "data": {
+                            "_id": "674e1234567890abcdef1234",
+                            "company_name": "Acme Corporation",
+                            "subscription_id": "674a1234567890abcdef5678",
+                            "invoice_number": "INV-2025-Q1-def567",
+                            "invoice_date": "2025-04-01T00:00:00Z",
+                            "due_date": "2025-05-01T00:00:00Z",
+                            "total_amount": 323.30,
+                            "tax_amount": 18.30,
+                            "status": "sent",
+                            "billing_period": {
+                                "period_numbers": [1, 2, 3],
+                                "period_start": "2025-01-01T00:00:00Z",
+                                "period_end": "2025-03-31T23:59:59Z"
+                            },
+                            "line_items": [
+                                {
+                                    "description": "Base Subscription - Q1",
+                                    "period_numbers": [1, 2, 3],
+                                    "quantity": 3,
+                                    "unit_price": 100.00,
+                                    "amount": 300.00
+                                },
+                                {
+                                    "description": "Overage - Period 1",
+                                    "period_numbers": [1],
+                                    "quantity": 50,
+                                    "unit_price": 0.10,
+                                    "amount": 5.00
+                                }
+                            ],
+                            "subtotal": 305.00,
+                            "amount_paid": 0.0,
+                            "created_at": "2025-04-01T00:00:00Z"
+                        }
+                    }
+                }
+            }
+        },
+        400: {"description": "Invalid quarter or subscription not found"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not authorized (admin only)"},
+        500: {"description": "Internal server error"}
+    }
+)
+async def generate_quarterly_invoice(
+    subscription_id: str = Query(..., description="Subscription ID"),
+    quarter: int = Query(..., ge=1, le=4, description="Quarter number (1-4)"),
+    admin: Dict[str, Any] = Depends(get_admin_user)
+):
+    """
+    Generate a quarterly invoice with line items for a subscription.
+
+    **Admin Only**
+
+    This endpoint creates an invoice for a specific quarter (Q1-Q4) of a subscription,
+    including:
+    - Base subscription charges (monthly price × 3 months)
+    - Overage charges (units used beyond allocation)
+    - Billing period information
+    - Itemized line items
+
+    Args:
+        subscription_id: Subscription ObjectId
+        quarter: Quarter number (1=Q1/Jan-Mar, 2=Q2/Apr-Jun, 3=Q3/Jul-Sep, 4=Q4/Oct-Dec)
+        admin: Admin user (injected by auth middleware)
+
+    Returns:
+        InvoiceCreateResponse with generated invoice data
+
+    Raises:
+        HTTPException 400: If subscription not found or quarter invalid
+        HTTPException 401: If not authenticated
+        HTTPException 403: If not admin
+        HTTPException 500: If invoice generation fails
+    """
+    logger.info(f"[API] Admin {admin.get('email')} generating Q{quarter} invoice for subscription {subscription_id}")
+
+    try:
+        # Generate invoice using service
+        invoice_doc = await invoice_generation_service.generate_quarterly_invoice(
+            subscription_id=subscription_id,
+            quarter=quarter
+        )
+
+        logger.info(f"[API] Invoice generated: {invoice_doc.get('invoice_number')}")
+
+        # Serialize for JSON response
+        invoice_doc["_id"] = str(invoice_doc["_id"])
+
+        # Convert datetime fields to ISO format
+        datetime_fields = ["invoice_date", "due_date", "created_at", "updated_at"]
+        for field in datetime_fields:
+            if field in invoice_doc and hasattr(invoice_doc[field], "isoformat"):
+                invoice_doc[field] = invoice_doc[field].isoformat()
+
+        # Convert billing_period datetimes
+        if "billing_period" in invoice_doc and invoice_doc["billing_period"]:
+            bp = invoice_doc["billing_period"]
+            if "period_start" in bp and hasattr(bp["period_start"], "isoformat"):
+                bp["period_start"] = bp["period_start"].isoformat()
+            if "period_end" in bp and hasattr(bp["period_end"], "isoformat"):
+                bp["period_end"] = bp["period_end"].isoformat()
+
+        # Create InvoiceListItem for response
+        invoice_item = InvoiceListItem(**invoice_doc)
+
+        response_payload = {
+            "success": True,
+            "message": f"Q{quarter} invoice generated successfully",
+            "data": invoice_item
+        }
+
+        logger.info(f"[API] Returning invoice: {invoice_doc['invoice_number']}")
+
+        return InvoiceCreateResponse(**response_payload)
+
+    except InvoiceGenerationError as e:
+        logger.error(f"[API] Invoice generation error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"[API] Unexpected error generating invoice:", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate invoice: {str(e)}"
         )

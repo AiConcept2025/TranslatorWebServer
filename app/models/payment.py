@@ -4,7 +4,7 @@ Payment models for Square payment integration.
 
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator, computed_field
 from bson import ObjectId
 
 
@@ -47,6 +47,28 @@ class Payment(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
     payment_date: datetime = Field(default_factory=datetime.utcnow, description="Payment processing date")
+
+    # New billing enhancement fields
+    invoice_id: Optional[str] = Field(None, description="Invoice ID (only for subscription payments)")
+    subscription_id: Optional[str] = Field(None, description="Subscription ID (only for subscription payments)")
+    total_refunded: float = Field(default=0.0, ge=0, description="Total amount refunded in dollars")
+
+    @computed_field
+    @property
+    def net_amount(self) -> float:
+        """Calculate net amount (amount - total_refunded)."""
+        amount_dollars = self.amount / 100.0
+        return max(0.0, amount_dollars - self.total_refunded)
+
+    @field_validator('total_refunded')
+    @classmethod
+    def validate_total_refunded(cls, v, info):
+        """Validate total_refunded does not exceed payment amount."""
+        if 'amount' in info.data:
+            amount_dollars = info.data['amount'] / 100.0
+            if v > amount_dollars:
+                raise ValueError(f'total_refunded ({v}) cannot exceed payment amount ({amount_dollars})')
+        return v
 
     model_config = {
         'json_schema_extra': {
@@ -191,6 +213,12 @@ class PaymentListItem(BaseModel):
     payment_date: str = Field(..., description="Payment processing date in ISO 8601 format")
     created_at: str = Field(..., description="Record creation timestamp in ISO 8601 format")
     updated_at: str = Field(..., description="Last update timestamp in ISO 8601 format")
+
+    # New billing enhancement fields
+    invoice_id: Optional[str] = Field(None, description="Invoice ID (only for subscription payments)")
+    subscription_id: Optional[str] = Field(None, description="Subscription ID (only for subscription payments)")
+    total_refunded: float = Field(default=0.0, ge=0, description="Total amount refunded in dollars")
+    net_amount: Optional[float] = Field(None, description="Net amount (amount - total_refunded)")
 
     model_config = {
         'populate_by_name': True,

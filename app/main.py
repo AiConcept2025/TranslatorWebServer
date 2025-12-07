@@ -2257,8 +2257,10 @@ async def initialize_stripe():
     stripe.api_key = settings.stripe_secret_key
 
     # Pin API version for stability (prevents breaking changes when Stripe updates defaults)
-    # Version: 2024-01-25.basil (Stripe SDK v8.x default)
-    stripe.api_version = "2024-01-25.basil"
+    # Version: 2025-03-31.basil (Stripe SDK v12.x default)
+    # Breaking changes in v12.x: List.total_count removed (not used in our code)
+    # Migration note: Reviewed and safe - no total_count usage, webhook API stable
+    stripe.api_version = "2025-03-31.basil"
 
     # Set app info for Stripe telemetry (helps Stripe support identify our integration)
     stripe.app_info = {

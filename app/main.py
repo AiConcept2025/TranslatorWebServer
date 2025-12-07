@@ -2257,10 +2257,11 @@ async def initialize_stripe():
     stripe.api_key = settings.stripe_secret_key
 
     # Pin API version for stability (prevents breaking changes when Stripe updates defaults)
-    # Version: 2025-03-31.basil (Stripe SDK v12.x default)
+    # Version: 2025-11-17.clover (Stripe SDK v13.x default - latest)
     # Breaking changes in v12.x: List.total_count removed (not used in our code)
-    # Migration note: Reviewed and safe - no total_count usage, webhook API stable
-    stripe.api_version = "2025-03-31.basil"
+    # Breaking changes in v13.x: InvoiceLineItem.modify signature changed (not used in our code)
+    # Migration note: Reviewed and safe - webhook API stable, no breaking change usage
+    stripe.api_version = "2025-11-17.clover"
 
     # Set app info for Stripe telemetry (helps Stripe support identify our integration)
     stripe.app_info = {

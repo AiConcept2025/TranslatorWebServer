@@ -36,6 +36,7 @@ TDD GREEN PHASE - Implementation to make integration tests pass.
 
 import logging
 import json
+import uuid
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 import stripe
@@ -111,23 +112,26 @@ async def stripe_webhook(request: Request, background_tasks: BackgroundTasks):
         ...      -d '{"id": "evt_123", ...}'
         >>> {"detail": "Invalid signature"}
     """
+    # Generate unique request ID for correlation across logs
+    request_id = str(uuid.uuid4())[:8]  # Short UUID for readability
+
     # STEP 1: Extract raw payload and signature header
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
 
-    logger.info(f"[WEBHOOK] Received webhook from {request.client.host}")
+    logger.info(f"[WEBHOOK] [{request_id}] Received webhook from {request.client.host}")
 
     # STEP 2: VERIFY SIGNATURE (Security Critical - MUST happen BEFORE processing)
     try:
         verify_webhook_signature(payload, sig_header, settings.stripe_webhook_secret)
-        logger.info(f"[WEBHOOK_SECURITY] Valid signature verified from IP {request.client.host}")
+        logger.info(f"[WEBHOOK_SECURITY] [{request_id}] Valid signature verified from IP {request.client.host}")
     except SignatureVerificationError as e:
         # Invalid signature - log security event and reject request
-        logger.warning(f"[WEBHOOK_SECURITY] Invalid signature from IP {request.client.host}: {e}")
+        logger.warning(f"[WEBHOOK_SECURITY] [{request_id}] Invalid signature from IP {request.client.host}: {e}")
         raise HTTPException(status_code=400, detail="Invalid signature")
     except Exception as e:
         # Other signature verification errors (malformed header, etc.)
-        logger.error(f"[WEBHOOK_SECURITY] Signature verification error: {e}")
+        logger.error(f"[WEBHOOK_SECURITY] [{request_id}] Signature verification error: {e}")
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     # STEP 3: PARSE EVENT (Convert raw payload to Stripe Event object)
@@ -138,10 +142,10 @@ async def stripe_webhook(request: Request, background_tasks: BackgroundTasks):
         # Construct Stripe Event object (validates event structure)
         event = stripe.Event.construct_from(event_dict, settings.stripe_api_key)
 
-        logger.info(f"[WEBHOOK] Event received: {event.id} type={event.type}")
+        logger.info(f"[WEBHOOK] [{request_id}] Event received: {event.id} type={event.type}")
     except (ValueError, json.JSONDecodeError) as e:
         # Malformed JSON payload
-        logger.error(f"[WEBHOOK] Invalid payload: {e}")
+        logger.error(f"[WEBHOOK] [{request_id}] Invalid payload: {e}")
         raise HTTPException(status_code=400, detail="Invalid payload")
 
     # STEP 4: PROCESS ASYNCHRONOUSLY (Background Task)
@@ -167,16 +171,16 @@ async def stripe_webhook(request: Request, background_tasks: BackgroundTasks):
         """
         try:
             result = await handler.handle_event(event.to_dict())
-            logger.info(f"[WEBHOOK] Completed {event.id}: {result}")
+            logger.info(f"[WEBHOOK] [{request_id}] Completed {event.id}: {result}")
         except Exception as e:
             # Catch all errors in background task (don't crash)
             # Event will be marked as processed with error in WebhookHandler
-            logger.error(f"[WEBHOOK] Failed {event.id}: {e}", exc_info=True)
+            logger.error(f"[WEBHOOK] [{request_id}] Failed {event.id}: {e}", exc_info=True)
 
     # Add background task to queue
     background_tasks.add_task(process_event)
 
     # STEP 5: RETURN 200 IMMEDIATELY (Stripe expects fast response < 5s)
     # CRITICAL: Return 200 even for duplicates/unsupported events (Stripe retries on non-200)
-    logger.info(f"[WEBHOOK] Queued event {event.id} for processing")
-    return JSONResponse({"received": True, "event_id": event.id})
+    logger.info(f"[WEBHOOK] [{request_id}] Queued event {event.id} for processing")
+    return JSONResponse({"received": True, "event_id": event.id, "request_id": request_id})

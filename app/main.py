@@ -17,7 +17,7 @@ import asyncio
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit, dashboard
+from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit, dashboard, webhooks
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities
@@ -113,6 +113,7 @@ app.include_router(upload.router)
 app.include_router(submit.router)  # File submission endpoint
 app.include_router(payment.router)  # Simplified payment webhooks
 app.include_router(payments.router)  # Payment management API
+app.include_router(webhooks.router)  # Stripe webhooks API
 app.include_router(user_transactions.router)  # User transaction payment API
 app.include_router(invoices.router)  # Invoice management API
 app.include_router(translation_transactions.router)  # Translation transaction management API
@@ -2234,6 +2235,41 @@ app.openapi = custom_openapi
 
 
 # Startup and shutdown functions
+async def initialize_stripe():
+    """
+    Initialize Stripe SDK with global configuration.
+
+    Phase 1 Migration: Stripe SDK v8.2.0
+    - Sets global API key for all Stripe operations
+    - Pins API version to prevent breaking changes from account defaults
+    - Adds app info for Stripe telemetry
+
+    Called during application startup (lifespan).
+    """
+    import stripe
+
+    # Skip initialization if Stripe API key not configured
+    if not settings.stripe_secret_key:
+        logging.warning("[STRIPE] Stripe API key not configured - skipping Stripe SDK initialization")
+        return
+
+    # Set global API key
+    stripe.api_key = settings.stripe_secret_key
+
+    # Pin API version for stability (prevents breaking changes when Stripe updates defaults)
+    # Version: 2024-01-25.basil (Stripe SDK v8.x default)
+    stripe.api_version = "2024-01-25.basil"
+
+    # Set app info for Stripe telemetry (helps Stripe support identify our integration)
+    stripe.app_info = {
+        "name": "TranslationService",
+        "version": settings.app_version,
+        "url": getattr(settings, 'api_url', 'https://api.example.com')
+    }
+
+    logging.info(f"[STRIPE] Initialized Stripe SDK v{stripe.VERSION} with API version {stripe.api_version}")
+
+
 async def initialize_services():
     """Initialize application services."""
     logging.info("Initializing services...")
@@ -2249,6 +2285,9 @@ async def initialize_services():
     # Initialize translation services
     from app.services.translation_service import translation_service
     logging.info(f"Translation services available: {list(translation_service.services.keys())}")
+
+    # Initialize Stripe SDK (Phase 1: v8.2.0 migration)
+    await initialize_stripe()
 
     # Initialize payment service
     from app.services.payment_service import payment_service

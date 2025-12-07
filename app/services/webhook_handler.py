@@ -247,22 +247,45 @@ class WebhookHandler:
 
         logger.info(f"[WEBHOOK] Handling payment_intent.succeeded: {payment_intent_id} amount={amount} cents ({amount/100:.2f} {currency}) customer={customer_email}")
 
-        # Payment-level idempotency check
-        existing_payment = await self.db.payments.find_one({
-            "stripe_payment_intent_id": payment_intent_id
-        })
-
-        if existing_payment:
-            # Payment already processed (webhook retry after payment record created)
-            logger.info(f"[WEBHOOK] Payment {payment_intent_id} already exists, skipping processing")
-            return
-
         # Extract file_ids from metadata (optional)
         metadata = payment_intent.get("metadata", {})
         file_ids_str = metadata.get("file_ids")
         file_ids = file_ids_str.split(",") if file_ids_str else None
 
-        logger.info(f"[WEBHOOK] Processing new payment {payment_intent_id}, file_ids={file_ids}")
+        # Payment-level idempotency using atomic upsert
+        # This prevents race conditions when multiple webhooks arrive concurrently
+        # Only ONE webhook will successfully insert the payment record
+        try:
+            from datetime import datetime, timezone
+
+            result = await self.db.payments.update_one(
+                {"stripe_payment_intent_id": payment_intent_id},
+                {
+                    "$setOnInsert": {
+                        "stripe_payment_intent_id": payment_intent_id,
+                        "status": "pending",
+                        "created_at": datetime.now(timezone.utc),
+                        "webhook_event_id": event_id,
+                        "amount": amount,
+                        "currency": currency,
+                        "customer_email": customer_email
+                    }
+                },
+                upsert=True
+            )
+
+            if result.matched_count > 0:
+                # Payment record already existed - another webhook got here first
+                logger.info(f"[WEBHOOK] Payment {payment_intent_id} already exists (concurrent webhook detected), skipping processing")
+                return
+
+            # We successfully inserted the payment record - proceed with processing
+            logger.info(f"[WEBHOOK] Processing new payment {payment_intent_id}, file_ids={file_ids}")
+
+        except Exception as e:
+            # Unique index violation or other database error
+            logger.warning(f"[WEBHOOK] Payment {payment_intent_id} duplicate prevented by database constraint: {e}")
+            return
 
         # Trigger background payment processing
         # NOTE: Tests mock process_payment_files_background to avoid actual file processing

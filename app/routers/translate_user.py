@@ -584,7 +584,9 @@ async def translate_user_files(
             # For enterprise users: pricing is informational (they use subscription units)
             # For individual users: pricing determines actual payment amount
             # NOTE: For enterprise, we pass "default" because quota units already have multipliers
-            pricing_mode_for_calc = "default" if customer_type == "enterprise" else batch_translation_mode
+            # Map "automatic" mode to "default" for pricing service (pricing config doesn't have "automatic")
+            pricing_mode = "default" if batch_translation_mode == "automatic" else batch_translation_mode
+            pricing_mode_for_calc = "default" if customer_type == "enterprise" else pricing_mode
             total_price_decimal = pricing_service.calculate_price(units_for_billing, customer_type, pricing_mode_for_calc)
             total_amount = float(total_price_decimal)
             # Back-calculate average cost per unit for database storage

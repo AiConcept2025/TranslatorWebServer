@@ -32,6 +32,8 @@ import logging
 from typing import Optional, Dict
 from datetime import datetime, timezone
 
+from pymongo import ReturnDocument
+
 from app.services.webhook_repository import WebhookRepository, DuplicateEventError
 from app.routers.payment_simplified import process_payment_files_background
 
@@ -363,18 +365,9 @@ class WebhookHandler:
 
         logger.info(f"[WEBHOOK] Handling charge.refunded: payment_intent={payment_intent_id} amount_refunded={amount_refunded} cents (${amount_refunded/100:.2f})")
 
-        # Find payment by payment_intent_id
-        payment = await self.db.payments.find_one({
-            "stripe_payment_intent_id": payment_intent_id
-        })
-
-        if not payment:
-            # Payment not found - raise exception to store warning in event
-            logger.warning(f"[WEBHOOK] Payment not found for refund: {payment_intent_id} (event still stored for audit)")
-            raise Exception(f"Payment not found for refund: {payment_intent_id}")
-
-        # Update payment status to refunded
-        await self.db.payments.update_one(
+        # Atomic find and update payment status to refunded
+        # Combines find_one + update_one into single database operation
+        payment = await self.db.payments.find_one_and_update(
             {"stripe_payment_intent_id": payment_intent_id},
             {
                 "$set": {
@@ -383,7 +376,13 @@ class WebhookHandler:
                     "amount_refunded": amount_refunded,
                     "refunded_at": datetime.now(timezone.utc)
                 }
-            }
+            },
+            return_document=ReturnDocument.AFTER  # Return updated document
         )
 
-        logger.info(f"[WEBHOOK] Payment {payment_intent_id} marked as refunded (${amount_refunded})")
+        if not payment:
+            # Payment not found - raise exception to store warning in event
+            logger.warning(f"[WEBHOOK] Payment not found for refund: {payment_intent_id} (event still stored for audit)")
+            raise Exception(f"Payment not found for refund: {payment_intent_id}")
+
+        logger.info(f"[WEBHOOK] Payment {payment_intent_id} marked as refunded (${amount_refunded/100:.2f})")

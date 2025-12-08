@@ -76,7 +76,8 @@ async def process_payment_files_background(
     currency: Optional[str],
     payment_metadata: Optional[PaymentMetadata] = None,
     transaction_id: Optional[str] = None,
-    file_ids: Optional[list[str]] = None
+    file_ids: Optional[list[str]] = None,
+    webhook_event_id: Optional[str] = None
 ):
     """
     Background task to move files from Temp to Inbox and persist payment data.
@@ -85,6 +86,7 @@ async def process_payment_files_background(
     Args:
         transaction_id: Pre-generated transaction ID from payment handler (if available)
         file_ids: File IDs from upload response (enables direct lookup, eliminates Drive search)
+        webhook_event_id: Stripe webhook event ID (if triggered by webhook)
     """
     import time
     task_start = time.time()
@@ -98,6 +100,10 @@ async def process_payment_files_background(
         print(f"   Customer: {customer_email}")
         print(f"   Payment ID: {payment_intent_id}")
         print(f"   Amount: ${amount} {currency}")
+        if webhook_event_id:
+            print(f"   Source: Webhook (event_id: {webhook_event_id})")
+        else:
+            print(f"   Source: Client Notification (fallback)")
         print("=" * 80)
 
         # Step 0: Check for duplicate payment (idempotency)
@@ -140,6 +146,19 @@ async def process_payment_files_background(
             persist_time = (time.time() - persist_start) * 1000
             print(f"⏱️  Payment persistence completed in {persist_time:.2f}ms")
             print(f"✅ Payment record created with ID: {payment_id}")
+
+            # Link to webhook event if provided
+            if webhook_event_id:
+                try:
+                    await database.payments.update_one(
+                        {"stripe_payment_intent_id": payment_intent_id},
+                        {"$set": {"webhook_event_id": webhook_event_id}}
+                    )
+                    print(f"✅ Payment linked to webhook event: {webhook_event_id}")
+                    logging.info(f"Payment {payment_intent_id} linked to webhook event {webhook_event_id}")
+                except Exception as e:
+                    print(f"⚠️  Failed to link webhook event: {str(e)}")
+                    logging.warning(f"Failed to link webhook event {webhook_event_id} to payment {payment_intent_id}: {e}")
         except Exception as e:
             persist_time = (time.time() - persist_start) * 1000
             print(f"⏱️  Payment persistence attempted in {persist_time:.2f}ms")
@@ -343,6 +362,48 @@ async def handle_payment_success(
         print(f"   Payment ID: {payment_intent_id}")
         print(f"   Amount: ${request.amount} {request.currency}")
         print(f"   Payment Method: {request.payment_method}")
+
+        # CHECK: Has webhook already processed this payment?
+        # Webhook sets webhook_processing=True to claim payment processing
+        check_webhook_start = time.time()
+        from app.database.mongodb import database
+        existing_payment = await database.payments.find_one({
+            "stripe_payment_intent_id": payment_intent_id
+        })
+
+        if existing_payment and existing_payment.get("webhook_processing"):
+            check_webhook_time = (time.time() - check_webhook_start) * 1000
+            total_time = (time.time() - start_time) * 1000
+
+            logging.info(
+                f"[CLIENT_NOTIFICATION] Payment {payment_intent_id} already "
+                f"processed by webhook (webhook_processing=True), skipping"
+            )
+
+            print(f"\n⚠️  WEBHOOK ALREADY PROCESSED THIS PAYMENT")
+            print(f"   Payment ID: {payment_intent_id}")
+            print(f"   Webhook processing flag: True")
+            print(f"   Skipping client-side processing")
+            print(f"⏱️  Webhook check time: {check_webhook_time:.2f}ms")
+            print(f"⏱️  TOTAL TIME: {total_time:.2f}ms")
+            print("=" * 80 + "\n")
+
+            return JSONResponse(content={
+                "success": True,
+                "message": "Payment already processed by webhook",
+                "data": {
+                    "customer_email": customer_email,
+                    "payment_intent_id": payment_intent_id,
+                    "status": "already_processed",
+                    "processed_by": "webhook",
+                    "processing_time_ms": round(total_time, 2)
+                }
+            })
+
+        check_webhook_time = (time.time() - check_webhook_start) * 1000
+        print(f"\n✅ WEBHOOK CHECK: Payment not yet processed by webhook")
+        print(f"   Proceeding with client-side processing (webhook fallback)")
+        print(f"⏱️  Webhook check time: {check_webhook_time:.2f}ms")
 
         # Create translation transaction (synchronously, returns transaction_id)
         print(f"\n💾 Creating translation transaction...")
@@ -732,6 +793,48 @@ async def handle_user_payment_success(
         print(f"   Square Transaction ID: {stripe_checkout_session_id}")
         print(f"   Amount: ${request.amount} {request.currency}")
         print(f"   Payment Method: {request.payment_method}")
+
+        # CHECK: Has webhook already processed this payment?
+        # For user payments, check user_transactions collection
+        check_webhook_start = time.time()
+        from app.database.mongodb import database
+        existing_transaction = await database.user_transactions.find_one({
+            "stripe_checkout_session_id": stripe_checkout_session_id
+        })
+
+        if existing_transaction and existing_transaction.get("webhook_processing"):
+            check_webhook_time = (time.time() - check_webhook_start) * 1000
+            total_time = (time.time() - start_time) * 1000
+
+            logging.info(
+                f"[CLIENT_NOTIFICATION] User payment {stripe_checkout_session_id} already "
+                f"processed by webhook (webhook_processing=True), skipping"
+            )
+
+            print(f"\n⚠️  WEBHOOK ALREADY PROCESSED THIS USER PAYMENT")
+            print(f"   Transaction ID: {stripe_checkout_session_id}")
+            print(f"   Webhook processing flag: True")
+            print(f"   Skipping client-side processing")
+            print(f"⏱️  Webhook check time: {check_webhook_time:.2f}ms")
+            print(f"⏱️  TOTAL TIME: {total_time:.2f}ms")
+            print("=" * 80 + "\n")
+
+            return JSONResponse(content={
+                "success": True,
+                "message": "User payment already processed by webhook",
+                "data": {
+                    "customer_email": customer_email,
+                    "stripe_checkout_session_id": stripe_checkout_session_id,
+                    "status": "already_processed",
+                    "processed_by": "webhook",
+                    "processing_time_ms": round(total_time, 2)
+                }
+            })
+
+        check_webhook_time = (time.time() - check_webhook_start) * 1000
+        print(f"\n✅ WEBHOOK CHECK: User payment not yet processed by webhook")
+        print(f"   Proceeding with client-side processing (webhook fallback)")
+        print(f"⏱️  Webhook check time: {check_webhook_time:.2f}ms")
 
         # Schedule background file processing for user transaction
         task_schedule_start = time.time()

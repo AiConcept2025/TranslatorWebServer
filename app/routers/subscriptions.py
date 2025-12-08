@@ -249,7 +249,7 @@ async def get_company_subscriptions(
             "last_updated": period.get("updated_at", period.get("period_end")).isoformat() if period.get("updated_at") or period.get("period_end") else None
         }
 
-    # Return direct list of subscriptions (not wrapped)
+    # Serialize subscriptions list
     subscriptions_list = [
         {
             "_id": str(sub["_id"]),
@@ -273,9 +273,17 @@ async def get_company_subscriptions(
         for sub in subscriptions
     ]
 
-    logger.info(f"📤 Response: direct list, count={len(subscriptions)}, "
+    # Return nested structure matching frontend expectations:
+    # response.data.data gives us {company_name, count, subscriptions: [...]}
+    response_data = {
+        "company_name": company_name,
+        "count": len(subscriptions_list),
+        "subscriptions": subscriptions_list
+    }
+
+    logger.info(f"📤 Response: nested structure with data wrapper, count={len(subscriptions)}, "
                f"company_name={company_name}")
-    return JSONResponse(content=subscriptions_list)
+    return JSONResponse(content={"data": response_data})
 
 
 @router.options("/{subscription_id}")

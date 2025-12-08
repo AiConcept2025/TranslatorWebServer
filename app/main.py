@@ -353,10 +353,6 @@ async def translate_files(
     request: TranslateRequest = Body(...),
     current_user: Optional[dict] = Depends(get_optional_user)
 ):
-    # DEBUG: This line should appear immediately after Pydantic validation succeeds
-    print("🔵 DEBUG: Endpoint function STARTED - Pydantic validation PASSED")
-    print(f"🔵 DEBUG: Received {len(request.files)} files")
-    print(f"🔵 DEBUG: First file name: {request.files[0].name if request.files else 'NO FILES'}")
     """
     SIMPLIFIED TRANSLATE ENDPOINT:
     1. Upload files to Google Drive {customer_email}/Temp/ folder
@@ -365,31 +361,6 @@ async def translate_files(
     4. Frontend processes payment with customer_email
     5. Payment webhook moves files from Temp/ to Inbox/
     """
-    # ============================================================================
-    # RAW INCOMING DATA - Logged immediately after Pydantic validation
-    # ============================================================================
-    print("=" * 100)
-    print("[RAW INCOMING DATA] /translate ENDPOINT REACHED - Pydantic validation passed")
-    print(f"[RAW INCOMING DATA] Authenticated User: {current_user.get('email', 'N/A') if current_user else 'None (Individual User)'}")
-    print(f"[RAW INCOMING DATA] Company Name: {current_user.get('company_name', 'N/A') if current_user else 'None (Individual User)'}")
-    print(f"[RAW INCOMING DATA] Permission: {current_user.get('permission_level', 'N/A') if current_user else 'None (Individual User)'}")
-    print(f"[RAW INCOMING DATA] Request Data:")
-    print(f"[RAW INCOMING DATA]   - Customer Email: {request.email}")
-    print(f"[RAW INCOMING DATA]   - Source Language: {request.sourceLanguage}")
-    print(f"[RAW INCOMING DATA]   - Target Language: {request.targetLanguage}")
-    print(f"[RAW INCOMING DATA]   - Number of Files: {len(request.files)}")
-    print(f"[RAW INCOMING DATA]   - Payment Intent ID: {request.paymentIntentId or 'None'}")
-    print(f"[RAW INCOMING DATA]   - File Translation Modes: {len(request.fileTranslationModes) if request.fileTranslationModes else 0} entries")
-    if request.fileTranslationModes:
-        for mode_info in request.fileTranslationModes:
-            print(f"[RAW INCOMING DATA]     - {mode_info.fileName}: {mode_info.translationMode.value}")
-    else:
-        print(f"[RAW INCOMING DATA]   ⚠️ NO fileTranslationModes received - will use default (automatic)")
-    print(f"[RAW INCOMING DATA] Files Details:")
-    for i, file_info in enumerate(request.files, 1):
-        print(f"[RAW INCOMING DATA]   File {i}: '{file_info.name}' | {file_info.size:,} bytes | Type: {file_info.type} | ID: {file_info.id}")
-    print("=" * 100)
-
     # Initialize timing tracker
     request_start_time = time.time()
 
@@ -1255,19 +1226,12 @@ async def confirm_transactions(
     try:
         # Fetch all transactions
         transactions = []
-        print(f"[CONFIRM DEBUG] Fetching {len(request.transaction_ids)} transaction(s) from database...")
         for txn_id in request.transaction_ids:
             txn = await database.translation_transactions.find_one({"transaction_id": txn_id})
             if txn:
                 transactions.append(txn)
-                print(f"[CONFIRM DEBUG] Found transaction {txn_id}")
-                print(f"[CONFIRM DEBUG]   - user_id: {txn.get('user_id', 'MISSING')}")
-                print(f"[CONFIRM DEBUG]   - original_file_url: {txn.get('original_file_url', 'MISSING')}")
-                print(f"[CONFIRM DEBUG]   - file_name: {txn.get('file_name', 'MISSING')}")
-                print(f"[CONFIRM DEBUG]   - status: {txn.get('status', 'MISSING')}")
             else:
                 logging.warning(f"[CONFIRM] Transaction {txn_id} not found")
-                print(f"[CONFIRM DEBUG] ❌ Transaction {txn_id} NOT FOUND in database")
 
         if not transactions:
             raise HTTPException(status_code=404, detail="No valid transactions found")
@@ -1276,15 +1240,11 @@ async def confirm_transactions(
         first_txn = transactions[0]
         customer_email = first_txn.get("user_id", "")  # user_id contains email
         company_name = first_txn.get("company_name")  # company_name for enterprise customers
-        print(f"[CONFIRM DEBUG] Customer email extracted: {customer_email}")
-        print(f"[CONFIRM DEBUG] Company name extracted: {company_name or 'None (individual customer)'}")
 
         # Get file IDs from original_file_url (Google Drive URLs contain file ID)
         file_ids = []
-        print(f"[CONFIRM DEBUG] Extracting file IDs from {len(transactions)} transaction(s)...")
-        for i, txn in enumerate(transactions, 1):
+        for txn in transactions:
             url = txn.get("original_file_url", "")
-            print(f"[CONFIRM DEBUG] Transaction {i}/{len(transactions)}: URL = '{url}'")
 
             # Extract file ID from Google Drive URL - handles multiple formats:
             # - Google Docs: https://docs.google.com/document/d/{file_id}/edit
@@ -1293,21 +1253,13 @@ async def confirm_transactions(
             file_id = None
             if "/document/d/" in url:
                 file_id = url.split("/document/d/")[1].split("/")[0]
-                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /document/d/ pattern: {file_id}")
             elif "/spreadsheets/d/" in url:
                 file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
-                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /spreadsheets/d/ pattern: {file_id}")
             elif "/file/d/" in url:
                 file_id = url.split("/file/d/")[1].split("/")[0]
-                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /file/d/ pattern: {file_id}")
-            else:
-                print(f"[CONFIRM DEBUG]   ❌ URL does not match any known Google Drive pattern - SKIPPED")
 
             if file_id:
                 file_ids.append(file_id)
-
-        print(f"[CONFIRM DEBUG] Total file IDs extracted: {len(file_ids)}")
-        print(f"[CONFIRM DEBUG] File IDs: {file_ids}")
 
         # Log what we're about to do (fast - logging only)
         if company_name:

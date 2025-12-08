@@ -50,6 +50,8 @@ class PaymentRepository:
             "amount": payment_data.amount,
             "currency": payment_data.currency,
             "payment_status": payment_data.payment_status,
+            "invoice_id": payment_data.invoice_id,
+            "subscription_id": payment_data.subscription_id,
             "refunds": [],  # Always start with empty array
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),

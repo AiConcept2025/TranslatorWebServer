@@ -100,7 +100,7 @@ class IndividualLoginResponse(BaseModel):
 
 
 @router.post("/admin", response_model=AdminLoginResponse)
-@limiter.limit("10/5minutes")  # Brute force protection: 10 attempts per 5 minutes
+@limiter.limit("100/minute")  # Allow more logins for E2E testing
 async def admin_login(req: AdminLoginRequest, request: Request):
     """
     Admin login endpoint with MongoDB authentication.

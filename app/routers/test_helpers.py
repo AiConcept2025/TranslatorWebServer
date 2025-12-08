@@ -241,6 +241,8 @@ async def seed_subscription_data():
             "subscription_price": 90.00,
             "start_date": datetime(2025, 1, 1),
             "end_date": datetime(2025, 12, 31),
+            "billing_frequency": "quarterly",
+            "payment_terms_days": 30,
             "status": "active"
         },
         {
@@ -252,6 +254,8 @@ async def seed_subscription_data():
             "subscription_price": 211.20,
             "start_date": datetime(2025, 1, 15),
             "end_date": datetime(2025, 12, 31),
+            "billing_frequency": "monthly",
+            "payment_terms_days": 45,
             "status": "active"
         }
     ]

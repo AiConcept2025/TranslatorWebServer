@@ -538,110 +538,66 @@ async def get_company_invoices(
         }
     }
 )
-async def create_invoice(invoice_data: InvoiceCreate):
+async def create_invoice(invoice_data: InvoiceCreate, admin: Dict[str, Any] = Depends(get_admin_user)):
     """
-    Create a new invoice.
+    Create a new invoice with automatic calculations (NEW billing schema).
 
-    Creates a new invoice record in the invoices collection with the provided data.
-    Validates that the company and subscription exist before creating the invoice.
+    Creates a new invoice with billing_period and line_items.
+    Auto-calculates: subtotal, tax_amount (6%), total_amount, amount_paid (0), amount_due.
+    Auto-generates: invoice_number, invoice_date, due_date, status.
 
-    ## Request Body
-    - **company_name**: Company name (must exist in companies collection)
+    ## Request Body (Required)
+    - **company_id**: Company name (must exist in companies collection)
     - **subscription_id**: Subscription identifier (must exist in subscriptions collection)
-    - **invoice_number**: Unique invoice number (e.g., INV-2025-001)
-    - **invoice_date**: Invoice date in ISO 8601 format
-    - **due_date**: Payment due date in ISO 8601 format
-    - **total_amount**: Total amount in dollars (must be >= 0)
-    - **tax_amount**: Tax amount in dollars (must be >= 0)
-    - **status**: Invoice status (sent | paid | overdue | cancelled)
-    - **pdf_url** *(optional)*: URL to the invoice PDF document
+    - **billing_period**: Object with period_numbers, period_start, period_end
+    - **line_items**: Array of line items (description, period_numbers, quantity, unit_price, amount)
+
+    ## Auto-Calculated Fields
+    - **subtotal**: Sum of all line_item amounts
+    - **tax_amount**: subtotal × 0.06 (6% tax)
+    - **total_amount**: subtotal + tax_amount
+    - **amount_paid**: 0.00 (default for new invoice)
+    - **amount_due**: total_amount - amount_paid
+    - **status**: "sent" (default)
 
     ## Response
-    Returns the created invoice with all fields including the generated MongoDB _id.
-
-    ## Usage Examples
-
-    ### Create a new sent invoice
-    ```bash
-    curl -X POST "http://localhost:8000/api/v1/invoices" \\
-      -H "Content-Type: application/json" \\
-      -d '{
-        "company_name": "Acme Health LLC",
-        "subscription_id": "sub_abc123",
-        "invoice_number": "INV-2025-001",
-        "invoice_date": "2025-10-08T00:07:00.396Z",
-        "due_date": "2025-11-07T00:07:00.396Z",
-        "total_amount": 106.00,
-        "tax_amount": 6.00,
-        "status": "sent",
-        "pdf_url": "https://storage.example.com/invoices/INV-2025-001.pdf"
-      }'
-    ```
-
-    ### Create invoice without PDF URL
-    ```bash
-    curl -X POST "http://localhost:8000/api/v1/invoices" \\
-      -H "Content-Type: application/json" \\
-      -d '{
-        "company_name": "Acme Health LLC",
-        "subscription_id": "sub_abc123",
-        "invoice_number": "INV-2025-002",
-        "invoice_date": "2025-11-08T00:07:00.396Z",
-        "due_date": "2025-12-08T00:07:00.396Z",
-        "total_amount": 200.00,
-        "tax_amount": 12.00,
-        "status": "sent"
-      }'
-    ```
-
-    ## Notes
-    - Invoice number must be unique across all invoices
-    - Company and subscription must exist in their respective collections
-    - Status values are case-sensitive (lowercase)
-    - All datetime fields must be in ISO 8601 format
-    - Total amount and tax amount are in dollars (not cents)
+    Returns the created invoice with all calculated fields.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime, timezone, timedelta
     from bson.decimal128 import Decimal128
+    import uuid
 
     try:
         timestamp = datetime.now(timezone.utc).isoformat()
         logger.info(f"🔍 [{timestamp}] POST /api/v1/invoices - START")
-        logger.info(f"📥 Request Data: company_name={invoice_data.company_name}, "
-                   f"invoice_number={invoice_data.invoice_number}, "
+        logger.info(f"📥 Request Data: company_id={invoice_data.company_id}, "
                    f"subscription_id={invoice_data.subscription_id}, "
-                   f"total_amount={invoice_data.total_amount}, status={invoice_data.status}")
-
-        # Validate status
-        valid_statuses = ["sent", "paid", "overdue", "cancelled"]
-        if invoice_data.status not in valid_statuses:
-            logger.warning(f"❌ Invalid status: {invoice_data.status}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid invoice status. Must be one of: {', '.join(valid_statuses)}"
-            )
+                   f"line_items={len(invoice_data.line_items)} items")
 
         # Check if company exists
-        logger.info(f"🔄 Checking if company exists: {invoice_data.company_name}")
-        company = await database.company.find_one({"company_name": invoice_data.company_name})
+        logger.info(f"🔄 Checking if company exists: {invoice_data.company_id}")
+        company = await database.company.find_one({"company_name": invoice_data.company_id})
         if not company:
-            logger.warning(f"❌ Company not found: {invoice_data.company_name}")
+            logger.warning(f"❌ Company not found: {invoice_data.company_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Company not found: {invoice_data.company_name}"
+                detail=f"Company not found: {invoice_data.company_id}"
             )
-        logger.info(f"✅ Company found: {invoice_data.company_name}")
+        logger.info(f"✅ Company found: {invoice_data.company_id}")
 
-        # Check if subscription exists (can be ObjectId or string)
+        # Check if subscription exists (try multiple query strategies)
         logger.info(f"🔄 Checking if subscription exists: {invoice_data.subscription_id}")
-        try:
-            # Try as ObjectId first
-            subscription_query = {"_id": ObjectId(invoice_data.subscription_id)}
-        except Exception:
-            # Fall back to string comparison if not a valid ObjectId
-            subscription_query = {"_id": invoice_data.subscription_id}
-
+        subscription_query = {"subscription_id": invoice_data.subscription_id}
         subscription = await database.subscriptions.find_one(subscription_query)
+
+        if not subscription:
+            # Try as ObjectId
+            try:
+                subscription_query = {"_id": ObjectId(invoice_data.subscription_id)}
+                subscription = await database.subscriptions.find_one(subscription_query)
+            except Exception:
+                pass
+
         if not subscription:
             logger.warning(f"❌ Subscription not found: {invoice_data.subscription_id}")
             raise HTTPException(
@@ -650,36 +606,98 @@ async def create_invoice(invoice_data: InvoiceCreate):
             )
         logger.info(f"✅ Subscription found: {invoice_data.subscription_id}")
 
-        # Check if invoice number already exists
-        logger.info(f"🔄 Checking for duplicate invoice number: {invoice_data.invoice_number}")
-        existing_invoice = await database.invoices.find_one({"invoice_number": invoice_data.invoice_number})
-        if existing_invoice:
-            logger.warning(f"❌ Duplicate invoice number: {invoice_data.invoice_number}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invoice number already exists: {invoice_data.invoice_number}"
-            )
+        # CALCULATE subtotal from line_items
+        subtotal = sum(item.amount for item in invoice_data.line_items)
+        logger.info(f"💰 Calculated subtotal: ${subtotal:.2f} (from {len(invoice_data.line_items)} line items)")
+
+        # CALCULATE tax_amount (6%)
+        tax_amount = round(subtotal * 0.06, 2)
+        logger.info(f"💰 Calculated tax_amount: ${tax_amount:.2f} (6% of ${subtotal:.2f})")
+
+        # CALCULATE total_amount
+        total_amount = subtotal + tax_amount
+        logger.info(f"💰 Calculated total_amount: ${total_amount:.2f}")
+
+        # SET payment tracking fields
+        amount_paid = 0.0
+        amount_due = total_amount
+        logger.info(f"💰 Set amount_paid: ${amount_paid:.2f}")
+        logger.info(f"💰 Set amount_due: ${amount_due:.2f}")
+
+        # AUTO-GENERATE invoice_number if not provided
+        if not invoice_data.invoice_number:
+            invoice_number = f"INV-TEST-{uuid.uuid4().hex[:8].upper()}"
+            logger.info(f"🔢 Auto-generated invoice_number: {invoice_number}")
+        else:
+            invoice_number = invoice_data.invoice_number
+            # Check for duplicates
+            existing_invoice = await database.invoices.find_one({"invoice_number": invoice_number})
+            if existing_invoice:
+                logger.warning(f"❌ Duplicate invoice_number: {invoice_number}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invoice number already exists: {invoice_number}"
+                )
+
+        # AUTO-GENERATE invoice_date and due_date if not provided
+        invoice_date = datetime.now(timezone.utc)
+        if invoice_data.invoice_date:
+            invoice_date = datetime.fromisoformat(invoice_data.invoice_date.replace("Z", "+00:00"))
+
+        due_date = invoice_date + timedelta(days=30)
+        if invoice_data.due_date:
+            due_date = datetime.fromisoformat(invoice_data.due_date.replace("Z", "+00:00"))
+
+        # SET status
+        invoice_status = "sent"
+        logger.info(f"📊 Set status: {invoice_status}")
 
         # Prepare invoice document for MongoDB
         created_at = datetime.now(timezone.utc)
+
+        # Convert billing_period dates
+        billing_period_doc = invoice_data.billing_period.model_dump()
+        billing_period_doc["period_start"] = datetime.fromisoformat(
+            billing_period_doc["period_start"].replace("Z", "+00:00")
+            if isinstance(billing_period_doc["period_start"], str)
+            else billing_period_doc["period_start"].isoformat()
+        )
+        billing_period_doc["period_end"] = datetime.fromisoformat(
+            billing_period_doc["period_end"].replace("Z", "+00:00")
+            if isinstance(billing_period_doc["period_end"], str)
+            else billing_period_doc["period_end"].isoformat()
+        )
+
+        # Convert line_items to dict
+        line_items_doc = [item.model_dump() for item in invoice_data.line_items]
+
         invoice_doc = {
-            "company_name": invoice_data.company_name,
+            "invoice_id": invoice_number,  # Custom invoice_id field
+            "company_id": invoice_data.company_id,
+            "company_name": invoice_data.company_id,  # Keep for backward compatibility
             "subscription_id": invoice_data.subscription_id,
-            "invoice_number": invoice_data.invoice_number,
-            "invoice_date": datetime.fromisoformat(invoice_data.invoice_date.replace("Z", "+00:00")),
-            "due_date": datetime.fromisoformat(invoice_data.due_date.replace("Z", "+00:00")),
-            "total_amount": invoice_data.total_amount,
-            "tax_amount": invoice_data.tax_amount,
-            "status": invoice_data.status,
+            "invoice_number": invoice_number,
+            "invoice_date": invoice_date,
+            "due_date": due_date,
+            "billing_period": billing_period_doc,
+            "line_items": line_items_doc,
+            "subtotal": subtotal,
+            "tax_amount": tax_amount,
+            "total_amount": total_amount,
+            "amount_paid": amount_paid,
+            "amount_due": amount_due,
+            "status": invoice_status,
             "pdf_url": invoice_data.pdf_url,
+            "stripe_invoice_id": invoice_data.stripe_invoice_id,
             "payment_applications": [],
-            "created_at": created_at
+            "created_at": created_at,
+            "updated_at": created_at
         }
 
         # Insert invoice into database
         logger.info(f"🔄 Inserting invoice into database...")
         result = await database.invoices.insert_one(invoice_doc)
-        logger.info(f"✅ Invoice created: _id={result.inserted_id}")
+        logger.info(f"✅ Invoice created: _id={result.inserted_id}, invoice_id={invoice_number}")
 
         # Fetch the created invoice
         created_invoice = await database.invoices.find_one({"_id": result.inserted_id})
@@ -687,22 +705,35 @@ async def create_invoice(invoice_data: InvoiceCreate):
         # Serialize for JSON response
         created_invoice["_id"] = str(created_invoice["_id"])
 
-        # Convert datetime fields to ISO format
-        datetime_fields = ["invoice_date", "due_date", "created_at"]
+        # Convert datetime fields to ISO format (with Z suffix for UTC)
+        datetime_fields = ["invoice_date", "due_date", "created_at", "updated_at"]
         for field in datetime_fields:
             if field in created_invoice and hasattr(created_invoice[field], "isoformat"):
-                created_invoice[field] = created_invoice[field].isoformat()
+                iso_str = created_invoice[field].isoformat()
+                # Ensure Z suffix for UTC timestamps
+                if "+00:00" in iso_str:
+                    iso_str = iso_str.replace("+00:00", "Z")
+                elif not iso_str.endswith("Z"):
+                    iso_str = iso_str + "Z"
+                created_invoice[field] = iso_str
 
-        # Convert datetime in payment_applications array
-        if "payment_applications" in created_invoice and isinstance(created_invoice["payment_applications"], list):
-            for payment_app in created_invoice["payment_applications"]:
-                if "applied_date" in payment_app and hasattr(payment_app["applied_date"], "isoformat"):
-                    payment_app["applied_date"] = payment_app["applied_date"].isoformat()
-
-        # Convert Decimal128 if present
-        for key, value in list(created_invoice.items()):
-            if isinstance(value, Decimal128):
-                created_invoice[key] = float(value.to_decimal())
+        # Convert billing_period datetimes (with Z suffix for UTC)
+        if "billing_period" in created_invoice and created_invoice["billing_period"]:
+            bp = created_invoice["billing_period"]
+            if "period_start" in bp and hasattr(bp["period_start"], "isoformat"):
+                iso_str = bp["period_start"].isoformat()
+                if "+00:00" in iso_str:
+                    iso_str = iso_str.replace("+00:00", "Z")
+                elif not iso_str.endswith("Z"):
+                    iso_str = iso_str + "Z"
+                bp["period_start"] = iso_str
+            if "period_end" in bp and hasattr(bp["period_end"], "isoformat"):
+                iso_str = bp["period_end"].isoformat()
+                if "+00:00" in iso_str:
+                    iso_str = iso_str.replace("+00:00", "Z")
+                elif not iso_str.endswith("Z"):
+                    iso_str = iso_str + "Z"
+                bp["period_end"] = iso_str
 
         response_payload = {
             "success": True,
@@ -710,8 +741,11 @@ async def create_invoice(invoice_data: InvoiceCreate):
             "data": created_invoice
         }
 
-        logger.info(f"📤 Response: success=True, invoice_id={created_invoice['_id']}, "
-                   f"invoice_number={created_invoice['invoice_number']}")
+        logger.info(f"📤 Response: success=True, invoice_id={invoice_number}")
+        logger.info(f"   Subtotal: ${subtotal:.2f}")
+        logger.info(f"   Tax (6%): ${tax_amount:.2f}")
+        logger.info(f"   Total: ${total_amount:.2f}")
+        logger.info(f"   Amount Due: ${amount_due:.2f}")
 
         return JSONResponse(content=response_payload, status_code=status.HTTP_201_CREATED)
 
@@ -809,64 +843,36 @@ async def create_invoice(invoice_data: InvoiceCreate):
 async def update_invoice(
     invoice_id: str = Path(
         ...,
-        description="MongoDB ObjectId of the invoice to update",
-        example="671b2bc25c62a0b61c084b34"
+        description="Invoice ID (invoice_id field, not MongoDB _id)",
+        example="INV-TEST-12345678"
     ),
-    update_data: InvoiceUpdate = ...
+    update_data: InvoiceUpdate = ...,
+    admin: Dict[str, Any] = Depends(get_admin_user)
 ):
     """
-    Update an existing invoice.
+    Update an existing invoice with automatic recalculations.
 
-    Updates invoice fields. Only provided fields will be updated.
-    Note: company_name, subscription_id, and invoice_number are immutable and cannot be changed.
+    Updates invoice fields (especially amount_paid) and automatically recalculates:
+    - amount_due = total_amount - amount_paid
+    - status transitions: sent (0%) → partial (1-99%) → paid (100%)
 
     ## Path Parameters
-    - **invoice_id**: MongoDB ObjectId of the invoice (24-character hex string)
+    - **invoice_id**: Invoice ID (invoice_id field, e.g., "INV-TEST-12345678")
 
     ## Request Body (all fields optional)
-    - **status**: Invoice status (sent | paid | overdue | cancelled)
-    - **invoice_date**: Invoice date in ISO 8601 format
-    - **due_date**: Payment due date in ISO 8601 format
-    - **total_amount**: Total amount in dollars (must be >= 0)
-    - **tax_amount**: Tax amount in dollars (must be >= 0)
+    - **amount_paid**: Amount paid towards invoice (triggers recalculation)
+    - **status**: Invoice status (sent | paid | overdue | cancelled | partial)
     - **pdf_url**: URL to the invoice PDF document
 
+    ## Auto-Recalculated Fields
+    - **amount_due**: total_amount - amount_paid
+    - **status**: Auto-updated based on payment percentage
+      - "sent" if amount_paid == 0
+      - "partial" if 0 < amount_paid < total_amount
+      - "paid" if amount_paid >= total_amount
+
     ## Response
-    Returns the updated invoice with all fields.
-
-    ## Usage Examples
-
-    ### Update invoice status to paid
-    ```bash
-    curl -X PATCH "http://localhost:8000/api/v1/invoices/671b2bc25c62a0b61c084b34" \\
-      -H "Content-Type: application/json" \\
-      -d '{"status": "paid"}'
-    ```
-
-    ### Update PDF URL
-    ```bash
-    curl -X PATCH "http://localhost:8000/api/v1/invoices/671b2bc25c62a0b61c084b34" \\
-      -H "Content-Type: application/json" \\
-      -d '{"pdf_url": "https://storage.example.com/invoices/INV-2025-001-updated.pdf"}'
-    ```
-
-    ### Update multiple fields
-    ```bash
-    curl -X PATCH "http://localhost:8000/api/v1/invoices/671b2bc25c62a0b61c084b34" \\
-      -H "Content-Type: application/json" \\
-      -d '{
-        "status": "paid",
-        "total_amount": 110.00,
-        "tax_amount": 10.00
-      }'
-    ```
-
-    ## Notes
-    - Invoice number, company_name, and subscription_id are immutable
-    - Status values are case-sensitive (lowercase)
-    - All datetime fields must be in ISO 8601 format
-    - Total amount and tax amount are in dollars (not cents)
-    - Only fields present in the request will be updated
+    Returns the updated invoice with all recalculated fields.
     """
     from datetime import datetime, timezone
     from bson.decimal128 import Decimal128
@@ -880,19 +886,9 @@ async def update_invoice(
         update_dict = update_data.model_dump(exclude_unset=True)
         logger.info(f"📨 Update Data: {update_dict}")
 
-        # Validate ObjectId
-        try:
-            obj_id = ObjectId(invoice_id)
-        except Exception:
-            logger.warning(f"❌ Invalid ObjectId format: {invoice_id}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid invoice ID format: {invoice_id}"
-            )
-
-        # Check if invoice exists
+        # Check if invoice exists (query by invoice_id field, not _id)
         logger.info(f"🔄 Checking if invoice exists: {invoice_id}")
-        existing_invoice = await database.invoices.find_one({"_id": obj_id})
+        existing_invoice = await database.invoices.find_one({"invoice_id": invoice_id})
         if not existing_invoice:
             logger.warning(f"❌ Invoice not found: {invoice_id}")
             raise HTTPException(
@@ -906,13 +902,18 @@ async def update_invoice(
             logger.info(f"⚠️ No fields to update")
             # Serialize and return existing invoice
             existing_invoice["_id"] = str(existing_invoice["_id"])
-            datetime_fields = ["invoice_date", "due_date", "created_at"]
+            datetime_fields = ["invoice_date", "due_date", "created_at", "updated_at"]
             for field in datetime_fields:
                 if field in existing_invoice and hasattr(existing_invoice[field], "isoformat"):
                     existing_invoice[field] = existing_invoice[field].isoformat()
-            for key, value in list(existing_invoice.items()):
-                if isinstance(value, Decimal128):
-                    existing_invoice[key] = float(value.to_decimal())
+
+            # Convert billing_period datetimes
+            if "billing_period" in existing_invoice and existing_invoice["billing_period"]:
+                bp = existing_invoice["billing_period"]
+                if "period_start" in bp and hasattr(bp["period_start"], "isoformat"):
+                    bp["period_start"] = bp["period_start"].isoformat()
+                if "period_end" in bp and hasattr(bp["period_end"], "isoformat"):
+                    bp["period_end"] = bp["period_end"].isoformat()
 
             return JSONResponse(content={
                 "success": True,
@@ -920,9 +921,34 @@ async def update_invoice(
                 "data": existing_invoice
             })
 
+        # HANDLE amount_paid update with automatic recalculation
+        if "amount_paid" in update_dict:
+            amount_paid = update_dict["amount_paid"]
+            total_amount = existing_invoice.get("total_amount", 0.0)
+
+            # RECALCULATE amount_due
+            amount_due = max(0.0, total_amount - amount_paid)
+            update_dict["amount_due"] = amount_due
+
+            logger.info(f"💰 Payment Update:")
+            logger.info(f"   total_amount: ${total_amount:.2f}")
+            logger.info(f"   amount_paid: ${amount_paid:.2f}")
+            logger.info(f"   amount_due (recalculated): ${amount_due:.2f}")
+
+            # AUTO-UPDATE status based on payment percentage
+            if amount_paid == 0:
+                new_status = "sent"
+            elif amount_paid >= total_amount:
+                new_status = "paid"
+            else:
+                new_status = "partial"
+
+            update_dict["status"] = new_status
+            logger.info(f"📊 Status transition: {existing_invoice.get('status')} → {new_status}")
+
         # Validate status if provided
         if "status" in update_dict:
-            valid_statuses = ["sent", "paid", "overdue", "cancelled"]
+            valid_statuses = ["sent", "paid", "overdue", "cancelled", "partial"]
             if update_dict["status"] not in valid_statuses:
                 logger.warning(f"❌ Invalid status: {update_dict['status']}")
                 raise HTTPException(
@@ -940,11 +966,23 @@ async def update_invoice(
                 update_dict["due_date"].replace("Z", "+00:00")
             )
 
+        # Convert billing_period if present
+        if "billing_period" in update_dict and update_dict["billing_period"]:
+            bp = update_dict["billing_period"]
+            if isinstance(bp, dict):
+                if "period_start" in bp and isinstance(bp["period_start"], str):
+                    bp["period_start"] = datetime.fromisoformat(bp["period_start"].replace("Z", "+00:00"))
+                if "period_end" in bp and isinstance(bp["period_end"], str):
+                    bp["period_end"] = datetime.fromisoformat(bp["period_end"].replace("Z", "+00:00"))
+
+        # Add updated_at timestamp
+        update_dict["updated_at"] = datetime.now(timezone.utc)
+
         # Update invoice in database
         logger.info(f"🔄 Updating invoice in database...")
         logger.info(f"📨 Final update data keys: {list(update_dict.keys())}")
         result = await database.invoices.update_one(
-            {"_id": obj_id},
+            {"invoice_id": invoice_id},
             {"$set": update_dict}
         )
 
@@ -954,22 +992,24 @@ async def update_invoice(
             logger.info(f"✅ Invoice updated: modified_count={result.modified_count}")
 
         # Fetch updated invoice
-        updated_invoice = await database.invoices.find_one({"_id": obj_id})
+        updated_invoice = await database.invoices.find_one({"invoice_id": invoice_id})
 
         # Serialize for JSON response
         updated_invoice["_id"] = str(updated_invoice["_id"])
 
         # Convert datetime fields to ISO format
-        datetime_fields = ["invoice_date", "due_date", "created_at"]
+        datetime_fields = ["invoice_date", "due_date", "created_at", "updated_at"]
         for field in datetime_fields:
             if field in updated_invoice and hasattr(updated_invoice[field], "isoformat"):
                 updated_invoice[field] = updated_invoice[field].isoformat()
 
-        # Convert datetime in payment_applications array
-        if "payment_applications" in updated_invoice and isinstance(updated_invoice["payment_applications"], list):
-            for payment_app in updated_invoice["payment_applications"]:
-                if "applied_date" in payment_app and hasattr(payment_app["applied_date"], "isoformat"):
-                    payment_app["applied_date"] = payment_app["applied_date"].isoformat()
+        # Convert billing_period datetimes
+        if "billing_period" in updated_invoice and updated_invoice["billing_period"]:
+            bp = updated_invoice["billing_period"]
+            if "period_start" in bp and hasattr(bp["period_start"], "isoformat"):
+                bp["period_start"] = bp["period_start"].isoformat()
+            if "period_end" in bp and hasattr(bp["period_end"], "isoformat"):
+                bp["period_end"] = bp["period_end"].isoformat()
 
         # Convert Decimal128 if present
         for key, value in list(updated_invoice.items()):
@@ -982,13 +1022,11 @@ async def update_invoice(
             "data": updated_invoice
         }
 
-        logger.info(f"📤 Response: success=True, invoice_id={updated_invoice['_id']}, "
-                   f"invoice_number={updated_invoice['invoice_number']}")
-
-        # Verify all fields are serializable before returning
-        logger.info(f"🔍 Final serialization check before response...")
-        for key, value in updated_invoice.items():
-            logger.info(f"   {key}: {type(value).__name__} = {value}")
+        logger.info(f"📤 Response: success=True, invoice_id={invoice_id}")
+        if "amount_paid" in update_dict:
+            logger.info(f"   Updated: amount_paid=${updated_invoice.get('amount_paid', 0):.2f}, "
+                       f"amount_due=${updated_invoice.get('amount_due', 0):.2f}, "
+                       f"status={updated_invoice.get('status')}")
 
         return JSONResponse(content=response_payload)
 
@@ -1002,6 +1040,160 @@ async def update_invoice(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update invoice: {str(e)}"
+        )
+
+
+@router.get(
+    "/{invoice_id}",
+    response_model=InvoiceUpdateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Single Invoice",
+    description="Retrieve a single invoice by invoice_id with all billing fields"
+)
+async def get_invoice(
+    invoice_id: str = Path(
+        ...,
+        description="Invoice ID (invoice_id field)",
+        example="INV-TEST-12345678"
+    ),
+    admin: Dict[str, Any] = Depends(get_admin_user)
+):
+    """
+    Get a single invoice by invoice_id.
+
+    Returns invoice with all billing fields including:
+    - billing_period (period_numbers, period_start, period_end)
+    - line_items array
+    - All amount fields (subtotal, tax_amount, total_amount, amount_paid, amount_due)
+    """
+    from datetime import datetime, timezone
+    from bson.decimal128 import Decimal128
+
+    try:
+        logger.info(f"🔍 GET /api/v1/invoices/{invoice_id} - START")
+
+        # Find invoice by invoice_id
+        invoice = await database.invoices.find_one({"invoice_id": invoice_id})
+
+        if not invoice:
+            logger.warning(f"❌ Invoice not found: {invoice_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Invoice not found: {invoice_id}"
+            )
+
+        # Serialize for JSON response
+        invoice["_id"] = str(invoice["_id"])
+
+        # Convert datetime fields to ISO format
+        datetime_fields = ["invoice_date", "due_date", "created_at", "updated_at"]
+        for field in datetime_fields:
+            if field in invoice and hasattr(invoice[field], "isoformat"):
+                invoice[field] = invoice[field].isoformat()
+
+        # Convert billing_period datetimes
+        if "billing_period" in invoice and invoice["billing_period"]:
+            bp = invoice["billing_period"]
+            if "period_start" in bp and hasattr(bp["period_start"], "isoformat"):
+                bp["period_start"] = bp["period_start"].isoformat()
+            if "period_end" in bp and hasattr(bp["period_end"], "isoformat"):
+                bp["period_end"] = bp["period_end"].isoformat()
+
+        # Convert Decimal128 if present
+        for key, value in list(invoice.items()):
+            if isinstance(value, Decimal128):
+                invoice[key] = float(value.to_decimal())
+
+        response_payload = {
+            "success": True,
+            "message": "Invoice retrieved successfully",
+            "data": invoice
+        }
+
+        logger.info(f"✅ Retrieved invoice: {invoice_id}")
+
+        return JSONResponse(content=response_payload)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to retrieve invoice:", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve invoice: {str(e)}"
+        )
+
+
+@router.get(
+    "",
+    status_code=status.HTTP_200_OK,
+    summary="List All Invoices",
+    description="Retrieve all invoices with billing fields (Admin only)"
+)
+async def list_invoices(
+    admin: Dict[str, Any] = Depends(get_admin_user)
+):
+    """
+    List all invoices with billing fields.
+
+    Returns array of invoices, each containing:
+    - billing_period
+    - line_items
+    - All amount fields
+    """
+    from datetime import datetime, timezone
+    from bson.decimal128 import Decimal128
+
+    try:
+        logger.info(f"🔍 GET /api/v1/invoices - START")
+
+        # Find all invoices
+        invoices_cursor = database.invoices.find({})
+        invoices = await invoices_cursor.to_list(length=None)
+
+        logger.info(f"📊 Found {len(invoices)} invoices")
+
+        # Serialize each invoice
+        for invoice in invoices:
+            invoice["_id"] = str(invoice["_id"])
+
+            # Ensure invoice_id field exists (backward compatibility)
+            if "invoice_id" not in invoice:
+                # Use invoice_number or generate from _id if missing
+                invoice["invoice_id"] = invoice.get("invoice_number", invoice["_id"])
+
+            # Convert subscription_id if it's an ObjectId
+            if "subscription_id" in invoice and isinstance(invoice["subscription_id"], ObjectId):
+                invoice["subscription_id"] = str(invoice["subscription_id"])
+
+            # Convert datetime fields to ISO format
+            datetime_fields = ["invoice_date", "due_date", "created_at", "updated_at"]
+            for field in datetime_fields:
+                if field in invoice and hasattr(invoice[field], "isoformat"):
+                    invoice[field] = invoice[field].isoformat()
+
+            # Convert billing_period datetimes
+            if "billing_period" in invoice and invoice["billing_period"]:
+                bp = invoice["billing_period"]
+                if "period_start" in bp and hasattr(bp["period_start"], "isoformat"):
+                    bp["period_start"] = bp["period_start"].isoformat()
+                if "period_end" in bp and hasattr(bp["period_end"], "isoformat"):
+                    bp["period_end"] = bp["period_end"].isoformat()
+
+            # Convert Decimal128 if present
+            for key, value in list(invoice.items()):
+                if isinstance(value, Decimal128):
+                    invoice[key] = float(value.to_decimal())
+
+        logger.info(f"✅ Returning {len(invoices)} invoices")
+
+        return JSONResponse(content=invoices)
+
+    except Exception as e:
+        logger.error(f"❌ Failed to list invoices:", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list invoices: {str(e)}"
         )
 
 

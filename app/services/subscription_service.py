@@ -58,7 +58,7 @@ class SubscriptionService:
 
         now = datetime.now(timezone.utc)
 
-        # Create subscription document
+        # Insert into MongoDB first to get the _id
         subscription_doc = {
             "company_name": subscription_data.company_name,
             "subscription_unit": subscription_data.subscription_unit,
@@ -70,14 +70,23 @@ class SubscriptionService:
             "start_date": subscription_data.start_date,
             "end_date": subscription_data.end_date,
             "status": subscription_data.status,
+            "billing_frequency": subscription_data.billing_frequency,
+            "payment_terms_days": subscription_data.payment_terms_days,
             "usage_periods": [],
             "created_at": now,
             "updated_at": now
         }
 
-        # Insert into MongoDB
         result = await database.subscriptions.insert_one(subscription_doc)
         subscription_doc["_id"] = result.inserted_id
+
+        # Update the document to include subscription_id field that matches _id
+        subscription_id_str = str(result.inserted_id)
+        await database.subscriptions.update_one(
+            {"_id": result.inserted_id},
+            {"$set": {"subscription_id": subscription_id_str}}
+        )
+        subscription_doc["subscription_id"] = subscription_id_str
 
         logger.info(f"[SUBSCRIPTION] Created subscription ID: {result.inserted_id}")
 
@@ -160,7 +169,7 @@ class SubscriptionService:
         result = await database.subscriptions.find_one_and_update(
             {"_id": ObjectId(subscription_id)},
             {"$set": update_dict},
-            return_document=True
+            return_document=ReturnDocument.AFTER
         )
 
         if result:

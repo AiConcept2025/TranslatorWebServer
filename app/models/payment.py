@@ -98,6 +98,10 @@ class PaymentCreate(BaseModel):
     payment_status: str = Field(default="PENDING", description="PENDING | COMPLETED | FAILED | REFUNDED")
     payment_date: Optional[datetime] = None
 
+    # Enhanced billing fields (Phase 2)
+    invoice_id: Optional[str] = Field(None, description="Invoice ID (only for subscription payments)")
+    subscription_id: Optional[str] = Field(None, description="Subscription ID (only for subscription payments)")
+
     model_config = {
         'json_schema_extra': {
             'example': {

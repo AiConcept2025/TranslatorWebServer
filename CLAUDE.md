@@ -34,6 +34,55 @@ uvicorn app.main:app --reload --port 8000
 
 ## ⚠️ CRITICAL RULES - ALWAYS FOLLOW
 
+### **-2. ABSOLUTE TOP PRIORITY: NEVER START WEBSERVER WITHOUT EXPLICIT USER REQUEST**
+
+**CRITICAL REQUIREMENT:**
+- ❌ **NEVER** start uvicorn or any webserver automatically
+- ❌ **NEVER** run webserver in background without explicit user request
+- ❌ **NEVER** start server "for convenience" or "to run tests"
+- ✅ **ALWAYS** wait for user to start their own server manually
+- ✅ **ALWAYS** use the server instance started by the user
+- ✅ **ALWAYS** assume server is already running at http://localhost:8000 when running tests
+
+**Why This is Rule #-2 (Highest Priority):**
+- User maintains full control over server lifecycle
+- Prevents port conflicts and resource issues
+- User can monitor server logs in their own terminal
+- Allows user to debug server issues independently
+- Respects user's development workflow preferences
+
+**Red Flag - VIOLATION if:**
+```bash
+# ❌ NEVER DO THIS - Starting server automatically
+uvicorn app.main:app --port 8000 &
+DATABASE_MODE=test uvicorn app.main:app --reload --port 8000 &
+
+# ❌ NEVER DO THIS - Background server processes
+nohup uvicorn app.main:app > logs/server.log 2>&1 &
+```
+
+**Correct - ALWAYS DO THIS:**
+```bash
+# ✅ Wait for user to start server manually in their terminal
+# ✅ User runs: DATABASE_MODE=test uvicorn app.main:app --reload --port 8000
+
+# ✅ Then run tests against the user's server
+pytest tests/integration/test_subscriptions_billing_integration.py -v
+```
+
+**When Tests Fail Due to "Server Not Running":**
+- ❌ **NEVER** automatically start the server
+- ✅ **ALWAYS** inform user: "Server not running. Please start server with: DATABASE_MODE=test uvicorn app.main:app --reload --port 8000"
+- ✅ **WAIT** for user to start server manually
+- ✅ **ONLY THEN** proceed with running tests
+
+**Enforcement:**
+- If you start a webserver without explicit user request → CRITICAL VIOLATION
+- If you run background uvicorn processes → CRITICAL VIOLATION
+- If you bypass this rule "to be helpful" → CRITICAL VIOLATION
+
+---
+
 ### **-1. TOP PRIORITY: NEVER MOCK OR BYPASS HTTP LAYER IN INTEGRATION TESTS**
 
 **ABSOLUTE REQUIREMENT:**
@@ -132,12 +181,15 @@ price = calculate_individual_price(5, "default", config)  # Bypasses API!
 
 **Before Running Tests:**
 ```bash
-# Terminal 1: Start test server
+# ⚠️ USER must start server manually in Terminal 1:
+# (NEVER start server automatically - see Rule #-2)
 DATABASE_MODE=test uvicorn app.main:app --port 8000
 
-# Terminal 2: Run tests
+# ✅ THEN run tests in Terminal 2 (only after user starts server):
 pytest tests/integration/ -v
 ```
+
+**IMPORTANT:** If server is not running, **NEVER** start it automatically. Instead, inform the user to start the server manually as shown above.
 
 ---
 

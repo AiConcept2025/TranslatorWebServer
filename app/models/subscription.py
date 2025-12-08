@@ -54,7 +54,7 @@ class SubscriptionCreate(BaseModel):
     start_date: datetime
     end_date: Optional[datetime] = None
     status: Literal["active", "inactive", "expired"] = "active"
-    billing_frequency: Literal["monthly", "quarterly", "yearly"] = Field(default="monthly", description="Billing frequency")
+    billing_frequency: Literal["monthly", "quarterly", "annual"] = Field(default="quarterly", description="Billing frequency")
     payment_terms_days: int = Field(default=30, ge=1, le=90, description="Payment terms in days (Net 30, Net 60, etc.)")
 
     @field_validator('end_date')
@@ -78,7 +78,7 @@ class SubscriptionUpdate(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     status: Optional[Literal["active", "inactive", "expired"]] = None
-    billing_frequency: Optional[Literal["monthly", "quarterly", "yearly"]] = None
+    billing_frequency: Optional[Literal["monthly", "quarterly", "annual"]] = None
     payment_terms_days: Optional[int] = Field(None, ge=1, le=90)
 
 

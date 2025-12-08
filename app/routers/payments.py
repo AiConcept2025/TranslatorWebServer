@@ -32,6 +32,7 @@ from app.models.payment import (
     AllPaymentsFilters,
     SubscriptionPaymentCreate
 )
+from pydantic import BaseModel
 from app.services.payment_repository import payment_repository
 from app.services.payment_application_service import payment_application_service, PaymentApplicationError
 from app.middleware.auth_middleware import get_admin_user
@@ -40,6 +41,11 @@ from app.database.mongodb import database
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/payments", tags=["Payment Management"])
+
+
+class ApplyPaymentToInvoiceRequest(BaseModel):
+    """Request model for applying payment to invoice."""
+    invoice_id: str
 
 
 def validate_object_id(object_id: str, field_name: str = "ID") -> None:
@@ -413,13 +419,15 @@ async def get_all_payments(
             f"[ADMIN] Retrieved {len(payments)} payments (total: {total_count} matching filters)"
         )
 
-        # Helper function to recursively convert ObjectIds and datetimes
+        # Helper function to recursively convert ObjectIds, datetimes, and Decimal128
         def convert_doc(obj):
-            """Recursively convert ObjectIds and datetimes to JSON-serializable types."""
+            """Recursively convert ObjectIds, datetimes, and Decimal128 to JSON-serializable types."""
             if isinstance(obj, ObjectId):
                 return str(obj)
             elif isinstance(obj, datetime):
                 return obj.isoformat()
+            elif hasattr(obj, 'to_decimal'):  # Decimal128 type
+                return float(obj.to_decimal())
             elif isinstance(obj, dict):
                 return {key: convert_doc(value) for key, value in obj.items()}
             elif isinstance(obj, list):
@@ -1314,13 +1322,15 @@ async def get_company_payments(
         print(f"[PAYMENTS DEBUG] Retrieved {len(payments)} payments from repository")
         logger.info(f"Retrieved {len(payments)} payments from repository")
 
-        # Helper function to recursively convert ObjectIds and datetimes
+        # Helper function to recursively convert ObjectIds, datetimes, and Decimal128
         def convert_doc(obj):
-            """Recursively convert ObjectIds and datetimes to JSON-serializable types."""
+            """Recursively convert ObjectIds, datetimes, and Decimal128 to JSON-serializable types."""
             if isinstance(obj, ObjectId):
                 return str(obj)
             elif isinstance(obj, datetime):
                 return obj.isoformat()
+            elif hasattr(obj, 'to_decimal'):  # Decimal128 type
+                return float(obj.to_decimal())
             elif isinstance(obj, dict):
                 return {key: convert_doc(value) for key, value in obj.items()}
             elif isinstance(obj, list):
@@ -1879,7 +1889,7 @@ async def get_company_payment_stats(
 )
 async def apply_payment_to_invoice(
     payment_id: str = Path(..., description="Payment ID"),
-    invoice_id: str = Query(..., description="Invoice ID to apply payment to"),
+    request: ApplyPaymentToInvoiceRequest = None,
     admin: Dict[str, Any] = Depends(get_admin_user)
 ):
     """
@@ -1895,8 +1905,13 @@ async def apply_payment_to_invoice(
 
     **Request:**
     ```
-    POST /api/v1/payments/{payment_id}/apply-to-invoice?invoice_id={invoice_id}
+    POST /api/v1/payments/{payment_id}/apply-to-invoice
     Authorization: Bearer {admin_token}
+    Content-Type: application/json
+
+    {
+        "invoice_id": "507f1f77bcf86cd799439011"
+    }
     ```
 
     **Success Response (200):**
@@ -1922,8 +1937,10 @@ async def apply_payment_to_invoice(
 
     **Example:**
     ```bash
-    curl -X POST "http://localhost:8000/api/v1/payments/507f191e810c19729de860ea/apply-to-invoice?invoice_id=507f1f77bcf86cd799439011" \\
-      -H "Authorization: Bearer {admin_token}"
+    curl -X POST "http://localhost:8000/api/v1/payments/507f191e810c19729de860ea/apply-to-invoice" \\
+      -H "Authorization: Bearer {admin_token}" \\
+      -H "Content-Type: application/json" \\
+      -d '{"invoice_id": "507f1f77bcf86cd799439011"}'
     ```
     """
     try:
@@ -1931,7 +1948,7 @@ async def apply_payment_to_invoice(
         logger.info(f"🔄 [{timestamp}] POST /api/v1/payments/{payment_id}/apply-to-invoice - START")
         logger.info(f"📥 Request Parameters:")
         logger.info(f"   - payment_id: {payment_id}")
-        logger.info(f"   - invoice_id: {invoice_id}")
+        logger.info(f"   - invoice_id: {request.invoice_id}")
         logger.info(f"   - admin_email: {admin.get('email')}")
 
         logger.info(f"🔄 Calling payment_application_service.apply_payment_to_invoice()...")
@@ -1939,7 +1956,7 @@ async def apply_payment_to_invoice(
         # Apply payment to invoice
         updated_invoice = await payment_application_service.apply_payment_to_invoice(
             payment_id=payment_id,
-            invoice_id=invoice_id
+            invoice_id=request.invoice_id
         )
 
         logger.info(f"✅ Payment applied successfully")
@@ -2004,7 +2021,7 @@ async def apply_payment_to_invoice(
         logger.error(f"   - Error: {str(e)}")
         logger.error(f"   - Error type: {type(e).__name__}")
         logger.error(f"   - Payment ID: {payment_id}")
-        logger.error(f"   - Invoice ID: {invoice_id}")
+        logger.error(f"   - Invoice ID: {request.invoice_id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to apply payment to invoice: {str(e)}"

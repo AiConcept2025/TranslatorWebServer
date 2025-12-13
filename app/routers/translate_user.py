@@ -399,6 +399,20 @@ async def translate_user_files(
     cost_per_unit = 0.0  # Initialize to avoid undefined variable errors
     total_amount = 0.0
 
+    # Initialize overdraft tracking variables
+    overdraft_detected = False
+    overdraft_amount = 0
+    exceeds_soft_limit = False
+    available_units = 0
+    requested_units = 0
+
+    # Initialize subscription tracking variables (for response)
+    subscription_units_allocated = None
+    subscription_units_used = None
+    subscription_units_remaining = None
+    subscription_promotional_units = None
+    subscription_unit_type = None
+
     # Determine customer type based on authentication
     customer_type = "enterprise" if (current_user and current_user.get("company_name")) else "individual"
     log_step("CUSTOMER TYPE", f"Detected as: {customer_type}")
@@ -584,7 +598,9 @@ async def translate_user_files(
             # For enterprise users: pricing is informational (they use subscription units)
             # For individual users: pricing determines actual payment amount
             # NOTE: For enterprise, we pass "default" because quota units already have multipliers
-            pricing_mode_for_calc = "default" if customer_type == "enterprise" else batch_translation_mode
+            # Map "automatic" mode to "default" for pricing service (pricing config doesn't have "automatic")
+            pricing_mode = "default" if batch_translation_mode == "automatic" else batch_translation_mode
+            pricing_mode_for_calc = "default" if customer_type == "enterprise" else pricing_mode
             total_price_decimal = pricing_service.calculate_price(units_for_billing, customer_type, pricing_mode_for_calc)
             total_amount = float(total_price_decimal)
             # Back-calculate average cost per unit for database storage
@@ -672,6 +688,21 @@ async def translate_user_files(
                     )
 
                     if updated_subscription:
+                        # Extract overdraft information from subscription service result
+                        overdraft_detected = updated_subscription.get("overdraft", False)
+                        overdraft_amount = updated_subscription.get("overdraft_amount", 0)
+                        exceeds_soft_limit = updated_subscription.get("exceeds_soft_limit", False)
+                        available_units = updated_subscription.get("available_units", 0)
+                        requested_units = updated_subscription.get("requested_units", 0)
+
+                        if overdraft_detected:
+                            log_step("OVERDRAFT DETECTED",
+                                    f"Overdraft: {overdraft_amount} units, Soft limit exceeded: {exceeds_soft_limit}")
+                            print(f"   ⚠️  Overdraft: {overdraft_amount} units")
+                            print(f"      Available: {available_units}, Requested: {requested_units}")
+                            if exceeds_soft_limit:
+                                print(f"      ⚠️  Soft limit exceeded")
+
                         # Find current active period (same logic as record_usage)
                         usage_periods = updated_subscription.get("usage_periods", [])
                         now = datetime.now(timezone.utc)
@@ -698,6 +729,13 @@ async def translate_user_files(
                             units_allocated = current_period["units_allocated"]
                             promotional = current_period.get("promotional_units", 0)
                             remaining = units_allocated + promotional - units_used
+
+                            # Store subscription data for response
+                            subscription_units_allocated = units_allocated
+                            subscription_units_used = units_used
+                            subscription_units_remaining = remaining
+                            subscription_promotional_units = promotional
+                            subscription_unit_type = updated_subscription.get("subscription_unit", "page")
 
                             log_step("SUBSCRIPTION UPDATED",
                                     f"Period {current_period_idx}: Units used: {units_used}, Remaining: {remaining}")
@@ -771,6 +809,12 @@ async def translate_user_files(
                 "currency": "usd",  # Lowercase to match frontend expectations
                 "customer_type": customer_type,  # enterprise or individual based on authentication
                 "transaction_ids": [batch_transaction_id] if batch_transaction_id else [],  # ✅ Database transaction ID (USER######), not Square ID
+                # Overdraft information (for enterprise subscriptions)
+                "overdraft": overdraft_detected,
+                "overdraft_amount": overdraft_amount,
+                "exceeds_soft_limit": exceeds_soft_limit,
+                "available_units": available_units,
+                "requested_units": requested_units,
             },
             # File information
             "files": {
@@ -786,8 +830,11 @@ async def translate_user_files(
                 "target_language": request.targetLanguage,  # Added for frontend
             },
             # Payment information
+            # Enterprise users with overdraft do NOT require payment (overdraft warning instead)
+            # Individual users always require payment
+            # Enterprise users without subscription require payment
             "payment": {
-                "required": True,
+                "required": not (customer_type == "enterprise" and overdraft_detected),
                 "amount_cents": amount_cents,
                 "customer_email": request.email,
             },
@@ -800,6 +847,16 @@ async def translate_user_files(
         },
         "error": None,
     }
+
+    # Add subscription info to response if available (enterprise users with active subscription)
+    if subscription_units_allocated is not None:
+        response_data["data"]["subscription"] = {
+            "units_allocated": subscription_units_allocated,
+            "units_used": subscription_units_used,
+            "units_remaining": subscription_units_remaining,
+            "promotional_units": subscription_promotional_units,
+            "subscription_unit": subscription_unit_type,
+        }
 
     # ========================================================================
     # RAW OUTGOING DATA

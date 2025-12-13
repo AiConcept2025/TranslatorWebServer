@@ -99,6 +99,22 @@ class TranslationMode(str, Enum):
 # EMBEDDED DOCUMENT MODELS
 # ==============================================================================
 
+class BillingPeriod(BaseModel):
+    """Billing period for quarterly invoices."""
+    period_numbers: List[int]
+    period_start: datetime
+    period_end: datetime
+
+
+class LineItem(BaseModel):
+    """Line item for invoice."""
+    description: str
+    period_numbers: List[int]
+    quantity: int
+    unit_price: float
+    amount: float
+
+
 class UsagePeriod(BaseModel):
     """Embedded usage period in subscriptions."""
     period_start: datetime
@@ -228,6 +244,10 @@ class Subscription(BaseModel):
     end_date: Optional[datetime] = None
     status: SubscriptionStatus = SubscriptionStatus.ACTIVE
 
+    # Enhanced billing fields (Phase 2)
+    billing_frequency: str = "monthly"  # monthly, quarterly, yearly
+    payment_terms_days: int = 30  # Payment terms (e.g., Net 30)
+
     # Embedded arrays
     usage_periods: List[UsagePeriod] = Field(default_factory=list)
 
@@ -253,6 +273,13 @@ class Invoice(BaseModel):
     status: InvoiceStatus = InvoiceStatus.DRAFT
     pdf_url: Optional[str] = None
 
+    # Enhanced billing fields (Phase 2)
+    billing_period: Optional[BillingPeriod] = None
+    line_items: List[LineItem] = Field(default_factory=list)
+    subtotal: float = 0.0
+    amount_paid: float = 0.0
+    stripe_invoice_id: Optional[str] = None
+
     # Embedded payment applications
     payment_applications: List[PaymentApplication] = Field(default_factory=list)
 
@@ -269,6 +296,7 @@ class Payment(BaseModel):
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
     company_name: str = Field(..., max_length=255)
     subscription_id: Optional[PyObjectId] = None
+    invoice_id: Optional[PyObjectId] = None  # Link payment to invoice
     stripe_payment_intent_id: str = Field(..., max_length=255)
     stripe_invoice_id: Optional[str] = None
     stripe_customer_id: Optional[str] = None
@@ -369,6 +397,8 @@ __all__ = [
     "TransactionStatus",
 
     # Embedded Models
+    "BillingPeriod",
+    "LineItem",
     "UsagePeriod",
     "PaymentApplication",
     "FileMetadata",

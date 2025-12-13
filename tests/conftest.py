@@ -8,9 +8,15 @@ Uses the real test database (translation_test) for all integration tests.
 import pytest
 import uuid
 import httpx
+import os
 from datetime import datetime, timezone
 from typing import Dict, Any
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from dotenv import load_dotenv
+
+# Load test environment variables BEFORE importing app config
+load_dotenv(".env")  # Load base config
+load_dotenv(".env.test", override=True)  # Override with test config
 
 # CRITICAL: Do NOT import database from app.database.mongodb here!
 # That singleton uses settings.mongodb_database which points to PRODUCTION.
@@ -18,9 +24,9 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from tests.test_logger import TestLogger, get_test_headers
 
-# Test database configuration
-TEST_MONGODB_URI = "mongodb://iris:Sveta87201120@localhost:27017/translation_test?authSource=translation"
-TEST_DATABASE_NAME = "translation_test"
+# Test database configuration (from .env.test)
+TEST_MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://iris:Sveta87201120@localhost:27017/translation_test?authSource=translation")
+TEST_DATABASE_NAME = os.getenv("MONGODB_DATABASE", "translation_test")
 
 
 # Cache for admin token to avoid recreating for each test
@@ -39,32 +45,32 @@ def pytest_configure(config):
         "markers", "asyncio: mark test as an asyncio test"
     )
 
-    # CRITICAL: Check database mode BEFORE running any tests
+    # CRITICAL: Check database name BEFORE running any tests
     from app.config import settings
 
     if not settings.is_test_mode():
         pytest.exit(
             f"\n\n"
             f"{'='*80}\n"
-            f"FATAL ERROR: Tests cannot run in {settings.database_mode.upper()} mode!\n"
+            f"FATAL ERROR: Tests cannot run against production database!\n"
             f"{'='*80}\n\n"
-            f"Current DATABASE_MODE: {settings.database_mode}\n"
-            f"Current database: {settings.active_mongodb_database}\n\n"
+            f"Current database: {settings.mongodb_database}\n"
+            f"Expected: Database name must end with '_test'\n\n"
             f"REQUIRED ACTION:\n"
-            f"  1. Open your .env file: {settings.Config.env_file}\n"
-            f"  2. Set: DATABASE_MODE=test\n"
-            f"  3. Save and run pytest again\n\n"
+            f"  1. Ensure .env.test exists in server/ directory\n"
+            f"  2. Verify MONGODB_DATABASE=translation_test in .env.test\n"
+            f"  3. Run pytest again\n\n"
             f"This safety check prevents accidentally running tests against production data.\n"
             f"{'='*80}\n",
             returncode=1
         )
 
-    # Log successful database mode verification
+    # Log successful database verification
     print(f"\n{'='*80}")
-    print(f"Database Mode Verification: PASSED")
-    print(f"  DATABASE_MODE: {settings.database_mode}")
-    print(f"  Active Database: {settings.active_mongodb_database}")
+    print(f"Database Verification: PASSED")
+    print(f"  Active Database: {settings.mongodb_database}")
     print(f"  Expected Database: {TEST_DATABASE_NAME}")
+    print(f"  Test Mode: {settings.is_test_mode()}")
     print(f"{'='*80}\n")
 
     # Clear token caches at start of session

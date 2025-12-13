@@ -27,7 +27,7 @@ googletrans==4.0.0rc1
 deep-translator==1.11.4
 
 # Payment processing
-stripe==7.8.0
+stripe==13.2.0  # Phase 6: Upgraded from 12.5.1 (Stripe SDK Migration - FINAL TARGET)
 
 # HTTP client for API calls
 httpx==0.25.2

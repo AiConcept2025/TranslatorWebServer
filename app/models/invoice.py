@@ -310,32 +310,42 @@ class InvoiceListResponse(BaseModel):
 
 class InvoiceCreate(BaseModel):
     """
-    Schema for creating a new invoice.
+    Schema for creating a new invoice with NEW billing schema.
 
-    All fields are required except pdf_url which is optional.
+    Required fields: company_id, subscription_id, billing_period, line_items
+    Auto-calculated fields: subtotal, tax_amount, total_amount, amount_paid, amount_due, invoice_number, status
     """
-    company_name: str = Field(..., description="Company name (e.g., 'Acme Health LLC')")
+    company_id: str = Field(..., description="Company name/ID (e.g., 'Acme Health LLC')")
     subscription_id: str = Field(..., description="Subscription identifier linked to this invoice")
-    invoice_number: str = Field(..., description="Unique invoice number (e.g., INV-2025-001)")
-    invoice_date: str = Field(..., description="Invoice date in ISO 8601 format")
-    due_date: str = Field(..., description="Payment due date in ISO 8601 format")
-    total_amount: float = Field(..., ge=0, description="Total invoice amount in dollars (e.g., 106.00)")
-    tax_amount: float = Field(..., ge=0, description="Tax amount in dollars (e.g., 6.00)")
-    status: str = Field(..., description="Invoice status: sent | paid | overdue | cancelled")
+    billing_period: BillingPeriod = Field(..., description="Billing period for quarterly invoices")
+    line_items: List[LineItem] = Field(..., description="Line items for detailed billing (must not be empty)")
+
+    # Optional fields (will be auto-generated if not provided)
+    invoice_number: Optional[str] = Field(None, description="Unique invoice number (auto-generated if not provided)")
+    invoice_date: Optional[str] = Field(None, description="Invoice date in ISO 8601 format (defaults to now)")
+    due_date: Optional[str] = Field(None, description="Payment due date in ISO 8601 format (defaults to 30 days from invoice_date)")
     pdf_url: Optional[str] = Field(None, description="URL to the invoice PDF document")
+    stripe_invoice_id: Optional[str] = Field(None, description="Stripe invoice ID (if applicable)")
 
     model_config = {
         'json_schema_extra': {
             'example': {
-                'company_name': 'Acme Health LLC',
+                'company_id': 'Acme Health LLC',
                 'subscription_id': 'sub_abc123',
-                'invoice_number': 'INV-2025-001',
-                'invoice_date': '2025-10-08T00:07:00.396Z',
-                'due_date': '2025-11-07T00:07:00.396Z',
-                'total_amount': 106.00,
-                'tax_amount': 6.00,
-                'status': 'sent',
-                'pdf_url': 'https://storage.example.com/invoices/INV-2025-001.pdf'
+                'billing_period': {
+                    'period_numbers': [1, 2, 3],
+                    'period_start': '2025-01-01T00:00:00Z',
+                    'period_end': '2025-03-31T23:59:59Z'
+                },
+                'line_items': [
+                    {
+                        'description': 'Translation Services - Q1',
+                        'period_numbers': [1, 2, 3],
+                        'quantity': 3000,
+                        'unit_price': 0.10,
+                        'amount': 300.00
+                    }
+                ]
             }
         }
     }
@@ -354,6 +364,13 @@ class InvoiceUpdate(BaseModel):
     total_amount: Optional[float] = Field(None, ge=0, description="Total invoice amount in dollars")
     tax_amount: Optional[float] = Field(None, ge=0, description="Tax amount in dollars")
     pdf_url: Optional[str] = Field(None, description="URL to the invoice PDF document")
+
+    # Enhanced billing fields (Phase 2)
+    billing_period: Optional[BillingPeriod] = Field(None, description="Billing period for quarterly invoices")
+    line_items: Optional[List[LineItem]] = Field(None, description="Line items for detailed billing")
+    subtotal: Optional[float] = Field(None, ge=0, description="Subtotal before tax")
+    amount_paid: Optional[float] = Field(None, ge=0, description="Amount paid towards this invoice")
+    stripe_invoice_id: Optional[str] = Field(None, description="Stripe invoice ID (if applicable)")
 
     model_config = {
         'json_schema_extra': {

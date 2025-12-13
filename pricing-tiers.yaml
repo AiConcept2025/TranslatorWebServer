@@ -1,4 +1,14 @@
 # Translation Service Pricing Configuration
+#
+# ⚠️  SINGLE SOURCE OF TRUTH FOR PRICING
+# All pricing calculations happen on the backend using this configuration.
+# Frontend displays backend-provided prices ONLY - does NOT calculate.
+#
+# Endpoints returning pricing:
+#   - POST /api/translate → response.data.pricing
+#   - POST /translate-user → response.data.pricing
+#
+# Last updated: 2025-12-10 (removed frontend pricing calculations)
 
 # Page tier definitions
 page_tiers:

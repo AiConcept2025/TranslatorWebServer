@@ -155,13 +155,15 @@ class GoogleDriveService:
     def __init__(self):
         if not settings.google_drive_enabled:
             raise GoogleDriveStorageError("Google Drive is disabled in configuration")
-            
+
         self.credentials_path = settings.google_drive_credentials_path
-        self.token_path = settings.google_drive_token_path
-        self.root_folder = settings.google_drive_root_folder
+        self.parent_folder_id = settings.google_drive_parent_folder_id
         self.scopes = [scope.strip() for scope in settings.google_drive_scopes.split(',')]
+
+        # OAuth2-specific (only needed for OAuth2 Desktop flow, not service accounts)
+        self.token_path = settings.google_drive_token_path
         self.application_name = settings.google_drive_application_name
-        
+
         # Initialize service - no fallback, must succeed
         self.service = self._initialize_service()
         logging.info("Google Drive service initialized successfully")
@@ -291,8 +293,8 @@ class GoogleDriveService:
         else:
             logging.info(f"Creating individual folder structure: {customer_email}")
 
-        # Find or create root folder
-        root_folder_id = await self._find_or_create_folder(self.root_folder, None)
+        # Use parent_folder_id directly as root (parent folder IS the root folder)
+        root_folder_id = self.parent_folder_id
         logging.info(f"Root folder ID: {root_folder_id}")
 
         # For enterprise customers, create company folder first
@@ -360,7 +362,7 @@ class GoogleDriveService:
                 'target_language': target_language,
                 'page_count': str(page_count),
                 'status': 'awaiting_payment',
-                'upload_timestamp': datetime.utcnow().isoformat(),
+                'upload_timestamp': datetime.now(timezone.utc).isoformat(),
                 'original_filename': filename
             },
             'description': f'Translation file: {source_language}->{target_language}, {page_count} pages, customer: {customer_email}'
@@ -426,7 +428,7 @@ class GoogleDriveService:
             'parents': [folder_id],
             'properties': {
                 'target_language': target_language,
-                'upload_timestamp': datetime.utcnow().isoformat(),
+                'upload_timestamp': datetime.now(timezone.utc).isoformat(),
                 'original_filename': filename
             },
             'description': f'File uploaded for translation to {target_language}'
@@ -581,7 +583,7 @@ class GoogleDriveService:
             'total_size_bytes': total_size,
             'total_size_mb': round(total_size / (1024 * 1024), 2),
             'storage_type': 'google_drive',
-            'last_updated': datetime.utcnow().isoformat()
+            'last_updated': datetime.now(timezone.utc).isoformat()
         }
 
         try:
@@ -633,8 +635,8 @@ class GoogleDriveService:
             print(f"Google Drive: Moving {len(file_ids)} files to Inbox for {customer_email}")
         print(f"Files to move: {file_ids}")
 
-        # Get folder structure
-        root_folder_id = await self._find_or_create_folder(self.root_folder, None)
+        # Use parent_folder_id directly as root (parent folder IS the root folder)
+        root_folder_id = self.parent_folder_id
         print(f"Root folder ID: {root_folder_id}")
 
         # For enterprise, navigate through company folder first
@@ -1082,8 +1084,8 @@ class GoogleDriveService:
             GoogleDriveError: If operation fails
         """
         try:
-            # Get customer folder structure
-            root_folder_id = await self._find_or_create_folder(self.root_folder, None)
+            # Use parent_folder_id directly as root (parent folder IS the root folder)
+            root_folder_id = self.parent_folder_id
             customer_folder_id = await self._find_folder(customer_email, root_folder_id)
             
             if not customer_folder_id:
@@ -1254,7 +1256,7 @@ class GoogleDriveService:
         metadata = {
             'properties': {
                 'status': new_status,
-                'payment_confirmed_at': datetime.utcnow().isoformat()
+                'payment_confirmed_at': datetime.now(timezone.utc).isoformat()
             }
         }
         

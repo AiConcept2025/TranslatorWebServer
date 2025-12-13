@@ -58,7 +58,7 @@ class TranslationNotificationContext(BaseModel):
     user_email: EmailStr = Field(..., description="Recipient email address")
     company_name: str = Field(..., description="Company name ('Ind' for individuals)")
     documents: List[DocumentInfo] = Field(..., min_items=1, description="List of translated documents")
-    translation_service_company: str = Field(default="Iris Solutions", description="Translation service provider name")
+    translation_service_company: str = Field(..., description="Translation service provider name (from configuration)")
 
     @validator('documents')
     def validate_documents(cls, v):

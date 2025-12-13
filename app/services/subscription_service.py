@@ -58,7 +58,7 @@ class SubscriptionService:
 
         now = datetime.now(timezone.utc)
 
-        # Create subscription document
+        # Insert into MongoDB first to get the _id
         subscription_doc = {
             "company_name": subscription_data.company_name,
             "subscription_unit": subscription_data.subscription_unit,
@@ -70,14 +70,23 @@ class SubscriptionService:
             "start_date": subscription_data.start_date,
             "end_date": subscription_data.end_date,
             "status": subscription_data.status,
+            "billing_frequency": subscription_data.billing_frequency,
+            "payment_terms_days": subscription_data.payment_terms_days,
             "usage_periods": [],
             "created_at": now,
             "updated_at": now
         }
 
-        # Insert into MongoDB
         result = await database.subscriptions.insert_one(subscription_doc)
         subscription_doc["_id"] = result.inserted_id
+
+        # Update the document to include subscription_id field that matches _id
+        subscription_id_str = str(result.inserted_id)
+        await database.subscriptions.update_one(
+            {"_id": result.inserted_id},
+            {"$set": {"subscription_id": subscription_id_str}}
+        )
+        subscription_doc["subscription_id"] = subscription_id_str
 
         logger.info(f"[SUBSCRIPTION] Created subscription ID: {result.inserted_id}")
 
@@ -160,7 +169,7 @@ class SubscriptionService:
         result = await database.subscriptions.find_one_and_update(
             {"_id": ObjectId(subscription_id)},
             {"$set": update_dict},
-            return_document=True
+            return_document=ReturnDocument.AFTER
         )
 
         if result:
@@ -248,8 +257,19 @@ class SubscriptionService:
         logger.info(f"[RECORD_USAGE] Usage periods count: {len(usage_periods)}")
         print(f"[RECORD_USAGE] Usage periods count: {len(usage_periods)}")
 
+        # CRITICAL: Validate usage periods exist before attempting usage recording
         if not usage_periods:
-            raise SubscriptionError("No usage periods defined")
+            logger.error(
+                f"[SUBSCRIPTION] ❌ CRITICAL: No usage periods found for subscription {subscription_id}. "
+                f"Usage periods must be added via POST /api/subscriptions/{subscription_id}/usage-periods "
+                f"before recording usage."
+            )
+            raise SubscriptionError(
+                f"Subscription {subscription_id} has no usage periods. "
+                f"Admin must add usage period via API before recording usage. "
+                f"Use POST /api/subscriptions/{subscription_id}/usage-periods with period_start, "
+                f"period_end, and units_allocated."
+            )
 
         now = datetime.now(timezone.utc)
         current_period_idx = None
@@ -307,19 +327,33 @@ class SubscriptionService:
         logger.info(f"[RECORD_USAGE] Total available: {total_available}, Need: {units_to_add}")
         print(f"[RECORD_USAGE] Total available: {total_available}, Need: {units_to_add}")
 
-        # Check if we have enough (must have at least units_needed, can be equal)
-        if total_available < units_to_add:
-            logger.warning(
-                f"[SUBSCRIPTION] Insufficient units for subscription {subscription_id}. "
-                f"Need {units_to_add}, have {total_available} "
-                f"(promotional: {promotional_units_in_period}, allocated: {units_allocated}, used: {units_used})"
-            )
-            raise SubscriptionError(
-                f"Insufficient units. Need {units_to_add}, have {total_available} "
-                f"(promotional: {promotional_units_in_period}, allocated: {units_allocated}, used: {units_used})"
-            )
+        # Check if we have enough units (overdraft allowed for enterprise)
+        overdraft_detected = total_available < units_to_add
+        overdraft_amount = 0
+        exceeds_soft_limit = False
 
-        print(f"[RECORD_USAGE] ✅ Passed validation checks, about to update MongoDB")
+        if overdraft_detected:
+            overdraft_amount = units_to_add - total_available
+            # Calculate new balance after deduction
+            new_balance_preview = total_available - units_to_add
+
+            # Import settings to check soft limit
+            from app.config import settings
+            exceeds_soft_limit = new_balance_preview < settings.subscription_soft_limit
+
+            logger.warning(
+                f"[OVERDRAFT] Subscription {subscription_id}: "
+                f"Need {units_to_add}, have {total_available}, "
+                f"overdraft: {overdraft_amount}, new_balance: {new_balance_preview}"
+            )
+            print(f"[OVERDRAFT] ⚠️  Overdraft detected: {overdraft_amount} units")
+            print(f"[OVERDRAFT] New balance will be: {new_balance_preview}")
+            if exceeds_soft_limit:
+                print(f"[OVERDRAFT] ⚠️  Exceeds soft limit ({settings.subscription_soft_limit})")
+        else:
+            print(f"[RECORD_USAGE] ✅ Sufficient units available")
+
+        print(f"[RECORD_USAGE] Proceeding with MongoDB update")
         logger.info(f"[RECORD_USAGE] ✅ Passed validation checks, about to update MongoDB")
 
         # Log before update
@@ -357,6 +391,16 @@ class SubscriptionService:
             logger.info(f"[SUBSCRIPTION UPDATE] ✅ Update successful")
             logger.info(f"[SUBSCRIPTION UPDATE] New units_used: {updated_period.get('units_used', 0)}")
             logger.info(f"[SUBSCRIPTION UPDATE] Last updated: {updated_period.get('last_updated')}")
+
+            # Add overdraft information to the result
+            result["overdraft"] = overdraft_detected
+            result["overdraft_amount"] = overdraft_amount
+            result["exceeds_soft_limit"] = exceeds_soft_limit
+            result["available_units"] = total_available
+            result["requested_units"] = units_to_add
+
+            if overdraft_detected:
+                logger.info(f"[SUBSCRIPTION] Overdraft info added to result: {overdraft_amount} units")
         else:
             logger.error(f"[SUBSCRIPTION UPDATE] ❌ Update failed - no document returned")
 

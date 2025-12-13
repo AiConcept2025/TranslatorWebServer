@@ -9,7 +9,11 @@ from typing import Optional, List
 import logging
 from datetime import datetime, timezone
 from pymongo.errors import DuplicateKeyError
+from pymongo import ReturnDocument
+from bson.errors import InvalidId
+from decimal import Decimal
 
+from app.database.mongodb import database
 from app.services.subscription_service import subscription_service, SubscriptionError
 from app.models.subscription import (
     SubscriptionCreate,
@@ -25,7 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/subscriptions", tags=["Subscriptions"])
 
 
-@router.post("/", response_model=dict)
+@router.post("", response_model=dict)
 async def create_subscription(
     subscription_data: SubscriptionCreate,
     admin: dict = Depends(get_admin_user)
@@ -78,15 +82,19 @@ async def create_subscription(
         logger.info(f"✅ Subscription created: id={subscription['_id']}, "
                    f"company={subscription['company_name']}, status={subscription['status']}")
 
+        subscription_id = str(subscription["_id"])
         response_data = {
             "success": True,
             "message": "Subscription created successfully",
+            "subscription_id": subscription_id,  # Backward compatibility - at root level
             "data": {
-                "subscription_id": str(subscription["_id"]),
+                "subscription_id": subscription_id,
                 "company_name": subscription["company_name"],
                 "subscription_unit": subscription["subscription_unit"],
                 "units_per_subscription": subscription["units_per_subscription"],
-                "status": subscription["status"]
+                "status": subscription["status"],
+                "billing_frequency": subscription.get("billing_frequency", "quarterly"),
+                "payment_terms_days": subscription.get("payment_terms_days", 30)
             }
         }
         logger.info(f"📤 Response: {response_data}")
@@ -112,13 +120,21 @@ async def get_subscription(
     subscription_id: str
 ):
     """
-    Get subscription details by ID.
+    Get subscription details by ID (ObjectId or subscription_id field).
     """
     timestamp = datetime.now(timezone.utc).isoformat()
     logger.info(f"🔍 [{timestamp}] GET /api/subscriptions/{subscription_id} - START")
     logger.info(f"📥 Request Param: subscription_id={subscription_id}")
 
+    # Try to get by ObjectId first, then by subscription_id field
     subscription = await subscription_service.get_subscription(subscription_id)
+
+    # If not found by ObjectId, try by subscription_id field
+    if not subscription:
+        logger.info(f"🔎 Not found by ObjectId, trying subscription_id field...")
+        subscription = await database.subscriptions.find_one({"subscription_id": subscription_id})
+        logger.info(f"🔎 Query by subscription_id field: found={subscription is not None}")
+
     logger.info(f"🔎 Database Query Result: found={subscription is not None}")
 
     if not subscription:
@@ -163,12 +179,14 @@ async def get_subscription(
             "subscription_unit": subscription["subscription_unit"],
             "units_per_subscription": subscription["units_per_subscription"],
             "price_per_unit": subscription["price_per_unit"],
-            "promotional_units": subscription["promotional_units"],
-            "discount": subscription["discount"],
+            "promotional_units": subscription.get("promotional_units", 0),
+            "discount": subscription.get("discount", 1.0),
             "subscription_price": subscription["subscription_price"],
             "start_date": subscription["start_date"].isoformat(),
             "end_date": subscription["end_date"].isoformat() if subscription.get("end_date") else None,
             "status": subscription["status"],
+            "billing_frequency": subscription.get("billing_frequency", "quarterly"),
+            "payment_terms_days": subscription.get("payment_terms_days", 30),
             "usage_periods": [serialize_usage_period(period) for period in subscription.get("usage_periods", [])],
             "created_at": subscription["created_at"].isoformat(),
             "updated_at": subscription["updated_at"].isoformat()
@@ -231,35 +249,41 @@ async def get_company_subscriptions(
             "last_updated": period.get("updated_at", period.get("period_end")).isoformat() if period.get("updated_at") or period.get("period_end") else None
         }
 
-    response_data = {
-        "success": True,
-        "data": {
-            "company_name": company_name,
-            "count": len(subscriptions),
-            "subscriptions": [
-                {
-                    "_id": str(sub["_id"]),
-                    "company_name": sub.get("company_name", company_name),
-                    "subscription_unit": sub["subscription_unit"],
-                    "units_per_subscription": sub["units_per_subscription"],
-                    "price_per_unit": sub["price_per_unit"],
-                    "promotional_units": sub.get("promotional_units", 0),
-                    "discount": sub.get("discount", 1.0),
-                    "subscription_price": sub["subscription_price"],
-                    "status": sub["status"],
-                    "start_date": sub["start_date"].isoformat(),
-                    "end_date": sub["end_date"].isoformat() if sub.get("end_date") else None,
-                    "usage_periods": [serialize_usage_period(period) for period in sub.get("usage_periods", [])],
-                    "created_at": sub["created_at"].isoformat(),
-                    "updated_at": sub["updated_at"].isoformat()
-                }
-                for sub in subscriptions
-            ]
+    # Serialize subscriptions list
+    subscriptions_list = [
+        {
+            "_id": str(sub["_id"]),
+            "subscription_id": sub.get("subscription_id", str(sub["_id"])),
+            "company_name": sub.get("company_name", company_name),
+            "subscription_unit": sub["subscription_unit"],
+            "units_per_subscription": sub["units_per_subscription"],
+            "price_per_unit": sub["price_per_unit"],
+            "promotional_units": sub.get("promotional_units", 0),
+            "discount": sub.get("discount", 1.0),
+            "subscription_price": sub["subscription_price"],
+            "status": sub["status"],
+            "billing_frequency": sub.get("billing_frequency", "quarterly"),
+            "payment_terms_days": sub.get("payment_terms_days", 30),
+            "start_date": sub["start_date"].isoformat(),
+            "end_date": sub["end_date"].isoformat() if sub.get("end_date") else None,
+            "usage_periods": [serialize_usage_period(period) for period in sub.get("usage_periods", [])],
+            "created_at": sub["created_at"].isoformat(),
+            "updated_at": sub["updated_at"].isoformat()
         }
+        for sub in subscriptions
+    ]
+
+    # Return nested structure matching frontend expectations:
+    # response.data.data gives us {company_name, count, subscriptions: [...]}
+    response_data = {
+        "company_name": company_name,
+        "count": len(subscriptions_list),
+        "subscriptions": subscriptions_list
     }
-    logger.info(f"📤 Response: success=True, count={len(subscriptions)}, "
+
+    logger.info(f"📤 Response: nested structure with data wrapper, count={len(subscriptions)}, "
                f"company_name={company_name}")
-    return JSONResponse(content=response_data)
+    return JSONResponse(content={"data": response_data})
 
 
 @router.options("/{subscription_id}")
@@ -318,7 +342,6 @@ async def options_subscription(subscription_id: str, request: Request):
 @router.patch("/{subscription_id}")
 async def update_subscription(
     subscription_id: str,
-    request: Request,
     update_data: SubscriptionUpdate,
     admin: dict = Depends(get_admin_user)
 ):
@@ -332,18 +355,7 @@ async def update_subscription(
     logger.info(f"   - Admin User: {admin.get('email', 'unknown')}")
 
     # ============================================================
-    # STEP 1: Log Raw Request Body (Before Pydantic Validation)
-    # ============================================================
-    try:
-        raw_body = await request.body()
-        raw_body_str = raw_body.decode('utf-8') if raw_body else "{}"
-        logger.info(f"📨 Raw Request Body: {raw_body_str}")
-    except Exception as e:
-        logger.error(f"❌ Failed to read raw request body: {e}")
-        raw_body_str = "<unable to read>"
-
-    # ============================================================
-    # STEP 2: Pydantic Validation Logging
+    # STEP 1: Pydantic Validation Logging
     # ============================================================
     # NOTE: FastAPI automatically validates the request body against the SubscriptionUpdate
     # Pydantic model BEFORE this function is called. If validation fails, FastAPI returns
@@ -389,9 +401,37 @@ async def update_subscription(
     logger.info(f"📋 Full Update Payload: {update_dict}")
 
     try:
+        # Try to update by ObjectId first
         logger.info(f"🔄 Calling subscription_service.update_subscription()...")
-        subscription = await subscription_service.update_subscription(subscription_id, update_data)
-        logger.info(f"🔎 Database Update Result: found={subscription is not None}")
+        try:
+            subscription = await subscription_service.update_subscription(subscription_id, update_data)
+            logger.info(f"🔎 Database Update Result (by ObjectId): found={subscription is not None}")
+        except InvalidId:
+            # Not a valid ObjectId, will try subscription_id field below
+            logger.info(f"🔎 subscription_id is not a valid ObjectId, trying subscription_id field...")
+            subscription = None
+
+        # If not found by ObjectId, try by subscription_id field
+        if not subscription:
+            logger.info(f"🔎 Not found by ObjectId, trying update by subscription_id field...")
+
+            # Get only fields that were actually set in the request
+            update_dict = update_data.model_dump(exclude_unset=True)
+
+            if update_dict:
+                # Convert Decimal to float for MongoDB
+                for key, value in update_dict.items():
+                    if isinstance(value, Decimal):
+                        update_dict[key] = float(value)
+
+                update_dict["updated_at"] = datetime.now(timezone.utc)
+
+                subscription = await database.subscriptions.find_one_and_update(
+                    {"subscription_id": subscription_id},
+                    {"$set": update_dict},
+                    return_document=ReturnDocument.AFTER
+                )
+                logger.info(f"🔎 Database Update Result (by subscription_id): found={subscription is not None}")
 
         if not subscription:
             logger.warning(f"❌ Subscription not found for update: id={subscription_id}")
@@ -409,6 +449,8 @@ async def update_subscription(
             "data": {
                 "subscription_id": str(subscription["_id"]),
                 "status": subscription["status"],
+                "billing_frequency": subscription.get("billing_frequency", "quarterly"),
+                "payment_terms_days": subscription.get("payment_terms_days", 30),
                 "updated_at": subscription["updated_at"].isoformat()
             }
         }

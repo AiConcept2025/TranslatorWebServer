@@ -17,9 +17,6 @@ logger = logging.getLogger(__name__)
 async def get_current_user(
     authorization: Optional[str] = Header(None)
 ) -> Dict[str, Any]:
-    # DEBUG: Print immediately when dependency is invoked
-    print("🟢 DEBUG: get_current_user() INVOKED - FastAPI dependency system working")
-    print(f"🟢 DEBUG: Authorization header present: {bool(authorization)}")
     """
     Dependency to extract and verify session token from Authorization header.
 

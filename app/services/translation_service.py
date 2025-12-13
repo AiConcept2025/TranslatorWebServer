@@ -5,7 +5,7 @@ Translation service for handling text and file translations.
 import asyncio
 import uuid
 from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import json
 import re
@@ -96,8 +96,8 @@ class TranslationService:
             'service_used': None,
             'result': None,
             'error': None,
-            'created_at': datetime.utcnow(),
-            'updated_at': datetime.utcnow(),
+            'created_at': datetime.now(timezone.utc),
+            'updated_at': datetime.now(timezone.utc),
             'progress': 0.0
         }
         
@@ -146,8 +146,8 @@ class TranslationService:
             'service_used': None,
             'result': None,
             'error': None,
-            'created_at': datetime.utcnow(),
-            'updated_at': datetime.utcnow(),
+            'created_at': datetime.now(timezone.utc),
+            'updated_at': datetime.now(timezone.utc),
             'progress': 0.0
         }
         
@@ -315,7 +315,7 @@ class TranslationService:
             # Update task status
             task['status'] = TranslationStatus.PROCESSING
             task['progress'] = 0.1
-            task['updated_at'] = datetime.utcnow()
+            task['updated_at'] = datetime.now(timezone.utc)
             
             text = task['text']
             source_lang = task['source_language']
@@ -330,7 +330,7 @@ class TranslationService:
             
             task['service_used'] = selected_service
             task['progress'] = 0.3
-            task['updated_at'] = datetime.utcnow()
+            task['updated_at'] = datetime.now(timezone.utc)
             
             # Perform translation
             translated_text = await self._translate_with_service(
@@ -338,7 +338,7 @@ class TranslationService:
             )
             
             task['progress'] = 0.8
-            task['updated_at'] = datetime.utcnow()
+            task['updated_at'] = datetime.now(timezone.utc)
             
             # Detect source language if not provided
             if not source_lang:
@@ -360,12 +360,12 @@ class TranslationService:
             task['result'] = result.dict()
             task['status'] = TranslationStatus.COMPLETED
             task['progress'] = 1.0
-            task['updated_at'] = datetime.utcnow()
+            task['updated_at'] = datetime.now(timezone.utc)
             
         except Exception as e:
             task['status'] = TranslationStatus.FAILED
             task['error'] = str(e)
-            task['updated_at'] = datetime.utcnow()
+            task['updated_at'] = datetime.now(timezone.utc)
     
     def _select_best_service(self, char_count: int, target_language: str) -> str:
         """Select the best translation service based on requirements."""

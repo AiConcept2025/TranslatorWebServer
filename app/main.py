@@ -17,7 +17,7 @@ import asyncio
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit, dashboard
+from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit, dashboard, webhooks
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities
@@ -113,6 +113,7 @@ app.include_router(upload.router)
 app.include_router(submit.router)  # File submission endpoint
 app.include_router(payment.router)  # Simplified payment webhooks
 app.include_router(payments.router)  # Payment management API
+app.include_router(webhooks.router)  # Stripe webhooks API
 app.include_router(user_transactions.router)  # User transaction payment API
 app.include_router(invoices.router)  # Invoice management API
 app.include_router(translation_transactions.router)  # Translation transaction management API
@@ -341,8 +342,21 @@ async def create_transaction_record(
         return transaction_id
 
     except Exception as e:
-        logging.error(f"[TRANSACTION] ❌ FAILED to create transaction: {e}")
-        print(f"   ❌ [TRANSACTION] Failed to create transaction: {e}")
+        import traceback
+        error_type = type(e).__name__
+        error_msg = str(e)
+        stack_trace = traceback.format_exc()
+
+        logging.error(f"[TRANSACTION] ❌ FAILED to create transaction")
+        logging.error(f"[TRANSACTION] Error Type: {error_type}")
+        logging.error(f"[TRANSACTION] Error Message: {error_msg}")
+        logging.error(f"[TRANSACTION] Stack Trace:\n{stack_trace}")
+
+        print(f"   ❌ [TRANSACTION] Failed to create transaction")
+        print(f"   ❌ Error Type: {error_type}")
+        print(f"   ❌ Error Message: {error_msg}")
+        print(f"   ❌ See logs for full stack trace")
+
         return None
 
 
@@ -352,10 +366,6 @@ async def translate_files(
     request: TranslateRequest = Body(...),
     current_user: Optional[dict] = Depends(get_optional_user)
 ):
-    # DEBUG: This line should appear immediately after Pydantic validation succeeds
-    print("🔵 DEBUG: Endpoint function STARTED - Pydantic validation PASSED")
-    print(f"🔵 DEBUG: Received {len(request.files)} files")
-    print(f"🔵 DEBUG: First file name: {request.files[0].name if request.files else 'NO FILES'}")
     """
     SIMPLIFIED TRANSLATE ENDPOINT:
     1. Upload files to Google Drive {customer_email}/Temp/ folder
@@ -364,31 +374,6 @@ async def translate_files(
     4. Frontend processes payment with customer_email
     5. Payment webhook moves files from Temp/ to Inbox/
     """
-    # ============================================================================
-    # RAW INCOMING DATA - Logged immediately after Pydantic validation
-    # ============================================================================
-    print("=" * 100)
-    print("[RAW INCOMING DATA] /translate ENDPOINT REACHED - Pydantic validation passed")
-    print(f"[RAW INCOMING DATA] Authenticated User: {current_user.get('email', 'N/A') if current_user else 'None (Individual User)'}")
-    print(f"[RAW INCOMING DATA] Company Name: {current_user.get('company_name', 'N/A') if current_user else 'None (Individual User)'}")
-    print(f"[RAW INCOMING DATA] Permission: {current_user.get('permission_level', 'N/A') if current_user else 'None (Individual User)'}")
-    print(f"[RAW INCOMING DATA] Request Data:")
-    print(f"[RAW INCOMING DATA]   - Customer Email: {request.email}")
-    print(f"[RAW INCOMING DATA]   - Source Language: {request.sourceLanguage}")
-    print(f"[RAW INCOMING DATA]   - Target Language: {request.targetLanguage}")
-    print(f"[RAW INCOMING DATA]   - Number of Files: {len(request.files)}")
-    print(f"[RAW INCOMING DATA]   - Payment Intent ID: {request.paymentIntentId or 'None'}")
-    print(f"[RAW INCOMING DATA]   - File Translation Modes: {len(request.fileTranslationModes) if request.fileTranslationModes else 0} entries")
-    if request.fileTranslationModes:
-        for mode_info in request.fileTranslationModes:
-            print(f"[RAW INCOMING DATA]     - {mode_info.fileName}: {mode_info.translationMode.value}")
-    else:
-        print(f"[RAW INCOMING DATA]   ⚠️ NO fileTranslationModes received - will use default (automatic)")
-    print(f"[RAW INCOMING DATA] Files Details:")
-    for i, file_info in enumerate(request.files, 1):
-        print(f"[RAW INCOMING DATA]   File {i}: '{file_info.name}' | {file_info.size:,} bytes | Type: {file_info.type} | ID: {file_info.id}")
-    print("=" * 100)
-
     # Initialize timing tracker
     request_start_time = time.time()
 
@@ -805,27 +790,142 @@ async def translate_files(
 
     # Determine if payment is required based on enterprise subscription
     payment_required = True
+    overdraft_detected = False
+    overdraft_amount = 0
+    exceeds_soft_limit = False
+    subscription_info_dict = None
+
     if is_enterprise and subscription:
-        # Check if enterprise has enough units
-        if total_remaining >= total_pages:
-            payment_required = False
-            log_step("PAYMENT BYPASS", f"Enterprise has {total_remaining} units remaining (needs {total_pages})")
-            logging.info(f"[PAYMENT] ✓ Payment NOT required - using subscription units")
-            logging.info(f"[PAYMENT]   Required: {total_pages} {subscription_unit}s")
-            logging.info(f"[PAYMENT]   Available: {total_remaining} {subscription_unit}s")
-            print(f"\n✅ Payment NOT required - using subscription units")
-            print(f"   Required: {total_pages} {subscription_unit}s")
-            print(f"   Available: {total_remaining} {subscription_unit}s")
-        else:
-            log_step("PAYMENT REQUIRED", f"Insufficient units: {total_remaining} remaining, {total_pages} needed")
-            logging.warning(f"[PAYMENT] ⚠ Payment required - insufficient subscription units")
-            logging.warning(f"[PAYMENT]   Required: {total_pages} {subscription_unit}s")
-            logging.warning(f"[PAYMENT]   Available: {total_remaining} {subscription_unit}s")
-            logging.warning(f"[PAYMENT]   Shortfall: {total_pages - total_remaining} {subscription_unit}s")
-            print(f"\n⚠️  Payment required - insufficient subscription units")
-            print(f"   Required: {total_pages} {subscription_unit}s")
-            print(f"   Available: {total_remaining} {subscription_unit}s")
-            print(f"   Shortfall: {total_pages - total_remaining} {subscription_unit}s")
+        # Record subscription usage per file with individual translation modes
+        try:
+            # Import UsageUpdate model for type-safe usage recording
+            from app.models.subscription import UsageUpdate
+
+            # Build a map of fileName → translationMode from request
+            mode_map = {}
+            if request.fileTranslationModes:
+                mode_map = {
+                    mode_info.fileName: mode_info.translationMode.value
+                    for mode_info in request.fileTranslationModes
+                }
+                log_step("TRANSLATION MODES", f"Received modes for {len(mode_map)} files")
+
+            # Record usage for each file separately (per-file pricing)
+            updated_subscription = None
+            for file_info in stored_files:
+                # Only process successfully stored files
+                if file_info.get("status") != "stored":
+                    continue
+
+                file_name = file_info.get("filename")
+                pages = file_info.get("page_count", 1)
+                mode = mode_map.get(file_name, "default")
+
+                usage_update = UsageUpdate(
+                    units_to_add=pages,
+                    translation_mode=mode,
+                    use_promotional_units=False
+                )
+
+                # Record usage for THIS file
+                updated_subscription = await subscription_service.record_usage(
+                    subscription_id=str(subscription["_id"]),
+                    usage_data=usage_update
+                )
+
+                log_step("FILE USAGE RECORDED", f"'{file_name}': {pages} units (mode: {mode})")
+
+            # Extract overdraft information from final subscription state
+            if updated_subscription:
+                overdraft_detected = updated_subscription.get("overdraft", False)
+                overdraft_amount = updated_subscription.get("overdraft_amount", 0)
+                exceeds_soft_limit = updated_subscription.get("exceeds_soft_limit", False)
+
+                # Enterprise users don't require payment (using subscription, even if overdraft)
+                payment_required = False
+
+                # Get current period from usage_periods array
+                usage_periods = updated_subscription.get("usage_periods", [])
+
+                if not usage_periods:
+                    log_step("SUBSCRIPTION ERROR", "No usage periods found in subscription")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Subscription has no usage periods configured. Contact administrator."
+                    )
+
+                # Get current period and validate by date comparison
+                now = datetime.now(timezone.utc)
+                current_period = None
+
+                for period in usage_periods:
+                    period_start = period.get("period_start")
+                    period_end = period.get("period_end")
+
+                    # Ensure datetime objects have timezone info
+                    if period_start and not period_start.tzinfo:
+                        period_start = period_start.replace(tzinfo=timezone.utc)
+                    if period_end and not period_end.tzinfo:
+                        period_end = period_end.replace(tzinfo=timezone.utc)
+
+                    # Validate: today's date must fall within period
+                    if period_start and period_end and period_start <= now <= period_end:
+                        current_period = period
+                        log_step(
+                            "CURRENT PERIOD FOUND",
+                            f"Period: {period_start.date()} to {period_end.date()}, "
+                            f"Allocated: {period.get('units_allocated', 0)}, "
+                            f"Used: {period.get('units_used', 0)}, "
+                            f"Remaining: {period.get('units_remaining', 0)}"
+                        )
+                        break
+
+                if not current_period:
+                    log_step("SUBSCRIPTION ERROR", "No valid period found for current date")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="No active subscription period found for current date. Contact administrator."
+                    )
+
+                # Extract subscription data from validated current period
+                subscription_info_dict = {
+                    "units_allocated": current_period.get("units_allocated", 0),
+                    "units_used": current_period.get("units_used", 0),
+                    "units_remaining": current_period.get("units_remaining", 0),
+                    "promotional_units": current_period.get("promotional_units", 0),
+                    "subscription_unit": subscription_unit
+                }
+            else:
+                # Fallback if no files were processed
+                log_step("SUBSCRIPTION WARNING", "No files processed, skipping usage recording")
+                payment_required = True
+
+            if overdraft_detected:
+                log_step("OVERDRAFT DETECTED", f"Overdraft: {overdraft_amount} units, Soft limit exceeded: {exceeds_soft_limit}")
+                logging.warning(f"[OVERDRAFT] ⚠ Subscription overdraft detected")
+                logging.warning(f"[OVERDRAFT]   Required: {total_pages} {subscription_unit}s")
+                logging.warning(f"[OVERDRAFT]   Available: {total_remaining} {subscription_unit}s")
+                logging.warning(f"[OVERDRAFT]   Overdraft: {overdraft_amount} {subscription_unit}s")
+                logging.warning(f"[OVERDRAFT]   Exceeds soft limit: {exceeds_soft_limit}")
+                print(f"\n⚠️  Subscription overdraft")
+                print(f"   Required: {total_pages} {subscription_unit}s")
+                print(f"   Available: {total_remaining} {subscription_unit}s")
+                print(f"   Overdraft: {overdraft_amount} {subscription_unit}s")
+                if exceeds_soft_limit:
+                    print(f"   ⚠️  Exceeds soft limit (-100 pages)")
+            else:
+                log_step("SUBSCRIPTION USAGE", f"Using {total_pages} of {total_remaining} units available")
+                logging.info(f"[PAYMENT] ✓ Using subscription units (no overdraft)")
+                logging.info(f"[PAYMENT]   Required: {total_pages} {subscription_unit}s")
+                logging.info(f"[PAYMENT]   Available: {total_remaining} {subscription_unit}s")
+                print(f"\n✅ Using subscription units")
+                print(f"   Required: {total_pages} {subscription_unit}s")
+                print(f"   Available: {total_remaining} {subscription_unit}s")
+        except Exception as e:
+            log_step("SUBSCRIPTION ERROR", f"Error recording usage: {e}")
+            logging.error(f"[SUBSCRIPTION] Error recording usage: {e}")
+            # Fall back to requiring payment
+            payment_required = True
     else:
         log_step("PAYMENT REQUIRED", "Individual customer or no subscription")
         logging.info(f"[PAYMENT] Payment required for {'individual customer' if not is_enterprise else 'enterprise without subscription'}")
@@ -884,7 +984,14 @@ async def translate_files(
                         logging.error(f"[FILE {file_id[:20]}...] ❌ Failed to add transaction_id: {e}")
             log_step("FILE METADATA UPDATED", f"All files now have transaction_id={transaction_id}")
         else:
-            logging.error(f"[TRANSLATE] ❌ Failed to create transaction")
+            # CRITICAL: Transaction creation failed - cannot proceed
+            log_step("TRANSACTION FAILED", "Transaction creation returned None - cannot process files")
+            logging.error(f"[TRANSLATE] ❌ CRITICAL: Failed to create transaction record")
+            logging.error(f"[TRANSLATE] Files uploaded but cannot be processed without transaction record")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create transaction record. Files were uploaded but cannot be processed. Please contact support."
+            )
 
     logging.info(f"[TRANSLATE] ==============================================")
     log_step("TRANSACTION CREATE COMPLETE", f"Created {len(transaction_ids)} transaction(s) with {len(successful_stored_files)} total document(s)")
@@ -925,7 +1032,13 @@ async def translate_files(
                     "total_amount": None if is_enterprise else (total_pages * price_per_page),
                     "currency": None if is_enterprise else "USD",
                     "customer_type": "enterprise" if is_enterprise else "individual",
-                    "transaction_ids": transaction_ids  # Transaction IDs for all files
+                    "transaction_ids": transaction_ids,  # Transaction IDs for all files
+                    # Overdraft fields (for enterprise subscriptions)
+                    "overdraft": overdraft_detected,
+                    "overdraft_amount": overdraft_amount,
+                    "exceeds_soft_limit": exceeds_soft_limit,
+                    "available_units": total_remaining if is_enterprise and subscription else 0,
+                    "requested_units": total_pages
                 },
 
                 # File information
@@ -952,14 +1065,14 @@ async def translate_files(
                     "customer_email": request.email
                 },
 
-                # Subscription information (enterprise only)
-                "subscription": {
+                # Subscription information (enterprise only) - Use updated values if available
+                "subscription": subscription_info_dict if subscription_info_dict else ({
                     "units_allocated": units_allocated if is_enterprise and subscription else 0,
                     "units_used": total_used if is_enterprise and subscription else 0,
                     "units_remaining": total_remaining if is_enterprise and subscription else 0,
                     "promotional_units": promotional_units if is_enterprise and subscription else 0,
                     "subscription_unit": subscription_unit if is_enterprise and subscription else "page"
-                } if is_enterprise and subscription else None,
+                } if is_enterprise and subscription else None),
 
                 # User information (permission level and identity)
                 "user": user_info
@@ -1254,19 +1367,12 @@ async def confirm_transactions(
     try:
         # Fetch all transactions
         transactions = []
-        print(f"[CONFIRM DEBUG] Fetching {len(request.transaction_ids)} transaction(s) from database...")
         for txn_id in request.transaction_ids:
             txn = await database.translation_transactions.find_one({"transaction_id": txn_id})
             if txn:
                 transactions.append(txn)
-                print(f"[CONFIRM DEBUG] Found transaction {txn_id}")
-                print(f"[CONFIRM DEBUG]   - user_id: {txn.get('user_id', 'MISSING')}")
-                print(f"[CONFIRM DEBUG]   - original_file_url: {txn.get('original_file_url', 'MISSING')}")
-                print(f"[CONFIRM DEBUG]   - file_name: {txn.get('file_name', 'MISSING')}")
-                print(f"[CONFIRM DEBUG]   - status: {txn.get('status', 'MISSING')}")
             else:
                 logging.warning(f"[CONFIRM] Transaction {txn_id} not found")
-                print(f"[CONFIRM DEBUG] ❌ Transaction {txn_id} NOT FOUND in database")
 
         if not transactions:
             raise HTTPException(status_code=404, detail="No valid transactions found")
@@ -1275,15 +1381,11 @@ async def confirm_transactions(
         first_txn = transactions[0]
         customer_email = first_txn.get("user_id", "")  # user_id contains email
         company_name = first_txn.get("company_name")  # company_name for enterprise customers
-        print(f"[CONFIRM DEBUG] Customer email extracted: {customer_email}")
-        print(f"[CONFIRM DEBUG] Company name extracted: {company_name or 'None (individual customer)'}")
 
         # Get file IDs from original_file_url (Google Drive URLs contain file ID)
         file_ids = []
-        print(f"[CONFIRM DEBUG] Extracting file IDs from {len(transactions)} transaction(s)...")
-        for i, txn in enumerate(transactions, 1):
+        for txn in transactions:
             url = txn.get("original_file_url", "")
-            print(f"[CONFIRM DEBUG] Transaction {i}/{len(transactions)}: URL = '{url}'")
 
             # Extract file ID from Google Drive URL - handles multiple formats:
             # - Google Docs: https://docs.google.com/document/d/{file_id}/edit
@@ -1292,21 +1394,13 @@ async def confirm_transactions(
             file_id = None
             if "/document/d/" in url:
                 file_id = url.split("/document/d/")[1].split("/")[0]
-                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /document/d/ pattern: {file_id}")
             elif "/spreadsheets/d/" in url:
                 file_id = url.split("/spreadsheets/d/")[1].split("/")[0]
-                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /spreadsheets/d/ pattern: {file_id}")
             elif "/file/d/" in url:
                 file_id = url.split("/file/d/")[1].split("/")[0]
-                print(f"[CONFIRM DEBUG]   ✅ Extracted file_id from /file/d/ pattern: {file_id}")
-            else:
-                print(f"[CONFIRM DEBUG]   ❌ URL does not match any known Google Drive pattern - SKIPPED")
 
             if file_id:
                 file_ids.append(file_id)
-
-        print(f"[CONFIRM DEBUG] Total file IDs extracted: {len(file_ids)}")
-        print(f"[CONFIRM DEBUG] File IDs: {file_ids}")
 
         # Log what we're about to do (fast - logging only)
         if company_name:
@@ -1605,40 +1699,9 @@ async def confirm_enterprise_transaction(
                 if failed_count > 0:
                     logging.warning(f"[CONFIRM-ENTERPRISE] {failed_count} files failed to move")
 
-                # Update subscription usage
-                subscription_id = transaction.get("subscription_id")
-                units_count = transaction.get("units_count", 0)
-
-                # Determine translation mode from documents (mixed if multiple modes)
-                unique_modes = set(doc.get("translation_mode", "automatic") for doc in documents)
-                transaction_mode = "mixed" if len(unique_modes) > 1 else next(iter(unique_modes))
-
-                logging.info(f"[CONFIRM-ENTERPRISE] Subscription tracking - ID: {subscription_id}, Units: {units_count}, Mode: {transaction_mode}")
-
-                if subscription_id and units_count > 0:
-                    from app.services.subscription_service import subscription_service
-                    from app.models.subscription import UsageUpdate
-
-                    try:
-                        usage_update = UsageUpdate(
-                            units_to_add=units_count,
-                            use_promotional_units=False,
-                            translation_mode=transaction_mode  # Include mode for logging
-                        )
-                        await subscription_service.record_usage(
-                            subscription_id=str(subscription_id),
-                            usage_data=usage_update
-                        )
-                        logging.info(f"[CONFIRM-ENTERPRISE] Updated subscription usage: +{units_count} units (mode: {transaction_mode})")
-                    except Exception as e:
-                        logging.error(f"[CONFIRM-ENTERPRISE] Subscription update failed: {e}")
-                        # Don't fail the entire operation if usage tracking fails
-                        # The files were moved successfully, so we should return success
-                else:
-                    logging.warning(
-                        f"[CONFIRM-ENTERPRISE] Skipping subscription update - "
-                        f"subscription_id: {subscription_id}, units_count: {units_count}"
-                    )
+                # NOTE: Subscription usage is already recorded during upload (per-file)
+                # No need to record usage again here - would cause double-charging
+                logging.info(f"[CONFIRM-ENTERPRISE] Subscription usage already recorded during upload")
 
                 return JSONResponse(
                     status_code=200,
@@ -2221,7 +2284,7 @@ def custom_openapi():
             "description": "Development server"
         },
         {
-            "url": "https://api.translator.example.com",
+            "url": settings.api_url if settings.api_url else "https://api.example.com",
             "description": "Production server"
         }
     ]
@@ -2234,6 +2297,44 @@ app.openapi = custom_openapi
 
 
 # Startup and shutdown functions
+async def initialize_stripe():
+    """
+    Initialize Stripe SDK with global configuration.
+
+    Phase 1 Migration: Stripe SDK v8.2.0
+    - Sets global API key for all Stripe operations
+    - Pins API version to prevent breaking changes from account defaults
+    - Adds app info for Stripe telemetry
+
+    Called during application startup (lifespan).
+    """
+    import stripe
+
+    # Skip initialization if Stripe API key not configured
+    if not settings.stripe_secret_key:
+        logging.warning("[STRIPE] Stripe API key not configured - skipping Stripe SDK initialization")
+        return
+
+    # Set global API key
+    stripe.api_key = settings.stripe_secret_key
+
+    # Pin API version for stability (prevents breaking changes when Stripe updates defaults)
+    # Version: 2025-11-17.clover (Stripe SDK v13.x default - latest)
+    # Breaking changes in v12.x: List.total_count removed (not used in our code)
+    # Breaking changes in v13.x: InvoiceLineItem.modify signature changed (not used in our code)
+    # Migration note: Reviewed and safe - webhook API stable, no breaking change usage
+    stripe.api_version = "2025-11-17.clover"
+
+    # Set app info for Stripe telemetry (helps Stripe support identify our integration)
+    stripe.app_info = {
+        "name": "TranslationService",
+        "version": settings.app_version,
+        "url": settings.api_url if settings.api_url else 'https://api.example.com'
+    }
+
+    logging.info(f"[STRIPE] Initialized Stripe SDK v{stripe.VERSION} with API version {stripe.api_version}")
+
+
 async def initialize_services():
     """Initialize application services."""
     logging.info("Initializing services...")
@@ -2249,6 +2350,9 @@ async def initialize_services():
     # Initialize translation services
     from app.services.translation_service import translation_service
     logging.info(f"Translation services available: {list(translation_service.services.keys())}")
+
+    # Initialize Stripe SDK (Phase 1: v8.2.0 migration)
+    await initialize_stripe()
 
     # Initialize payment service
     from app.services.payment_service import payment_service

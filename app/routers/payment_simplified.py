@@ -7,9 +7,28 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, Dict, Any
 import logging
+import stripe
+
+# Stripe error classes - explicit imports required for SDK 13.2.0+
+try:
+    from stripe.error import (
+        CardError, InvalidRequestError, AuthenticationError,
+        APIConnectionError, StripeError
+    )
+except ImportError:
+    from stripe._error import (
+        CardError, InvalidRequestError, AuthenticationError,
+        APIConnectionError, StripeError
+    )
 
 from app.services.google_drive_service import google_drive_service
 from app.services.pricing_service import pricing_service
+from app.services.payment_creation_service import payment_creation_service
+from app.utils.amount_converter import AmountConverter
+from app.config import settings
+
+# Configure Stripe API key
+stripe.api_key = settings.stripe_secret_key
 
 router = APIRouter(prefix="/api/payment", tags=["Payments"])
 
@@ -76,7 +95,8 @@ async def process_payment_files_background(
     currency: Optional[str],
     payment_metadata: Optional[PaymentMetadata] = None,
     transaction_id: Optional[str] = None,
-    file_ids: Optional[list[str]] = None
+    file_ids: Optional[list[str]] = None,
+    webhook_event_id: Optional[str] = None
 ):
     """
     Background task to move files from Temp to Inbox and persist payment data.
@@ -85,6 +105,7 @@ async def process_payment_files_background(
     Args:
         transaction_id: Pre-generated transaction ID from payment handler (if available)
         file_ids: File IDs from upload response (enables direct lookup, eliminates Drive search)
+        webhook_event_id: Stripe webhook event ID (if triggered by webhook)
     """
     import time
     task_start = time.time()
@@ -98,48 +119,41 @@ async def process_payment_files_background(
         print(f"   Customer: {customer_email}")
         print(f"   Payment ID: {payment_intent_id}")
         print(f"   Amount: ${amount} {currency}")
+        if webhook_event_id:
+            print(f"   Source: Webhook (event_id: {webhook_event_id})")
+        else:
+            print(f"   Source: Client Notification (fallback)")
         print("=" * 80)
 
-        # Step 0: Check for duplicate payment (idempotency)
-        print(f"\n🔍 Step 0: Checking for duplicate payment...")
-        idempotency_start = time.time()
-
-        from app.services.payment_repository import payment_repository
-        from app.models.payment import PaymentCreate
-
-        # Check if payment already processed
-        existing_payment = await payment_repository.get_payment_by_square_id(payment_intent_id)
-        if existing_payment:
-            idempotency_time = (time.time() - idempotency_start) * 1000
-            print(f"⏱️  Idempotency check completed in {idempotency_time:.2f}ms")
-            print(f"⚠️  Payment {payment_intent_id} already processed (duplicate webhook)")
-            print(f"✅ Returning early - payment ID: {existing_payment.get('_id')}")
-            logging.info(f"Duplicate payment webhook ignored: {payment_intent_id}")
-            return  # Exit early, don't reprocess
-
-        print(f"✅ No duplicate found, proceeding with payment persistence...")
-
-        # Step 1: Persist payment data to payments collection
-        print(f"\n💾 Step 1: Persisting payment data to database...")
+        # Step 0: Create or update payment using centralized service (idempotent)
+        print(f"\n💾 Step 0: Creating payment record (idempotent)...")
         persist_start = time.time()
 
         try:
-            # Fix: Only use valid PaymentCreate fields (no company_name for individual users)
-            payment_data = PaymentCreate(
-                company_name=None,  # Individual users don't have companies
-                user_email=customer_email,
-                stripe_payment_intent_id=payment_intent_id,
-                amount=int((amount or 0) * 100) if amount else 0,  # Convert to cents
-                currency=currency or "USD",
-                payment_status="COMPLETED",  # Use schema enum value
-                payment_date=None  # Will default to now() in repository
+            # Use centralized payment creation service
+            result = await payment_creation_service.create_or_update_payment(
+                payment_intent_id=payment_intent_id,
+                amount_cents=AmountConverter.dollars_to_cents(amount or 0.0),
+                currency=currency or "usd",
+                customer_email=customer_email,
+                webhook_event_id=webhook_event_id,
+                metadata={}
             )
-            # Note: card_brand, last4, receipt_url stored in metadata collection separately
 
-            payment_id = await payment_repository.create_payment(payment_data)
             persist_time = (time.time() - persist_start) * 1000
             print(f"⏱️  Payment persistence completed in {persist_time:.2f}ms")
+
+            if not result["created"]:
+                # Payment already existed - duplicate webhook
+                print(f"⚠️  Payment {payment_intent_id} already processed (duplicate webhook)")
+                print(f"✅ Returning early - payment ID: {result['payment'].get('_id')}")
+                logging.info(f"[PAYMENT] Duplicate payment webhook ignored: {payment_intent_id}")
+                return  # Exit early, don't reprocess
+
+            payment_id = str(result["payment"]["_id"])
             print(f"✅ Payment record created with ID: {payment_id}")
+            logging.info(f"[PAYMENT] New payment created: {payment_intent_id}")
+
         except Exception as e:
             persist_time = (time.time() - persist_start) * 1000
             print(f"⏱️  Payment persistence attempted in {persist_time:.2f}ms")
@@ -295,6 +309,147 @@ async def process_payment_files_background(
         logging.error(f"Background file processing error for {customer_email}: {e}", exc_info=True)
 
 
+class CreatePaymentIntentRequest(BaseModel):
+    """Request model for creating a Stripe payment intent."""
+    amount: int = Field(..., description="Amount in cents (e.g., 5000 = $50.00)", gt=0)
+    currency: str = Field(default="usd", description="Currency code (ISO 4217)")
+    metadata: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional metadata (email, file_ids, etc.)"
+    )
+
+
+@router.post("/create-intent")
+async def create_payment_intent(request: CreatePaymentIntentRequest):
+    """
+    Create Stripe payment intent.
+
+    Args:
+        amount: Amount in cents (e.g., 5000 = $50.00)
+        currency: Currency code (default: usd)
+        metadata: Optional metadata (email, file_ids, etc.)
+
+    Returns:
+        {
+            "clientSecret": "pi_xxx_secret_yyy",
+            "paymentIntentId": "pi_xxx"
+        }
+
+    Raises:
+        HTTPException: 400 if Stripe API error occurs
+    """
+    print("\n" + "=" * 80)
+    print("💳 CREATE PAYMENT INTENT REQUEST")
+    print("=" * 80)
+    print(f"Amount: ${AmountConverter.cents_to_dollars(request.amount):.2f} ({request.amount} cents)")
+    print(f"Currency: {request.currency.upper()}")
+    if request.metadata:
+        print(f"Metadata: {request.metadata}")
+    print("=" * 80)
+
+    try:
+        # TEST MODE: Return mock payment intent without calling Stripe API
+        if settings.is_test_mode():
+            import uuid
+            mock_intent_id = f"pi_test_{uuid.uuid4().hex[:24]}"
+            mock_client_secret = f"{mock_intent_id}_secret_{uuid.uuid4().hex[:16]}"
+
+            print(f"\n✅ TEST MODE: Mock payment intent created")
+            print(f"   Payment Intent ID: {mock_intent_id}")
+            print(f"   Client Secret: {mock_client_secret[:20]}...")
+            print(f"   Amount: ${AmountConverter.cents_to_dollars(request.amount):.2f} {request.currency.upper()}")
+            print("=" * 80 + "\n")
+
+            logging.info(
+                f"TEST MODE: Mock payment intent created: {mock_intent_id} "
+                f"for ${AmountConverter.cents_to_dollars(request.amount):.2f} {request.currency.upper()}"
+            )
+
+            return JSONResponse(
+                content={
+                    "clientSecret": mock_client_secret,
+                    "paymentIntentId": mock_intent_id
+                },
+                status_code=200
+            )
+
+        # PRODUCTION MODE: Create real Stripe payment intent
+        intent = stripe.PaymentIntent.create(
+            amount=request.amount,
+            currency=request.currency,
+            metadata=request.metadata or {},
+            automatic_payment_methods={"enabled": True}
+        )
+
+        print(f"\n✅ Payment intent created successfully")
+        print(f"   Payment Intent ID: {intent.id}")
+        print(f"   Client Secret: {intent.client_secret[:20]}...")
+        print(f"   Amount: ${AmountConverter.cents_to_dollars(intent.amount):.2f} {intent.currency.upper()}")
+        print("=" * 80 + "\n")
+
+        logging.info(
+            f"Payment intent created: {intent.id} "
+            f"for ${AmountConverter.cents_to_dollars(intent.amount):.2f} {intent.currency.upper()}"
+        )
+
+        return JSONResponse(
+            content={
+                "clientSecret": intent.client_secret,
+                "paymentIntentId": intent.id
+            },
+            status_code=200
+        )
+
+    except CardError as e:
+        # Card was declined
+        error_msg = str(e.user_message) if hasattr(e, 'user_message') else str(e)
+        print(f"\n❌ Card error: {error_msg}")
+        print("=" * 80 + "\n")
+        logging.error(f"Stripe card error: {error_msg}")
+        raise HTTPException(status_code=400, detail=error_msg)
+
+    except InvalidRequestError as e:
+        # Invalid parameters
+        error_msg = str(e)
+        print(f"\n❌ Invalid request error: {error_msg}")
+        print("=" * 80 + "\n")
+        logging.error(f"Stripe invalid request: {error_msg}")
+        raise HTTPException(status_code=400, detail=error_msg)
+
+    except AuthenticationError as e:
+        # Authentication with Stripe API failed
+        error_msg = "Authentication with payment provider failed"
+        print(f"\n❌ Authentication error: {str(e)}")
+        print("=" * 80 + "\n")
+        logging.error(f"Stripe authentication error: {e}")
+        raise HTTPException(status_code=500, detail=error_msg)
+
+    except APIConnectionError as e:
+        # Network communication failed
+        error_msg = "Payment provider connection failed"
+        print(f"\n❌ API connection error: {str(e)}")
+        print("=" * 80 + "\n")
+        logging.error(f"Stripe API connection error: {e}")
+        raise HTTPException(status_code=503, detail=error_msg)
+
+    except StripeError as e:
+        # Generic Stripe error
+        error_msg = str(e)
+        print(f"\n❌ Stripe error: {error_msg}")
+        print("=" * 80 + "\n")
+        logging.error(f"Stripe error: {error_msg}")
+        raise HTTPException(status_code=400, detail=error_msg)
+
+    except Exception as e:
+        # Unexpected error
+        error_msg = "An unexpected error occurred while creating payment intent"
+        print(f"\n❌ Unexpected error: {str(e)}")
+        print(f"   Type: {type(e).__name__}")
+        print("=" * 80 + "\n")
+        logging.error(f"Unexpected error in create_payment_intent: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
 @router.post("/success")
 async def handle_payment_success(
     request: PaymentSuccessRequest,
@@ -343,6 +498,48 @@ async def handle_payment_success(
         print(f"   Payment ID: {payment_intent_id}")
         print(f"   Amount: ${request.amount} {request.currency}")
         print(f"   Payment Method: {request.payment_method}")
+
+        # CHECK: Has webhook already processed this payment?
+        # Webhook sets webhook_processing=True to claim payment processing
+        check_webhook_start = time.time()
+        from app.database.mongodb import database
+        existing_payment = await database.payments.find_one({
+            "stripe_payment_intent_id": payment_intent_id
+        })
+
+        if existing_payment and existing_payment.get("webhook_processing"):
+            check_webhook_time = (time.time() - check_webhook_start) * 1000
+            total_time = (time.time() - start_time) * 1000
+
+            logging.info(
+                f"[CLIENT_NOTIFICATION] Payment {payment_intent_id} already "
+                f"processed by webhook (webhook_processing=True), skipping"
+            )
+
+            print(f"\n⚠️  WEBHOOK ALREADY PROCESSED THIS PAYMENT")
+            print(f"   Payment ID: {payment_intent_id}")
+            print(f"   Webhook processing flag: True")
+            print(f"   Skipping client-side processing")
+            print(f"⏱️  Webhook check time: {check_webhook_time:.2f}ms")
+            print(f"⏱️  TOTAL TIME: {total_time:.2f}ms")
+            print("=" * 80 + "\n")
+
+            return JSONResponse(content={
+                "success": True,
+                "message": "Payment already processed by webhook",
+                "data": {
+                    "customer_email": customer_email,
+                    "payment_intent_id": payment_intent_id,
+                    "status": "already_processed",
+                    "processed_by": "webhook",
+                    "processing_time_ms": round(total_time, 2)
+                }
+            })
+
+        check_webhook_time = (time.time() - check_webhook_start) * 1000
+        print(f"\n✅ WEBHOOK CHECK: Payment not yet processed by webhook")
+        print(f"   Proceeding with client-side processing (webhook fallback)")
+        print(f"⏱️  Webhook check time: {check_webhook_time:.2f}ms")
 
         # Create translation transaction (synchronously, returns transaction_id)
         print(f"\n💾 Creating translation transaction...")
@@ -447,30 +644,32 @@ async def process_user_payment_files_background(
         print(f"   Square Transaction ID: {stripe_checkout_session_id}")
         print("=" * 80)
 
-        # Step 0: Persist payment data to payments collection
-        print(f"\n💾 Step 0: Persisting payment data to database...")
+        # Step 0: Create or update payment using centralized service (idempotent)
+        print(f"\n💾 Step 0: Creating payment record (idempotent)...")
         persist_start = time.time()
 
-        from app.services.payment_repository import payment_repository
-        from app.models.payment import PaymentCreate
-
         try:
-            # Fix: Only use valid PaymentCreate fields (no company_name for individual users)
-            payment_data = PaymentCreate(
-                company_name=None,  # Individual users don't have companies
-                user_email=customer_email,
-                stripe_payment_intent_id=stripe_checkout_session_id,
-                amount=int((amount or 0) * 100) if amount else 0,  # Convert to cents
-                currency=currency or "USD",
-                payment_status="COMPLETED",  # Use schema enum value
-                payment_date=None  # Will default to now() in repository
+            # Use centralized payment creation service
+            result = await payment_creation_service.create_or_update_payment(
+                payment_intent_id=stripe_checkout_session_id,
+                amount_cents=AmountConverter.dollars_to_cents(amount or 0.0),
+                currency=currency or "usd",
+                customer_email=customer_email,
+                metadata={}
             )
-            # Note: card_brand, last4, receipt_url stored in metadata collection separately
 
-            payment_id = await payment_repository.create_payment(payment_data)
             persist_time = (time.time() - persist_start) * 1000
             print(f"⏱️  Payment persistence completed in {persist_time:.2f}ms")
-            print(f"✅ Payment record created with ID: {payment_id}")
+
+            if not result["created"]:
+                # Payment already existed - duplicate webhook
+                print(f"⚠️  Payment {stripe_checkout_session_id} already processed (duplicate)")
+                logging.info(f"[PAYMENT] Duplicate user payment ignored: {stripe_checkout_session_id}")
+                # Continue processing for user payments (user transaction still needs to be completed)
+
+            payment_id = str(result["payment"]["_id"])
+            print(f"✅ Payment record created/found with ID: {payment_id}")
+
         except Exception as e:
             persist_time = (time.time() - persist_start) * 1000
             print(f"⏱️  Payment persistence attempted in {persist_time:.2f}ms")
@@ -732,6 +931,48 @@ async def handle_user_payment_success(
         print(f"   Square Transaction ID: {stripe_checkout_session_id}")
         print(f"   Amount: ${request.amount} {request.currency}")
         print(f"   Payment Method: {request.payment_method}")
+
+        # CHECK: Has webhook already processed this payment?
+        # For user payments, check user_transactions collection
+        check_webhook_start = time.time()
+        from app.database.mongodb import database
+        existing_transaction = await database.user_transactions.find_one({
+            "stripe_checkout_session_id": stripe_checkout_session_id
+        })
+
+        if existing_transaction and existing_transaction.get("webhook_processing"):
+            check_webhook_time = (time.time() - check_webhook_start) * 1000
+            total_time = (time.time() - start_time) * 1000
+
+            logging.info(
+                f"[CLIENT_NOTIFICATION] User payment {stripe_checkout_session_id} already "
+                f"processed by webhook (webhook_processing=True), skipping"
+            )
+
+            print(f"\n⚠️  WEBHOOK ALREADY PROCESSED THIS USER PAYMENT")
+            print(f"   Transaction ID: {stripe_checkout_session_id}")
+            print(f"   Webhook processing flag: True")
+            print(f"   Skipping client-side processing")
+            print(f"⏱️  Webhook check time: {check_webhook_time:.2f}ms")
+            print(f"⏱️  TOTAL TIME: {total_time:.2f}ms")
+            print("=" * 80 + "\n")
+
+            return JSONResponse(content={
+                "success": True,
+                "message": "User payment already processed by webhook",
+                "data": {
+                    "customer_email": customer_email,
+                    "stripe_checkout_session_id": stripe_checkout_session_id,
+                    "status": "already_processed",
+                    "processed_by": "webhook",
+                    "processing_time_ms": round(total_time, 2)
+                }
+            })
+
+        check_webhook_time = (time.time() - check_webhook_start) * 1000
+        print(f"\n✅ WEBHOOK CHECK: User payment not yet processed by webhook")
+        print(f"   Proceeding with client-side processing (webhook fallback)")
+        print(f"⏱️  Webhook check time: {check_webhook_time:.2f}ms")
 
         # Schedule background file processing for user transaction
         task_schedule_start = time.time()

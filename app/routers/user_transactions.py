@@ -257,8 +257,8 @@ async def process_payment_transaction(request: Request, transaction_data: UserTr
         logger.info(f"   - documents_count: {len(transaction_data.documents)}")
 
         # Use provided date or default to current UTC time
-        transaction_date = transaction_data.date if transaction_data.date else datetime.utcnow()
-        payment_date = transaction_data.payment_date if transaction_data.payment_date else datetime.utcnow()
+        transaction_date = transaction_data.date if transaction_data.date else datetime.now(timezone.utc)
+        payment_date = transaction_data.payment_date if transaction_data.payment_date else datetime.now(timezone.utc)
 
         # Convert documents to dict format
         logger.info(f"🔄 Converting {len(transaction_data.documents)} documents to dict format...")
@@ -440,7 +440,7 @@ async def process_transaction_refund(
             "amount_cents": refund_request.amount_cents,
             "currency": refund_request.currency,
             "status": "COMPLETED",  # Default status
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
             "idempotency_key": refund_request.idempotency_key,
         }
 
@@ -1012,7 +1012,7 @@ async def update_transaction_payment_status(
         logger.info(f"✅ Payment status update successful:")
         logger.info(f"   - stripe_checkout_session_id: {stripe_checkout_session_id}")
         logger.info(f"   - new_payment_status: {payment_status}")
-        logger.info(f"   - updated_at: {datetime.utcnow().isoformat()}")
+        logger.info(f"   - updated_at: {datetime.now(timezone.utc).isoformat()}")
         logger.info(f"📤 Response: success=True, message='Payment status updated successfully'")
 
         return JSONResponse(content={
@@ -1021,7 +1021,7 @@ async def update_transaction_payment_status(
             "data": {
                 "stripe_checkout_session_id": stripe_checkout_session_id,
                 "payment_status": payment_status,
-                "updated_at": datetime.utcnow().isoformat()
+                "updated_at": datetime.now(timezone.utc).isoformat()
             }
         })
 

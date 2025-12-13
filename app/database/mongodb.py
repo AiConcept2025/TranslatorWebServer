@@ -49,7 +49,7 @@ class MongoDB:
 
             self._connected = True
             logger.info(f"[MongoDB] Successfully connected to database: {settings.active_mongodb_database}")
-            logger.info(f"[MongoDB] Database mode: {settings.database_mode}")
+            logger.info(f"[MongoDB] Database mode: {'test' if settings.is_test_mode() else 'production'}")
 
             # Create indexes
             await self._create_indexes()
@@ -98,7 +98,7 @@ class MongoDB:
                 "healthy": True,
                 "status": "connected",
                 "database": settings.active_mongodb_database,
-                "database_mode": settings.database_mode,
+                "database_mode": "test" if settings.is_test_mode() else "production",
                 "version": server_info.get('version'),
                 "collections": await self.db.list_collection_names()
             }
@@ -321,6 +321,22 @@ class MongoDB:
             logger.warning(f"[MongoDB] Invoices index creation failed: {e}")
             failed_count += 1
 
+        # Webhook events collection indexes (for Stripe webhook audit trail)
+        try:
+            webhook_events_indexes = [
+                IndexModel([("event_id", ASCENDING)], unique=True, name="event_id_unique"),
+                IndexModel([("payment_intent_id", ASCENDING)], name="payment_intent_id_idx"),
+                IndexModel([("event_type", ASCENDING)], name="event_type_idx"),
+                IndexModel([("expires_at", ASCENDING)], expireAfterSeconds=0, name="ttl_90_days"),
+                IndexModel([("created_at", -1)], name="created_at_desc")
+            ]
+            await self.db.webhook_events.create_indexes(webhook_events_indexes)
+            logger.info("[MongoDB] Webhook events indexes created (90-day TTL)")
+            success_count += 1
+        except (OperationFailure, Exception) as e:
+            logger.warning(f"[MongoDB] Webhook events index creation failed: {e}")
+            failed_count += 1
+
         logger.info(f"[MongoDB] Index creation completed: {success_count} collections successful, {failed_count} collections had issues")
 
     @property
@@ -385,6 +401,11 @@ class MongoDB:
     def invoices(self):
         """Get invoices collection."""
         return self.db.invoices if self.db is not None else None
+
+    @property
+    def webhook_events(self):
+        """Get webhook_events collection for Stripe webhook audit trail."""
+        return self.db.webhook_events if self.db is not None else None
 
 
 # Global database instance

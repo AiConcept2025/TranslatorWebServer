@@ -35,7 +35,7 @@ class PaymentRepository:
         Example:
             >>> payment = PaymentCreate(
             ...     company_name="Acme Health LLC",
-            ...     user_email="test5@yahoo.com",
+            ...     user_email="user@example.com",
             ...     stripe_payment_intent_id="payment_sq_1761244600756",
             ...     amount=1299,
             ...     currency="USD",
@@ -50,6 +50,8 @@ class PaymentRepository:
             "amount": payment_data.amount,
             "currency": payment_data.currency,
             "payment_status": payment_data.payment_status,
+            "invoice_id": payment_data.invoice_id,
+            "subscription_id": payment_data.subscription_id,
             "refunds": [],  # Always start with empty array
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
@@ -247,7 +249,10 @@ class PaymentRepository:
             {"stripe_payment_intent_id": stripe_payment_intent_id},
             {
                 "$push": {"refunds": refund_obj},
-                "$set": {"updated_at": datetime.now(timezone.utc)}
+                "$set": {
+                    "payment_status": "REFUNDED",
+                    "updated_at": datetime.now(timezone.utc)
+                }
             }
         )
         return result.modified_count > 0

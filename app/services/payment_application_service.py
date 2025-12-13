@@ -35,14 +35,14 @@ class PaymentApplicationService:
             amount_paid: Amount paid so far
 
         Returns:
-            Invoice status: 'sent', 'partially_paid', or 'paid'
+            Invoice status: 'pending', 'partial', or 'paid'
         """
         if amount_paid <= 0:
-            return "sent"
+            return "pending"
         elif amount_paid >= total_amount:
             return "paid"
         else:
-            return "partially_paid"
+            return "partial"
 
     async def apply_payment_to_invoice(
         self,
@@ -70,11 +70,22 @@ class PaymentApplicationService:
         """
         logger.info(f"[PAYMENT_APP] Applying payment {payment_id} to invoice {invoice_id}")
 
-        # Step 1: Fetch payment
+        # Step 1: Fetch payment (try by payment_id field first, then by _id)
         try:
-            payment = await database.payments.find_one({"_id": ObjectId(payment_id)})
+            # Try to find by payment_id field first (custom ID like "PAY-TEST-xxx")
+            payment = await database.payments.find_one({"payment_id": payment_id})
+
+            # If not found and payment_id looks like ObjectId, try _id
+            if not payment:
+                try:
+                    payment = await database.payments.find_one({"_id": ObjectId(payment_id)})
+                except:
+                    pass  # Not a valid ObjectId, that's okay
+
             if not payment:
                 raise PaymentApplicationError(f"Payment not found: {payment_id}")
+        except PaymentApplicationError:
+            raise
         except Exception as e:
             logger.error(f"[PAYMENT_APP] Error fetching payment: {e}")
             raise PaymentApplicationError(f"Failed to fetch payment: {str(e)}")
@@ -87,16 +98,28 @@ class PaymentApplicationService:
             logger.warning(f"[PAYMENT_APP] Payment {payment_id} already applied to invoice {existing_invoice_id}")
             raise PaymentApplicationError(f"Payment already applied to invoice {existing_invoice_id}")
 
-        # Step 3: Check if payment is completed
-        payment_status = payment.get("payment_status", "")
-        if payment_status not in ["COMPLETED", "APPROVED"]:
+        # Step 3: Check if payment is completed (handle both 'status' and 'payment_status' fields)
+        payment_status = payment.get("payment_status") or payment.get("status", "")
+        payment_status_upper = str(payment_status).upper()
+        if payment_status_upper not in ["COMPLETED", "APPROVED"]:
             raise PaymentApplicationError(f"Payment status must be COMPLETED or APPROVED, got: {payment_status}")
 
-        # Step 4: Fetch invoice
+        # Step 4: Fetch invoice (try by invoice_number field first, then by _id)
         try:
-            invoice = await database.invoices.find_one({"_id": ObjectId(invoice_id)})
+            # Try to find by invoice_number field first (custom ID like "TEST-INV-xxx")
+            invoice = await database.invoices.find_one({"invoice_number": invoice_id})
+
+            # If not found and invoice_id looks like ObjectId, try _id
+            if not invoice:
+                try:
+                    invoice = await database.invoices.find_one({"_id": ObjectId(invoice_id)})
+                except:
+                    pass  # Not a valid ObjectId, that's okay
+
             if not invoice:
                 raise PaymentApplicationError(f"Invoice not found: {invoice_id}")
+        except PaymentApplicationError:
+            raise
         except Exception as e:
             logger.error(f"[PAYMENT_APP] Error fetching invoice: {e}")
             raise PaymentApplicationError(f"Failed to fetch invoice: {str(e)}")
@@ -104,8 +127,16 @@ class PaymentApplicationService:
         logger.info(f"[PAYMENT_APP] Invoice found: {invoice.get('invoice_number')}")
 
         # Step 5: Calculate new amount_paid
-        payment_amount_cents = payment.get("amount", 0)
-        payment_amount_dollars = payment_amount_cents / 100.0
+        payment_amount = payment.get("amount", 0)
+
+        # Determine if amount is in cents or dollars
+        # If payment has stripe_payment_intent_id (Stripe payment), amount is in cents
+        # Otherwise (test payments, manual entries), amount is in dollars
+        has_stripe_id = payment.get("stripe_payment_intent_id") is not None
+        if has_stripe_id and payment_amount >= 100:
+            payment_amount_dollars = payment_amount / 100.0
+        else:
+            payment_amount_dollars = float(payment_amount)
 
         current_amount_paid = invoice.get("amount_paid", 0.0)
         new_amount_paid = current_amount_paid + payment_amount_dollars
@@ -127,16 +158,20 @@ class PaymentApplicationService:
             "user_email": payment.get("user_email")
         }
 
-        # Step 8: Update invoice
+        # Step 8: Update invoice (use actual _id from fetched document)
         try:
             payment_applications = invoice.get("payment_applications", [])
             payment_applications.append(payment_application)
 
+            invoice_object_id = invoice["_id"]  # Get the actual _id from fetched document
+            new_amount_due = max(0.0, total_amount - new_amount_paid)  # Calculate amount_due
+
             updated_invoice = await database.invoices.find_one_and_update(
-                {"_id": ObjectId(invoice_id)},
+                {"_id": invoice_object_id},
                 {
                     "$set": {
                         "amount_paid": new_amount_paid,
+                        "amount_due": new_amount_due,
                         "status": new_status,
                         "payment_applications": payment_applications,
                         "updated_at": now
@@ -154,12 +189,13 @@ class PaymentApplicationService:
             logger.error(f"[PAYMENT_APP] Error updating invoice: {e}")
             raise PaymentApplicationError(f"Failed to update invoice: {str(e)}")
 
-        # Step 9: Update payment with invoice linkage
+        # Step 9: Update payment with invoice linkage (use actual _id from fetched document)
         try:
             subscription_id = invoice.get("subscription_id")
+            payment_object_id = payment["_id"]  # Get the actual _id from fetched document
 
             await database.payments.update_one(
-                {"_id": ObjectId(payment_id)},
+                {"_id": payment_object_id},
                 {
                     "$set": {
                         "invoice_id": invoice_id,

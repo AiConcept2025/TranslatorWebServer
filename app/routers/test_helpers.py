@@ -9,8 +9,9 @@ Security: Protected by environment check - returns 404 in production.
 
 from fastapi import APIRouter, HTTPException, status
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import bcrypt
+import uuid
 
 from app.database import database
 from app.config import settings
@@ -63,7 +64,7 @@ async def reset_test_data():
     return {
         "message": "Test data reset successfully",
         "collections_cleaned": collections_cleaned,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -100,7 +101,7 @@ async def seed_test_data():
         "user_email": "test@example.com",
         "user_name": "Test User",
         "user_password": password_hash,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "is_active": True,
         "email_verified": True
     }
@@ -124,8 +125,8 @@ async def seed_test_data():
         "password": admin_password_hash,
         "permission_level": "admin",
         "status": "active",
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
         "last_login": None
     }
 
@@ -145,8 +146,8 @@ async def seed_test_data():
             "contact_phone": "+1-555-0100",
             "address": "123 Tech Street, Silicon Valley, CA 94000",
             "status": "active",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         },
         {
             "company_name": "Global Translation Inc",
@@ -155,8 +156,8 @@ async def seed_test_data():
             "contact_phone": "+1-555-0200",
             "address": "456 Language Ave, New York, NY 10001",
             "status": "active",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         },
         {
             "company_name": "TechDocs Ltd",
@@ -165,8 +166,8 @@ async def seed_test_data():
             "contact_phone": "+1-555-0300",
             "address": "789 Documentation Blvd, Austin, TX 78701",
             "status": "active",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
     ]
 
@@ -180,6 +181,53 @@ async def seed_test_data():
         )
         companies_created.append(company_data["company_name"])
 
+    # Create test corporate user in company_users collection (for /login/corporate endpoint)
+    # This user is associated with "Acme Corporation" and can authenticate via /login/corporate
+    print("[SEED] Starting corporate user creation...")
+
+    try:
+        corporate_user_password_hash = bcrypt.hashpw(
+            "TestPassword123!".encode('utf-8'),
+            bcrypt.gensalt()
+        ).decode('utf-8')
+        print(f"[SEED] Password hash created: {corporate_user_password_hash[:20]}...")
+
+        test_corporate_user = {
+            "user_id": f"user_{uuid.uuid4().hex[:16]}",
+            "email": "test-admin@test.com",  # Note: field name is 'email' not 'user_email'
+            "user_name": "Test Admin",
+            "company_name": "Acme Corporation",
+            "password_hash": corporate_user_password_hash,  # Note: field name is 'password_hash' not 'password'
+            "permission_level": "admin",
+            "status": "active",
+            "phone_number": "+1-555-TEST",
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "last_login": None
+        }
+        print(f"[SEED] Corporate user document prepared: email={test_corporate_user['email']}, company={test_corporate_user['company_name']}")
+
+        # Insert test corporate user (replace if exists)
+        corporate_result = await database.db.company_users.replace_one(
+            {"email": test_corporate_user["email"], "company_name": test_corporate_user["company_name"]},
+            test_corporate_user,
+            upsert=True
+        )
+        print(f"[SEED] Corporate user insert result: matched_count={corporate_result.matched_count}, modified_count={corporate_result.modified_count}, upserted_id={corporate_result.upserted_id}")
+
+        # Verify the user was created
+        verify_user = await database.db.company_users.find_one({"email": "test-admin@test.com", "company_name": "Acme Corporation"})
+        if verify_user:
+            print(f"[SEED] ✅ Corporate user verified in database: {verify_user['email']}")
+        else:
+            print("[SEED] ❌ ERROR: Corporate user NOT found in database after insert!")
+
+    except Exception as e:
+        print(f"[SEED] ❌ ERROR creating corporate user: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
+
     return {
         "message": "Test data seeded successfully",
         "test_user": {
@@ -192,8 +240,13 @@ async def seed_test_data():
             "name": test_admin["user_name"],
             "password": "TestPassword123!"  # Only return in test mode!
         },
+        "test_corporate_user": {
+            "email": test_corporate_user["email"],
+            "company_name": test_corporate_user["company_name"],
+            "password": "TestPassword123!"  # Only return in test mode!
+        },
         "companies_created": companies_created,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -282,8 +335,8 @@ async def seed_subscription_data():
             "company_name": company_name,
             **template,
             "usage_periods": [],
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
 
         await database.db.subscriptions.insert_one(subscription_data)
@@ -297,7 +350,7 @@ async def seed_subscription_data():
         "subscriptions_created": created_count,
         "subscriptions_updated": updated_count,
         "companies_processed": companies_processed,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -413,7 +466,7 @@ async def seed_translation_transactions():
 
             # Generate timestamps (within last 30 days)
             days_ago = random.randint(0, 30)
-            created_at = datetime.utcnow() - timedelta(days=days_ago, hours=random.randint(0, 23))
+            created_at = datetime.now(timezone.utc) - timedelta(days=days_ago, hours=random.randint(0, 23))
             updated_at = created_at + timedelta(hours=random.randint(0, 48))
 
             # Google Drive URLs (mock)
@@ -468,7 +521,7 @@ async def seed_translation_transactions():
         "transactions_created": transactions_created,
         "total_created": len(all_transactions),
         "companies": [c['name'] for c in company_data],
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 

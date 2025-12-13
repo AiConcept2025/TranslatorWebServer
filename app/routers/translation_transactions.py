@@ -85,7 +85,7 @@ def serialize_translation_transaction_for_json(txn: dict) -> dict:
                                         {
                                             "_id": "68fe1edeac2359ccbc6b05b2",
                                             "transaction_id": "TXN-20FEF6D8FE",
-                                            "user_id": "danishevsky@yahoo.com",
+                                            "user_id": "user@example.com",
                                             "original_file_url": "https://docs.google.com/document/d/1ABCdef123/edit",
                                             "translated_file_url": "",
                                             "source_language": "en",

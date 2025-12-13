@@ -14,9 +14,11 @@ from fastapi import APIRouter, HTTPException, Query, Path, status, Depends
 from fastapi.responses import JSONResponse
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
-from bson import ObjectId
+from bson import ObjectId, Decimal128
 from pydantic import EmailStr
 import logging
+import copy
+import uuid
 
 from app.models.payment import (
     PaymentCreate,
@@ -41,6 +43,44 @@ from app.database.mongodb import database
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/payments", tags=["Payment Management"])
+
+
+def serialize_payment_for_json(payment: dict) -> dict:
+    """
+    Convert MongoDB payment document to JSON-serializable dict.
+
+    Handles:
+    - ObjectId → string
+    - Decimal128 → float
+    - datetime → ISO 8601 string
+
+    Args:
+        payment: Payment document from MongoDB
+
+    Returns:
+        JSON-serializable dict
+    """
+    def serialize_value(value):
+        """Recursively serialize a value to JSON-compatible format."""
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, ObjectId):
+            return str(value)
+        if isinstance(value, Decimal128):
+            return float(value.to_decimal())
+        if isinstance(value, dict):
+            return {k: serialize_value(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [serialize_value(item) for item in value]
+        return value
+
+    # Create a deep copy to avoid modifying the original
+    payment = copy.deepcopy(payment)
+
+    # Recursively serialize all values
+    return {key: serialize_value(value) for key, value in payment.items()}
 
 
 class ApplyPaymentToInvoiceRequest(BaseModel):
@@ -1020,8 +1060,8 @@ async def get_payment_by_square_id(
         logger.info(f"   - amount: {payment_doc.get('amount')}")
         logger.info(f"   - status: {payment_doc.get('payment_status')}")
 
-        # Return full payment document (not just PaymentResponse fields)
-        payment_doc["_id"] = str(payment_doc["_id"])
+        # Serialize payment document for JSON response
+        payment_doc = serialize_payment_for_json(payment_doc)
 
         logger.info(f"📤 Response: _id={payment_doc['_id']}, status={payment_doc.get('payment_status')}")
 
@@ -1551,8 +1591,8 @@ async def update_payment(
         logger.info(f"   - status: {payment_doc.get('payment_status')}")
         logger.info(f"Payment {stripe_payment_intent_id} updated successfully")
 
-        # Convert ObjectIds to strings
-        payment_doc["_id"] = str(payment_doc["_id"])
+        # Serialize payment document for JSON response
+        payment_doc = serialize_payment_for_json(payment_doc)
 
         response_data = {
             "success": True,
@@ -1704,13 +1744,19 @@ async def process_refund(
             )
         logger.info(f"✅ Refund amount validation passed")
 
+        # Generate idempotency_key if not provided
+        idempotency_key = refund_request.idempotency_key
+        if not idempotency_key:
+            idempotency_key = f"refund_{uuid.uuid4().hex[:16]}"
+            logger.info(f"🔑 Generated idempotency_key: {idempotency_key}")
+
         # Process refund
         logger.info(f"🔄 Calling payment_repository.process_refund()...")
         refunded = await payment_repository.process_refund(
             stripe_payment_intent_id=stripe_payment_intent_id,
             refund_id=refund_request.refund_id,
             refund_amount=refund_request.amount,
-            refund_reason=None
+            idempotency_key=idempotency_key
         )
         logger.info(f"🔎 Refund processing result: success={refunded}")
 
@@ -1732,8 +1778,8 @@ async def process_refund(
         logger.info(f"   - payment_status: {payment_doc.get('payment_status')}")
         logger.info(f"Refund processed successfully for payment {stripe_payment_intent_id}")
 
-        # Convert ObjectIds to strings
-        payment_doc["_id"] = str(payment_doc["_id"])
+        # Serialize payment document for JSON response
+        payment_doc = serialize_payment_for_json(payment_doc)
 
         response_data = {
             "success": True,
@@ -1743,7 +1789,7 @@ async def process_refund(
                 "refund": {
                     "refund_id": refund_request.refund_id,
                     "amount": refund_request.amount,
-                    "idempotency_key": refund_request.idempotency_key
+                    "idempotency_key": idempotency_key
                 }
             }
         }

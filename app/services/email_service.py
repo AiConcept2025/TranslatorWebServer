@@ -574,7 +574,7 @@ class EmailService:
                 "error": str(e)
             }
 
-    def test_minimal_smtp(self, to_email: str = "danishevsky@gmail.com") -> Dict[str, Any]:
+    def test_minimal_smtp(self, to_email: str) -> Dict[str, Any]:
         """
         Send ultra-minimal email to test SMTP at protocol level.
 
@@ -772,7 +772,7 @@ This is a minimal test email from the translation service.
 
         return issues
 
-    def test_with_email_message(self, to_email: str = "danishevsky@gmail.com") -> Dict[str, Any]:
+    def test_with_email_message(self, to_email: str) -> Dict[str, Any]:
         """
         Test with newer EmailMessage API instead of MIME.
 

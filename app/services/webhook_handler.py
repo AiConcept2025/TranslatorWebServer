@@ -36,6 +36,9 @@ from pymongo import ReturnDocument
 
 from app.services.webhook_repository import WebhookRepository, DuplicateEventError
 from app.routers.payment_simplified import process_payment_files_background
+from app.services.invoice_service import create_invoice_from_payment
+from app.services.payment_creation_service import payment_creation_service
+from app.utils.amount_converter import AmountConverter
 
 logger = logging.getLogger(__name__)
 
@@ -243,50 +246,55 @@ class WebhookHandler:
             Does NOT raise exceptions - logs errors and allows mark_processed to handle
         """
         payment_intent_id = payment_intent.get("id")
-        amount = payment_intent.get("amount", 0)  # Amount in cents (Stripe format)
+        amount = payment_intent.get("amount", 0)  # Already in cents (Stripe format)
         currency = payment_intent.get("currency", "usd")
         customer_email = payment_intent.get("customer_email")
 
-        logger.info(f"[WEBHOOK] Handling payment_intent.succeeded: {payment_intent_id} amount={amount} cents ({amount/100:.2f} {currency}) customer={customer_email}")
+        # Log amount in both cents and dollars for clarity
+        amount_dollars = AmountConverter.cents_to_dollars(amount)
+        logger.info(
+            f"[WEBHOOK] Handling payment_intent.succeeded: {payment_intent_id} "
+            f"amount={amount} cents (${amount_dollars:.2f} {currency}) "
+            f"customer={customer_email}"
+        )
 
         # Extract file_ids from metadata (optional)
         metadata = payment_intent.get("metadata", {})
         file_ids_str = metadata.get("file_ids")
         file_ids = file_ids_str.split(",") if file_ids_str else None
 
-        # Payment-level idempotency using atomic upsert
+        # Use centralized payment creation service (idempotent, atomic upsert)
         # This prevents race conditions when multiple webhooks arrive concurrently
-        # Only ONE webhook will successfully insert the payment record
         try:
-            from datetime import datetime, timezone
-
-            result = await self.db.payments.update_one(
-                {"stripe_payment_intent_id": payment_intent_id},
-                {
-                    "$setOnInsert": {
-                        "stripe_payment_intent_id": payment_intent_id,
-                        "status": "pending",
-                        "created_at": datetime.now(timezone.utc),
-                        "webhook_event_id": event_id,
-                        "amount": amount,
-                        "currency": currency,
-                        "customer_email": customer_email
-                    }
-                },
-                upsert=True
+            result = await payment_creation_service.create_or_update_payment(
+                payment_intent_id=payment_intent_id,
+                amount_cents=amount,  # Already in cents from Stripe
+                currency=currency,
+                customer_email=customer_email,
+                webhook_event_id=event_id,
+                metadata=metadata or {}
             )
 
-            if result.matched_count > 0:
-                # Payment record already existed - another webhook got here first
-                logger.info(f"[WEBHOOK] Payment {payment_intent_id} already exists (concurrent webhook detected), skipping processing")
+            if not result["created"]:
+                # Payment already existed - duplicate webhook
+                logger.info(
+                    f"[WEBHOOK] Duplicate payment {payment_intent_id}, skipping processing "
+                    f"(concurrent webhook detected)"
+                )
                 return
 
-            # We successfully inserted the payment record - proceed with processing
-            logger.info(f"[WEBHOOK] Processing new payment {payment_intent_id}, file_ids={file_ids}")
+            payment = result["payment"]
+            logger.info(
+                f"[WEBHOOK] Payment created: {payment['_id']}, "
+                f"processing new payment {payment_intent_id}, file_ids={file_ids}"
+            )
 
         except Exception as e:
-            # Unique index violation or other database error
-            logger.warning(f"[WEBHOOK] Payment {payment_intent_id} duplicate prevented by database constraint: {e}")
+            # Service error (validation, database error, etc.)
+            logger.error(
+                f"[WEBHOOK] Failed to create payment {payment_intent_id}: {e}",
+                exc_info=True
+            )
             return
 
         # Trigger background payment processing
@@ -301,6 +309,24 @@ class WebhookHandler:
         )
 
         logger.info(f"[WEBHOOK] Payment processing triggered for {payment_intent_id} (webhook event: {event_id})")
+
+        # Create invoice after payment success
+        try:
+            logger.info(f"[WEBHOOK] Creating invoice for payment {payment_intent_id}")
+            invoice = await create_invoice_from_payment(
+                payment_intent_id=payment_intent_id,
+                payment_data={
+                    "amount": amount,  # Amount in cents
+                    "currency": currency,
+                    "customer_email": customer_email,
+                    "metadata": metadata
+                },
+                db=self.db
+            )
+            logger.info(f"[WEBHOOK] Invoice created: {invoice['invoice_id']}")
+        except Exception as e:
+            logger.error(f"[WEBHOOK] Failed to create invoice for {payment_intent_id}: {e}", exc_info=True)
+            # Don't fail webhook processing if invoice creation fails
 
     async def _handle_payment_failed(self, payment_intent: dict):
         """
@@ -363,7 +389,12 @@ class WebhookHandler:
         payment_intent_id = charge.get("payment_intent")
         amount_refunded = charge.get("amount_refunded", 0)  # Amount in cents (Stripe format)
 
-        logger.info(f"[WEBHOOK] Handling charge.refunded: payment_intent={payment_intent_id} amount_refunded={amount_refunded} cents (${amount_refunded/100:.2f})")
+        # Log amount in both cents and dollars for clarity
+        amount_dollars = AmountConverter.cents_to_dollars(amount_refunded)
+        logger.info(
+            f"[WEBHOOK] Handling charge.refunded: payment_intent={payment_intent_id} "
+            f"amount_refunded={amount_refunded} cents (${amount_dollars:.2f})"
+        )
 
         # Atomic find and update payment status to refunded
         # Combines find_one + update_one into single database operation
@@ -385,4 +416,7 @@ class WebhookHandler:
             logger.warning(f"[WEBHOOK] Payment not found for refund: {payment_intent_id} (event still stored for audit)")
             raise Exception(f"Payment not found for refund: {payment_intent_id}")
 
-        logger.info(f"[WEBHOOK] Payment {payment_intent_id} marked as refunded (${amount_refunded/100:.2f})")
+        logger.info(
+            f"[WEBHOOK] Payment {payment_intent_id} marked as refunded "
+            f"(${amount_dollars:.2f})"
+        )

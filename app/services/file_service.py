@@ -9,7 +9,7 @@ import aiofiles
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple, BinaryIO
 from fastapi import UploadFile, HTTPException
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.config import settings
 from app.models.responses import FileInfo, FileType
@@ -157,7 +157,7 @@ class FileService:
                 'filename': 'stub_document.txt',
                 'size': 1024,
                 'file_type': 'txt',
-                'created_at': datetime.utcnow().isoformat(),
+                'created_at': datetime.now(timezone.utc).isoformat(),
                 'checksum': 'stub_checksum_123'
             },
             {
@@ -165,7 +165,7 @@ class FileService:
                 'filename': 'stub_document.pdf',
                 'size': 2048,
                 'file_type': 'pdf',
-                'created_at': datetime.utcnow().isoformat(),
+                'created_at': datetime.now(timezone.utc).isoformat(),
                 'checksum': 'stub_checksum_456'
             }
         ]
@@ -344,8 +344,8 @@ class FileService:
             'file_id': file_id,
             'file_info': file_info.dict(),
             'metadata': metadata or {},
-            'created_at': datetime.utcnow().isoformat(),
-            'updated_at': datetime.utcnow().isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            'updated_at': datetime.now(timezone.utc).isoformat()
         }
         
         metadata_path = self.upload_dir / f"{file_id}.json"

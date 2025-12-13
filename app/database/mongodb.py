@@ -49,7 +49,7 @@ class MongoDB:
 
             self._connected = True
             logger.info(f"[MongoDB] Successfully connected to database: {settings.active_mongodb_database}")
-            logger.info(f"[MongoDB] Database mode: {settings.database_mode}")
+            logger.info(f"[MongoDB] Database mode: {'test' if settings.is_test_mode() else 'production'}")
 
             # Create indexes
             await self._create_indexes()
@@ -98,7 +98,7 @@ class MongoDB:
                 "healthy": True,
                 "status": "connected",
                 "database": settings.active_mongodb_database,
-                "database_mode": settings.database_mode,
+                "database_mode": "test" if settings.is_test_mode() else "production",
                 "version": server_info.get('version'),
                 "collections": await self.db.list_collection_names()
             }

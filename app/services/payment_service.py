@@ -3,7 +3,7 @@ Payment service for Stripe integration.
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 import uuid
 
@@ -127,7 +127,7 @@ class PaymentService:
             'status': PaymentStatus.SUCCEEDED,
             'amount': 10.00,  # Stub amount
             'currency': 'USD',
-            'created': datetime.utcnow(),
+            'created': datetime.now(timezone.utc),
             'metadata': {'stub': 'true'}
         }
     
@@ -161,7 +161,7 @@ class PaymentService:
             'currency': 'USD',
             'status': 'succeeded',
             'reason': reason or 'requested_by_customer',
-            'created': datetime.utcnow()
+            'created': datetime.now(timezone.utc)
         }
     
     def calculate_price(
@@ -257,7 +257,7 @@ class PaymentService:
             'status': 'processed',
             'event_type': 'payment_intent.succeeded',
             'message': 'Webhook processed successfully (stub)',
-            'processed_at': datetime.utcnow()
+            'processed_at': datetime.now(timezone.utc)
         }
     
     async def get_payment_history(
@@ -287,8 +287,8 @@ class PaymentService:
                 currency="USD",
                 status=PaymentStatus.SUCCEEDED,
                 description="Translation service payment (stub)",
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
             ),
             PaymentHistory(
                 payment_id=f"ch_stub_2_{uuid.uuid4().hex[:8]}",
@@ -296,8 +296,8 @@ class PaymentService:
                 currency="USD",
                 status=PaymentStatus.SUCCEEDED,
                 description="Premium translation service (stub)",
-                created_at=datetime.utcnow() - timedelta(days=1),
-                updated_at=datetime.utcnow() - timedelta(days=1)
+                created_at=datetime.now(timezone.utc) - timedelta(days=1),
+                updated_at=datetime.now(timezone.utc) - timedelta(days=1)
             )
         ]
         

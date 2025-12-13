@@ -74,7 +74,7 @@ class Payment(BaseModel):
         'json_schema_extra': {
             'example': {
                 'company_name': 'Acme Health LLC',
-                'user_email': 'test5@yahoo.com',
+                'user_email': 'user@example.com',
                 'stripe_payment_intent_id': 'payment_sq_1761244600756_u12vb3tx6',
                 'amount': 1299,
                 'currency': 'USD',
@@ -106,7 +106,7 @@ class PaymentCreate(BaseModel):
         'json_schema_extra': {
             'example': {
                 'company_name': 'Acme Health LLC',
-                'user_email': 'test5@yahoo.com',
+                'user_email': 'user@example.com',
                 'stripe_payment_intent_id': 'payment_sq_1761244600756_u12vb3tx6',
                 'amount': 1299,
                 'currency': 'USD',
@@ -230,7 +230,7 @@ class PaymentListItem(BaseModel):
             'example': {
                 '_id': '68fad3c2a0f41c24037c4810',
                 'company_name': 'Acme Health LLC',
-                'user_email': 'test5@yahoo.com',
+                'user_email': 'user@example.com',
                 'stripe_payment_intent_id': 'payment_sq_1761244600756',
                 'amount': 1299,
                 'currency': 'USD',
@@ -289,7 +289,7 @@ class PaymentListData(BaseModel):
                             {
                                 '_id': '68fad3c2a0f41c24037c4810',
                                 'company_name': 'Acme Health LLC',
-                                'user_email': 'test5@yahoo.com',
+                                'user_email': 'user@example.com',
                                 'stripe_payment_intent_id': 'payment_sq_1761244600756',
                                 'amount': 1299,
                                 'currency': 'USD',
@@ -365,7 +365,7 @@ class PaymentListResponse(BaseModel):
                                 {
                                     '_id': '68fad3c2a0f41c24037c4810',
                                     'company_name': 'Acme Health LLC',
-                                    'user_email': 'test5@yahoo.com',
+                                    'user_email': 'user@example.com',
                                     'stripe_payment_intent_id': 'payment_sq_1761244600756',
                                     'amount': 1299,
                                     'currency': 'USD',
@@ -702,7 +702,7 @@ class AllPaymentsData(BaseModel):
                             {
                                 '_id': '68fad3c2a0f41c24037c4810',
                                 'company_name': 'Acme Health LLC',
-                                'user_email': 'test5@yahoo.com',
+                                'user_email': 'user@example.com',
                                 'stripe_payment_intent_id': 'payment_sq_1761244600756',
                                 'amount': 1299,
                                 'currency': 'USD',
@@ -762,7 +762,7 @@ class AllPaymentsResponse(BaseModel):
                                 {
                                     '_id': '68fad3c2a0f41c24037c4810',
                                     'company_name': 'Acme Health LLC',
-                                    'user_email': 'test5@yahoo.com',
+                                    'user_email': 'user@example.com',
                                     'stripe_payment_intent_id': 'payment_sq_1761244600756',
                                     'amount': 1299,
                                     'currency': 'USD',

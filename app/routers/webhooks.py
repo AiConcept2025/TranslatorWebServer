@@ -140,7 +140,7 @@ async def stripe_webhook(request: Request, background_tasks: BackgroundTasks):
         event_dict = json.loads(payload.decode('utf-8'))
 
         # Construct Stripe Event object (validates event structure)
-        event = stripe.Event.construct_from(event_dict, settings.stripe_api_key)
+        event = stripe.Event.construct_from(event_dict, stripe.api_key)
 
         logger.info(f"[WEBHOOK] [{request_id}] Event received: {event.id} type={event.type}")
     except (ValueError, json.JSONDecodeError) as e:

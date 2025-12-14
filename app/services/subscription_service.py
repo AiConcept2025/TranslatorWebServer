@@ -94,20 +94,42 @@ class SubscriptionService:
 
     async def get_subscription(self, subscription_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get subscription by ID.
+        Get subscription by ID (tries both ObjectId and subscription_id field).
 
         Args:
-            subscription_id: Subscription ID
+            subscription_id: MongoDB ObjectId string OR custom subscription_id
 
         Returns:
-            dict: Subscription document or None
+            dict: Subscription document or None if not found
+
+        Raises:
+            SubscriptionError: On database errors
         """
         try:
-            subscription = await database.subscriptions.find_one({"_id": ObjectId(subscription_id)})
+            # Build query that tries both fields
+            query = {"$or": [{"subscription_id": subscription_id}]}
+
+            # Only add ObjectId query if format is valid
+            from bson.errors import InvalidId
+            try:
+                object_id = ObjectId(subscription_id)
+                query["$or"].append({"_id": object_id})
+                logger.debug(f"[SUBSCRIPTION] Querying by ObjectId AND subscription_id field: {subscription_id}")
+            except InvalidId:
+                logger.debug(f"[SUBSCRIPTION] Querying by subscription_id field only: {subscription_id}")
+
+            subscription = await database.subscriptions.find_one(query)
+
+            if subscription:
+                logger.info(f"[SUBSCRIPTION] Found subscription for company: {subscription.get('company_name')}")
+            else:
+                logger.info(f"[SUBSCRIPTION] Subscription not found: {subscription_id}")
+
             return subscription
+
         except Exception as e:
-            logger.error(f"[SUBSCRIPTION] Error fetching subscription {subscription_id}: {e}")
-            return None
+            logger.error(f"[SUBSCRIPTION] Database error: {e}", exc_info=True)
+            raise SubscriptionError(f"Database error: {e}")
 
     async def get_company_subscriptions(
         self,

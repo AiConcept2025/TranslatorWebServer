@@ -2,7 +2,7 @@
 Stripe Webhook Event Handler - Routes webhook events and triggers payment processing.
 
 Purpose:
-- Handle Stripe webhook events (payment_intent.succeeded, payment_intent.payment_failed, charge.refunded)
+- Handle Stripe webhook events (payment_intent.succeeded, payment_intent.payment_failed, charge.refunded, charge.dispute.created)
 - Store events with deduplication via WebhookRepository
 - Route events to appropriate handlers
 - Implement payment-level idempotency (prevent duplicate processing)
@@ -17,15 +17,17 @@ Event Routing:
 1. payment_intent.succeeded → _handle_payment_succeeded() → process_payment_files_background()
 2. payment_intent.payment_failed → _handle_payment_failed() → log error
 3. charge.refunded → _handle_refund() → update payment status
+4. charge.dispute.created → _handle_dispute() → store dispute, flag payment, log alert
 
 Error Handling:
 - DuplicateEventError (Stripe retry) → return {"status": "duplicate"}
 - Missing payment for refund → log warning, don't raise exception
+- Missing payment for dispute → log warning, still store dispute
 - Unsupported event types → return {"status": "unsupported"}
 
 TDD Implementation:
-- Written to satisfy test_webhook_handler_integration.py (10 tests)
-- Tests verify: event storage, deduplication, payment processing, refunds, error handling
+- Written to satisfy test_webhook_handler_integration.py tests
+- Tests verify: event storage, deduplication, payment processing, refunds, disputes, error handling
 """
 
 import logging
@@ -188,6 +190,10 @@ class WebhookHandler:
             elif event_type == "charge.refunded":
                 charge = event.get("data", {}).get("object", {})
                 await self._handle_refund(charge)
+
+            elif event_type == "charge.dispute.created":
+                dispute = event.get("data", {}).get("object", {})
+                await self._handle_dispute(dispute)
 
             else:
                 # Unsupported event type (e.g., customer.created)
@@ -419,4 +425,137 @@ class WebhookHandler:
         logger.info(
             f"[WEBHOOK] Payment {payment_intent_id} marked as refunded "
             f"(${amount_dollars:.2f})"
+        )
+
+    async def _handle_dispute(self, dispute: dict):
+        """
+        Handle charge.dispute.created event.
+
+        Flow:
+        1. Extract dispute data (dispute_id, charge_id, payment_intent_id, amount, reason, status)
+        2. Store dispute in disputes collection
+        3. Link dispute to original charge and payment_intent
+        4. Log dispute details for investigation and alerting
+        5. Optionally update payment record with dispute flag
+
+        Dispute Investigation:
+        - All disputes are logged with comprehensive details for manual review
+        - Disputes require evidence submission to Stripe
+        - This handler stores dispute data for tracking and compliance
+
+        Args:
+            dispute: Stripe dispute object from webhook event
+                {
+                    "id": "dp_...",
+                    "charge": "ch_...",
+                    "payment_intent": "pi_...",
+                    "amount": 5000,  # Amount disputed in cents
+                    "currency": "usd",
+                    "reason": "fraudulent",  # or "duplicate", "product_not_received", etc.
+                    "status": "warning_needs_response",  # or "needs_response", "under_review", etc.
+                    "evidence_details": {
+                        "due_by": 1234567890,  # Timestamp for evidence submission
+                        "has_evidence": false,
+                        "past_due": false
+                    },
+                    "created": 1234567890,
+                    "metadata": {}
+                }
+
+        Raises:
+            Does NOT raise exceptions - logs errors for investigation
+        """
+        dispute_id = dispute.get("id")
+        charge_id = dispute.get("charge")
+        payment_intent_id = dispute.get("payment_intent")
+        amount = dispute.get("amount", 0)  # Amount disputed in cents
+        currency = dispute.get("currency", "usd")
+        reason = dispute.get("reason", "unknown")
+        status = dispute.get("status", "unknown")
+        evidence_details = dispute.get("evidence_details", {})
+        created_timestamp = dispute.get("created")
+
+        # Convert timestamps to datetime
+        created_at = datetime.fromtimestamp(created_timestamp, tz=timezone.utc) if created_timestamp else datetime.now(timezone.utc)
+        evidence_due_by = None
+        if evidence_details.get("due_by"):
+            evidence_due_by = datetime.fromtimestamp(evidence_details["due_by"], tz=timezone.utc)
+
+        # Log amount in both cents and dollars for clarity
+        amount_dollars = AmountConverter.cents_to_dollars(amount)
+
+        logger.warning(
+            f"[WEBHOOK] ⚠️  DISPUTE CREATED: dispute_id={dispute_id} "
+            f"charge={charge_id} payment_intent={payment_intent_id} "
+            f"amount={amount} cents (${amount_dollars:.2f} {currency}) "
+            f"reason={reason} status={status} "
+            f"evidence_due_by={evidence_due_by.isoformat() if evidence_due_by else 'N/A'}"
+        )
+
+        # Store dispute in disputes collection
+        dispute_record = {
+            "dispute_id": dispute_id,
+            "charge_id": charge_id,
+            "payment_intent_id": payment_intent_id,
+            "amount": amount,  # Store in cents (Stripe format)
+            "amount_dollars": amount_dollars,  # Also store in dollars for readability
+            "currency": currency,
+            "reason": reason,
+            "status": status,
+            "evidence_details": evidence_details,
+            "evidence_due_by": evidence_due_by,
+            "created_at": created_at,
+            "updated_at": datetime.now(timezone.utc),
+            "metadata": dispute.get("metadata", {}),
+            "raw_dispute_data": dispute,  # Store full dispute object for reference
+        }
+
+        try:
+            # Upsert dispute record (update if exists, insert if new)
+            await self.db.disputes.update_one(
+                {"dispute_id": dispute_id},
+                {"$set": dispute_record},
+                upsert=True
+            )
+            logger.info(f"[WEBHOOK] Dispute {dispute_id} stored in disputes collection")
+
+            # Optionally: Flag the associated payment as disputed
+            if payment_intent_id:
+                payment = await self.db.payments.find_one_and_update(
+                    {"stripe_payment_intent_id": payment_intent_id},
+                    {
+                        "$set": {
+                            "has_dispute": True,
+                            "dispute_id": dispute_id,
+                            "dispute_status": status,
+                            "dispute_reason": reason,
+                            "disputed_at": created_at
+                        }
+                    },
+                    return_document=ReturnDocument.AFTER
+                )
+
+                if payment:
+                    logger.warning(
+                        f"[WEBHOOK] Payment {payment_intent_id} flagged with dispute {dispute_id}"
+                    )
+                else:
+                    logger.warning(
+                        f"[WEBHOOK] Payment not found for dispute {dispute_id} "
+                        f"(payment_intent={payment_intent_id})"
+                    )
+
+        except Exception as e:
+            logger.error(
+                f"[WEBHOOK] Failed to store dispute {dispute_id}: {e}",
+                exc_info=True
+            )
+            # Re-raise to mark event as error (not processed successfully)
+            raise Exception(f"Failed to store dispute: {e}")
+
+        # Log detailed alert for team investigation
+        logger.warning(
+            f"[WEBHOOK] ⚠️  ACTION REQUIRED: Dispute {dispute_id} needs investigation. "
+            f"Reason: {reason}. Evidence due by: {evidence_due_by.isoformat() if evidence_due_by else 'Unknown'}. "
+            f"Check Stripe Dashboard for details and submit evidence."
         )

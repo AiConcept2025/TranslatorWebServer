@@ -41,7 +41,7 @@ class TestDatabaseRestorer:
         """Initialize restorer."""
         settings = get_settings()
         self.client = AsyncIOMotorClient(settings.mongodb_uri)
-        self.db_name = settings.mongodb_database_test  # Use test DB name
+        self.db_name = settings.active_mongodb_database  # Use active DB name (respects DATABASE_MODE)
         self.db = self.client[self.db_name]
         self.verbose = verbose
         self.skip_indexes = skip_indexes

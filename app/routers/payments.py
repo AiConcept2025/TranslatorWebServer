@@ -466,7 +466,7 @@ async def get_all_payments(
                 return str(obj)
             elif isinstance(obj, datetime):
                 return obj.isoformat()
-            elif hasattr(obj, 'to_decimal'):  # Decimal128 type
+            elif isinstance(obj, Decimal128):  # Decimal128 type - more reliable check
                 return float(obj.to_decimal())
             elif isinstance(obj, dict):
                 return {key: convert_doc(value) for key, value in obj.items()}
@@ -1369,7 +1369,7 @@ async def get_company_payments(
                 return str(obj)
             elif isinstance(obj, datetime):
                 return obj.isoformat()
-            elif hasattr(obj, 'to_decimal'):  # Decimal128 type
+            elif isinstance(obj, Decimal128):  # Decimal128 type - more reliable check
                 return float(obj.to_decimal())
             elif isinstance(obj, dict):
                 return {key: convert_doc(value) for key, value in obj.items()}

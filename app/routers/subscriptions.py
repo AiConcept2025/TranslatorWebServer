@@ -126,20 +126,21 @@ async def get_subscription(
     logger.info(f"🔍 [{timestamp}] GET /api/subscriptions/{subscription_id} - START")
     logger.info(f"📥 Request Param: subscription_id={subscription_id}")
 
-    # Try to get by ObjectId first, then by subscription_id field
-    subscription = await subscription_service.get_subscription(subscription_id)
+    try:
+        subscription = await subscription_service.get_subscription(subscription_id)
 
-    # If not found by ObjectId, try by subscription_id field
-    if not subscription:
-        logger.info(f"🔎 Not found by ObjectId, trying subscription_id field...")
-        subscription = await database.subscriptions.find_one({"subscription_id": subscription_id})
-        logger.info(f"🔎 Query by subscription_id field: found={subscription is not None}")
+        if not subscription:
+            logger.warning(f"❌ Subscription not found: id={subscription_id}")
+            raise HTTPException(status_code=404, detail="Subscription not found")
 
-    logger.info(f"🔎 Database Query Result: found={subscription is not None}")
-
-    if not subscription:
-        logger.warning(f"❌ Subscription not found: id={subscription_id}")
-        raise HTTPException(status_code=404, detail="Subscription not found")
+    except SubscriptionError as e:
+        logger.error(f"❌ Database error: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Unexpected error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     logger.info(f"✅ Subscription found: company={subscription.get('company_name')}, "
                f"status={subscription.get('status')}, "

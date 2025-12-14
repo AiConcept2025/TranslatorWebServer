@@ -657,6 +657,78 @@ async def update_payment_status(
         return False
 
 
+async def update_transaction_payment_intent(
+    transaction_id: str,
+    stripe_payment_intent_id: str
+) -> bool:
+    """
+    Update user_transaction with Stripe payment intent ID.
+    Enables correlation between upload transaction and payment.
+
+    Args:
+        transaction_id: Transaction ID (USER###### format or stripe_checkout_session_id)
+        stripe_payment_intent_id: Stripe payment intent ID (pi_...)
+
+    Returns:
+        bool: True if update successful, False otherwise
+
+    Raises:
+        None: Errors are logged and False is returned
+    """
+    try:
+        # Check database connection
+        collection = database.user_transactions
+        if collection is None:
+            logger.error("[UserTransaction] Database collection not available")
+            return False
+
+        # Try to find by transaction_id field first, then stripe_checkout_session_id
+        result = await collection.update_one(
+            {
+                "$or": [
+                    {"transaction_id": transaction_id},
+                    {"stripe_checkout_session_id": transaction_id}
+                ]
+            },
+            {
+                "$set": {
+                    "stripe_payment_intent_id": stripe_payment_intent_id,
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
+        )
+
+        if result.matched_count == 0:
+            logger.warning(f"[CORRELATION] Transaction {transaction_id} not found")
+            return False
+
+        if result.modified_count > 0:
+            logger.info(
+                f"[CORRELATION] Linked transaction {transaction_id} "
+                f"to payment intent {stripe_payment_intent_id}"
+            )
+            return True
+        else:
+            logger.info(
+                f"[CORRELATION] Transaction {transaction_id} already linked "
+                f"to payment intent {stripe_payment_intent_id}"
+            )
+            return True
+
+    except PyMongoError as e:
+        logger.error(
+            f"[CORRELATION] MongoDB error updating transaction: {e}",
+            exc_info=True
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            f"[CORRELATION] Unexpected error updating transaction: {e}",
+            exc_info=True
+        )
+        return False
+
+
 # Export all public functions
 __all__ = [
     "create_user_transaction",
@@ -665,4 +737,5 @@ __all__ = [
     "get_user_transaction",
     "add_refund_to_transaction",
     "update_payment_status",
+    "update_transaction_payment_intent",
 ]

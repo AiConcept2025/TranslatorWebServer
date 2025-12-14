@@ -2,7 +2,7 @@
 Simplified Payment API endpoints - No sessions, just customer email lookup.
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, Dict, Any
@@ -229,9 +229,17 @@ async def process_payment_files_background(
                 }
                 documents.append(doc)
 
-            # Calculate pricing using pricing service (individual user, default mode)
+            # Calculate pricing using pricing service (individual user, actual mode)
             total_units = sum(file_info.get('page_count', 1) for file_info in files_to_move)
-            total_price_decimal = pricing_service.calculate_price(total_units, "individual", "default")
+
+            # Get translation_mode from first file (or 'default' if not available)
+            translation_mode = "default"
+            if files_to_move and len(files_to_move) > 0:
+                first_file = files_to_move[0]
+                translation_mode = first_file.get("translation_mode", "default")
+                logging.info(f"[WEBHOOK_PRICING] Using translation_mode: {translation_mode}")
+
+            total_price_decimal = pricing_service.calculate_price(total_units, "individual", translation_mode)
             total_price = float(total_price_decimal)
             # Back-calculate price per unit for database storage
             price_per_unit = total_price / total_units if total_units > 0 else 0
@@ -320,14 +328,16 @@ class CreatePaymentIntentRequest(BaseModel):
 
 
 @router.post("/create-intent")
-async def create_payment_intent(request: CreatePaymentIntentRequest):
+async def create_payment_intent(
+    request: CreatePaymentIntentRequest,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
+):
     """
-    Create Stripe payment intent.
+    Create Stripe payment intent with REQUIRED idempotency protection.
 
     Args:
-        amount: Amount in cents (e.g., 5000 = $50.00)
-        currency: Currency code (default: usd)
-        metadata: Optional metadata (email, file_ids, etc.)
+        request: Payment intent request data
+        idempotency_key: REQUIRED idempotency key from header (prevents duplicate charges)
 
     Returns:
         {
@@ -336,7 +346,7 @@ async def create_payment_intent(request: CreatePaymentIntentRequest):
         }
 
     Raises:
-        HTTPException: 400 if Stripe API error occurs
+        HTTPException: 400 if idempotency key missing or Stripe API error occurs
     """
     print("\n" + "=" * 80)
     print("💳 CREATE PAYMENT INTENT REQUEST")
@@ -345,6 +355,18 @@ async def create_payment_intent(request: CreatePaymentIntentRequest):
     print(f"Currency: {request.currency.upper()}")
     if request.metadata:
         print(f"Metadata: {request.metadata}")
+
+    # CRITICAL: Validate idempotency key is present (prevents duplicate charges)
+    if not idempotency_key or not idempotency_key.strip():
+        logging.error("[STRIPE] Missing required Idempotency-Key header")
+        print("❌ ERROR: Idempotency-Key header is required to prevent duplicate charges")
+        print("=" * 80 + "\n")
+        raise HTTPException(
+            status_code=400,
+            detail="Idempotency-Key header is required to prevent duplicate charges. Please include 'Idempotency-Key' in request headers."
+        )
+
+    print(f"✓ Idempotency-Key: {idempotency_key[:20]}... (verified)")
     print("=" * 80)
 
     try:
@@ -374,12 +396,18 @@ async def create_payment_intent(request: CreatePaymentIntentRequest):
             )
 
         # PRODUCTION MODE: Create real Stripe payment intent
-        intent = stripe.PaymentIntent.create(
-            amount=request.amount,
-            currency=request.currency,
-            metadata=request.metadata or {},
-            automatic_payment_methods={"enabled": True}
-        )
+        intent_params = {
+            "amount": request.amount,
+            "currency": request.currency,
+            "metadata": request.metadata or {},
+            "automatic_payment_methods": {"enabled": True}
+        }
+
+        # Idempotency key already validated - always add to Stripe request
+        intent_params["idempotency_key"] = idempotency_key
+        logging.info(f"[STRIPE] Using idempotency key: {idempotency_key[:20]}...")
+
+        intent = stripe.PaymentIntent.create(**intent_params)
 
         print(f"\n✅ Payment intent created successfully")
         print(f"   Payment Intent ID: {intent.id}")
@@ -973,6 +1001,18 @@ async def handle_user_payment_success(
         print(f"\n✅ WEBHOOK CHECK: User payment not yet processed by webhook")
         print(f"   Proceeding with client-side processing (webhook fallback)")
         print(f"⏱️  Webhook check time: {check_webhook_time:.2f}ms")
+
+        # Link payment intent to transaction for correlation
+        if request.payment_intent_id:
+            from app.utils.user_transaction_helper import update_transaction_payment_intent
+            correlation_success = await update_transaction_payment_intent(
+                transaction_id=stripe_checkout_session_id,
+                stripe_payment_intent_id=request.payment_intent_id
+            )
+            if correlation_success:
+                print(f"✅ Payment intent {request.payment_intent_id} linked to transaction {stripe_checkout_session_id}")
+            else:
+                logging.warning(f"⚠️  Failed to link payment intent {request.payment_intent_id} to transaction {stripe_checkout_session_id}")
 
         # Schedule background file processing for user transaction
         task_schedule_start = time.time()

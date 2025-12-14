@@ -1484,7 +1484,8 @@ class GoogleDriveService:
                 'target_language': properties.get('target_language'),
                 'page_count': int(properties.get('page_count', 1)),
                 'status': properties.get('status'),
-                'upload_timestamp': properties.get('upload_timestamp')
+                'upload_timestamp': properties.get('upload_timestamp'),
+                'translation_mode': properties.get('translation_mode', 'default')
             }
 
             logging.info(f"Successfully fetched file {file_id}: {file_info['filename']}")

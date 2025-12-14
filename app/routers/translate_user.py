@@ -611,21 +611,28 @@ async def translate_user_files(
             if customer_type == "enterprise":
                 print(f"   💰 Pricing: {total_units} raw pages → {total_quota_units} quota units → ${total_amount:.2f}")
 
-            batch_transaction_id = await create_user_transaction(
-                user_name=request.userName,
-                user_email=request.email,
-                documents=all_documents,  # ✅ FIX: All documents in one transaction
-                number_of_units=units_for_billing,  # Use quota units for enterprise
-                unit_type=unit_type,
-                cost_per_unit=cost_per_unit,
-                source_language=request.sourceLanguage,
-                target_language=request.targetLanguage,
-                stripe_checkout_session_id=batch_square_tx_id,  # ✅ FIX: Single Square ID
-                date=datetime.now(timezone.utc),
-                status="processing",
-            )
+            try:
+                batch_transaction_id = await create_user_transaction(
+                    user_name=request.userName,
+                    user_email=request.email,
+                    documents=all_documents,  # ✅ FIX: All documents in one transaction
+                    number_of_units=units_for_billing,  # Use quota units for enterprise
+                    unit_type=unit_type,
+                    cost_per_unit=cost_per_unit,
+                    source_language=request.sourceLanguage,
+                    target_language=request.targetLanguage,
+                    stripe_checkout_session_id=batch_square_tx_id,  # ✅ FIX: Single Square ID
+                    date=datetime.now(timezone.utc),
+                    status="processing",
+                )
 
-            if batch_transaction_id:
+                if not batch_transaction_id:
+                    logger.error("[TRANSACTION] Transaction creation returned None")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Failed to create transaction record"
+                    )
+
                 log_step("BATCH TRANSACTION CREATED", f"TX ID: {batch_transaction_id}")
                 print(f"   ✅ Batch transaction created: {batch_transaction_id}")
 
@@ -640,12 +647,25 @@ async def translate_user_files(
                             print(f"   ✅ Updated {file_info['filename']} with transaction_id")
                         except Exception as e:
                             print(f"   ⚠️  Failed to update {file_info['filename']} metadata: {e}")
-            else:
-                log_step("BATCH TRANSACTION FAILED", "Transaction creation returned None")
-                print(f"   ❌ Batch transaction creation failed")
+
+            except HTTPException:
+                raise  # Re-raise HTTP exceptions
+            except Exception as e:
+                logger.error(f"[TRANSACTION] Database error: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Transaction creation failed: {str(e)}"
+                )
+
+        except HTTPException:
+            raise  # Re-raise HTTP exceptions from inner try block
         except Exception as e:
             log_step("BATCH TRANSACTION ERROR", f"Error: {str(e)}")
             print(f"   ❌ Error creating batch transaction: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to process transaction: {str(e)}"
+            )
 
     # ========================================================================
     # ENTERPRISE SUBSCRIPTION UPDATE (if authenticated user)

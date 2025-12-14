@@ -8,7 +8,8 @@ Test Coverage:
 2. Duplicate event handling → skips processing
 3. Payment failed → logs error, no payment created
 4. Charge refunded → updates payment status
-5. Unsupported event types → logged appropriately
+5. Charge dispute created → stores dispute, flags payment
+6. Unsupported event types → logged appropriately
 
 Database: Uses translation_test with TEST_WEBHOOK_ prefix for cleanup
 """
@@ -50,7 +51,7 @@ def webhook_handler(test_db):
 
 @pytest.fixture(autouse=True)
 async def cleanup_test_data(test_db):
-    """Cleanup test webhook events and payments before/after each test."""
+    """Cleanup test webhook events, payments, and disputes before/after each test."""
     from pymongo import ASCENDING, IndexModel
 
     # Ensure unique index exists on webhook_events.event_id (critical for deduplication)
@@ -63,15 +64,27 @@ async def cleanup_test_data(test_db):
     except Exception:
         pass  # Index already exists
 
+    # Ensure unique index exists on disputes.dispute_id
+    try:
+        await test_db.disputes.create_index(
+            [("dispute_id", ASCENDING)],
+            unique=True,
+            name="dispute_id_unique"
+        )
+    except Exception:
+        pass  # Index already exists
+
     # Cleanup before test (in case of previous failures)
     await test_db.webhook_events.delete_many({"event_id": {"$regex": f"^{TEST_PREFIX}"}})
     await test_db.payments.delete_many({"stripe_payment_intent_id": {"$regex": f"^{TEST_PREFIX}"}})
+    await test_db.disputes.delete_many({"dispute_id": {"$regex": f"^{TEST_PREFIX}"}})
 
     yield
 
     # Cleanup after test
     await test_db.webhook_events.delete_many({"event_id": {"$regex": f"^{TEST_PREFIX}"}})
     await test_db.payments.delete_many({"stripe_payment_intent_id": {"$regex": f"^{TEST_PREFIX}"}})
+    await test_db.disputes.delete_many({"dispute_id": {"$regex": f"^{TEST_PREFIX}"}})
 
 
 @pytest.fixture
@@ -149,6 +162,47 @@ def charge_refunded_event():
                     "payment_intent": payment_intent_id or f"{TEST_PREFIX}pi_{uuid.uuid4().hex[:8]}",
                     "amount_refunded": amount_refunded,
                     "refunded": True
+                }
+            }
+        }
+    return _create_event
+
+
+@pytest.fixture
+def charge_dispute_created_event():
+    """Factory fixture for charge.dispute.created events."""
+    def _create_event(
+        event_id: str = None,
+        dispute_id: str = None,
+        charge_id: str = None,
+        payment_intent_id: str = None,
+        amount: int = 5000,
+        reason: str = "fraudulent",
+        status: str = "needs_response"
+    ):
+        created_timestamp = int(datetime.now(timezone.utc).timestamp())
+        evidence_due_by = created_timestamp + (7 * 24 * 60 * 60)  # 7 days from now
+
+        return {
+            "id": event_id or f"{TEST_PREFIX}evt_{uuid.uuid4().hex[:8]}",
+            "type": "charge.dispute.created",
+            "created": created_timestamp,
+            "data": {
+                "object": {
+                    "id": dispute_id or f"{TEST_PREFIX}dp_{uuid.uuid4().hex[:8]}",
+                    "charge": charge_id or f"{TEST_PREFIX}ch_{uuid.uuid4().hex[:8]}",
+                    "payment_intent": payment_intent_id or f"{TEST_PREFIX}pi_{uuid.uuid4().hex[:8]}",
+                    "amount": amount,
+                    "currency": "usd",
+                    "reason": reason,
+                    "status": status,
+                    "evidence_details": {
+                        "due_by": evidence_due_by,
+                        "has_evidence": False,
+                        "past_due": False
+                    },
+                    "created": created_timestamp,
+                    "metadata": {}
                 }
             }
         }
@@ -546,6 +600,162 @@ async def test_handle_event_concurrent_same_event(
 
         # ASSERT: Payment processing only called once
         assert mock_process.call_count == 1, "Payment processing should only be called once"
+
+
+@pytest.mark.asyncio
+async def test_handle_charge_dispute_created_stores_dispute(
+    webhook_handler,
+    test_db,
+    charge_dispute_created_event
+):
+    """
+    Test handling charge.dispute.created event.
+
+    Expected behavior:
+    1. Event stored in webhook_events collection
+    2. Dispute stored in disputes collection
+    3. Event marked as processed
+    4. Returns {"status": "processed"}
+    """
+    # ARRANGE: Create charge.dispute.created event
+    event = charge_dispute_created_event()
+    event_id = event["id"]
+    dispute_id = event["data"]["object"]["id"]
+    charge_id = event["data"]["object"]["charge"]
+    payment_intent_id = event["data"]["object"]["payment_intent"]
+    amount = event["data"]["object"]["amount"]
+    reason = event["data"]["object"]["reason"]
+    status = event["data"]["object"]["status"]
+
+    # ACT: Handle dispute event
+    result = await webhook_handler.handle_event(event)
+
+    # ASSERT: Response status
+    assert result["status"] == "processed", "Expected 'processed' status for dispute event"
+
+    # ASSERT: Event stored in webhook_events
+    stored_event = await test_db.webhook_events.find_one({"event_id": event_id})
+    assert stored_event is not None, "Event should be stored in webhook_events collection"
+    assert stored_event["event_type"] == "charge.dispute.created"
+    assert stored_event["processed"] is True, "Event should be marked as processed"
+
+    # ASSERT: Dispute stored in disputes collection
+    dispute = await test_db.disputes.find_one({"dispute_id": dispute_id})
+    assert dispute is not None, "Dispute should be stored in disputes collection"
+    assert dispute["charge_id"] == charge_id
+    assert dispute["payment_intent_id"] == payment_intent_id
+    assert dispute["amount"] == amount
+    assert dispute["reason"] == reason
+    assert dispute["status"] == status
+    assert "evidence_details" in dispute
+    assert "created_at" in dispute
+    assert "evidence_due_by" in dispute
+
+
+@pytest.mark.asyncio
+async def test_handle_charge_dispute_created_flags_payment(
+    webhook_handler,
+    test_db,
+    payment_intent_succeeded_event,
+    charge_dispute_created_event
+):
+    """
+    Test handling charge.dispute.created flags associated payment.
+
+    Expected behavior:
+    1. Existing payment gets flagged with dispute information
+    2. Dispute stored in disputes collection
+    3. Payment has_dispute=True and dispute_id set
+    """
+    # ARRANGE: Create payment first
+    payment_event = payment_intent_succeeded_event()
+    payment_intent_id = payment_event["data"]["object"]["id"]
+
+    with patch("app.services.webhook_handler.process_payment_files_background", new_callable=AsyncMock):
+        await webhook_handler.handle_event(payment_event)
+
+    # ARRANGE: Create dispute for that payment
+    dispute_event = charge_dispute_created_event(payment_intent_id=payment_intent_id)
+    dispute_id = dispute_event["data"]["object"]["id"]
+    reason = dispute_event["data"]["object"]["reason"]
+
+    # ACT: Handle dispute event
+    result = await webhook_handler.handle_event(dispute_event)
+
+    # ASSERT: Response status
+    assert result["status"] == "processed"
+
+    # ASSERT: Payment flagged with dispute
+    payment = await test_db.payments.find_one({"stripe_payment_intent_id": payment_intent_id})
+    assert payment is not None, "Payment should exist"
+    assert payment.get("has_dispute") is True, "Payment should be flagged with dispute"
+    assert payment.get("dispute_id") == dispute_id
+    assert payment.get("dispute_reason") == reason
+    assert "disputed_at" in payment
+
+
+@pytest.mark.asyncio
+async def test_handle_charge_dispute_created_no_payment_still_stores_dispute(
+    webhook_handler,
+    test_db,
+    charge_dispute_created_event
+):
+    """
+    Test handling charge.dispute.created when payment doesn't exist.
+
+    Expected behavior:
+    1. Dispute still stored in disputes collection
+    2. Warning logged but no exception raised
+    3. Event marked as processed
+    """
+    # ARRANGE: Create dispute for non-existent payment
+    payment_intent_id = f"{TEST_PREFIX}pi_nonexistent_{uuid.uuid4().hex[:8]}"
+    dispute_event = charge_dispute_created_event(payment_intent_id=payment_intent_id)
+    dispute_id = dispute_event["data"]["object"]["id"]
+
+    # ACT: Handle dispute event (payment doesn't exist)
+    result = await webhook_handler.handle_event(dispute_event)
+
+    # ASSERT: Should still process successfully
+    assert result["status"] == "processed", "Should handle missing payment gracefully"
+
+    # ASSERT: Dispute stored anyway
+    dispute = await test_db.disputes.find_one({"dispute_id": dispute_id})
+    assert dispute is not None, "Dispute should be stored even if payment not found"
+    assert dispute["payment_intent_id"] == payment_intent_id
+
+
+@pytest.mark.asyncio
+async def test_handle_duplicate_dispute_event_updates_existing(
+    webhook_handler,
+    test_db,
+    charge_dispute_created_event
+):
+    """
+    Test handling duplicate charge.dispute.created events.
+
+    Expected behavior:
+    1. First event creates dispute
+    2. Second event (same dispute_id) returns duplicate status
+    3. Dispute data remains unchanged (or updated if needed)
+    """
+    # ARRANGE: Create dispute event
+    event = charge_dispute_created_event()
+    dispute_id = event["data"]["object"]["id"]
+
+    # ACT: Handle event first time
+    result1 = await webhook_handler.handle_event(event)
+    assert result1["status"] == "processed"
+
+    # ACT: Handle same event again (duplicate via webhook_events)
+    result2 = await webhook_handler.handle_event(event)
+
+    # ASSERT: Second call returns duplicate status
+    assert result2["status"] == "duplicate", "Duplicate webhook event should return 'duplicate' status"
+
+    # ASSERT: Only one dispute stored
+    dispute_count = await test_db.disputes.count_documents({"dispute_id": dispute_id})
+    assert dispute_count == 1, "Only one dispute should be stored"
 
 
 if __name__ == "__main__":

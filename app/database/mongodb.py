@@ -337,6 +337,24 @@ class MongoDB:
             logger.warning(f"[MongoDB] Webhook events index creation failed: {e}")
             failed_count += 1
 
+        # Disputes collection indexes (for Stripe dispute tracking)
+        try:
+            disputes_indexes = [
+                IndexModel([("dispute_id", ASCENDING)], unique=True, name="dispute_id_unique"),
+                IndexModel([("charge_id", ASCENDING)], name="charge_id_idx"),
+                IndexModel([("payment_intent_id", ASCENDING)], name="payment_intent_id_idx"),
+                IndexModel([("status", ASCENDING)], name="status_idx"),
+                IndexModel([("reason", ASCENDING)], name="reason_idx"),
+                IndexModel([("created_at", ASCENDING)], name="created_at_asc"),
+                IndexModel([("evidence_due_by", ASCENDING)], name="evidence_due_by_idx")
+            ]
+            await self.db.disputes.create_indexes(disputes_indexes)
+            logger.info("[MongoDB] Disputes indexes created")
+            success_count += 1
+        except (OperationFailure, Exception) as e:
+            logger.warning(f"[MongoDB] Disputes index creation failed: {e}")
+            failed_count += 1
+
         logger.info(f"[MongoDB] Index creation completed: {success_count} collections successful, {failed_count} collections had issues")
 
     @property
@@ -406,6 +424,11 @@ class MongoDB:
     def webhook_events(self):
         """Get webhook_events collection for Stripe webhook audit trail."""
         return self.db.webhook_events if self.db is not None else None
+
+    @property
+    def disputes(self):
+        """Get disputes collection for Stripe dispute tracking."""
+        return self.db.disputes if self.db is not None else None
 
 
 # Global database instance

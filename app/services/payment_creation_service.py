@@ -35,7 +35,8 @@ class PaymentCreationService:
         customer_email: str,
         webhook_event_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        company_name: Optional[str] = None
+        company_name: Optional[str] = None,
+        db = None
     ) -> Dict[str, Any]:
         """
         Atomic payment creation with idempotency using MongoDB upsert.
@@ -52,6 +53,7 @@ class PaymentCreationService:
             webhook_event_id: Optional webhook event ID for tracking
             metadata: Optional additional metadata
             company_name: Optional company name (for enterprise users)
+            db: Optional database instance (uses global database if not provided)
 
         Returns:
             {
@@ -97,13 +99,17 @@ class PaymentCreationService:
             f"customer_email={customer_email}"
         )
 
+        # Use provided db or fallback to global database
+        payments_collection = db.payments if db is not None else database.payments
+
         # Build payment document
         payment_doc = {
             "stripe_payment_intent_id": payment_intent_id,
             "amount": amount_cents,
             "currency": currency,
             "user_email": customer_email,
-            "payment_status": "COMPLETED",
+            "status": "succeeded",
+            "payment_status": "succeeded",
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
             "payment_date": datetime.now(timezone.utc),
@@ -122,7 +128,7 @@ class PaymentCreationService:
 
         # Atomic upsert: Only inserts if payment_intent_id doesn't exist
         try:
-            result = await database.payments.update_one(
+            result = await payments_collection.update_one(
                 {"stripe_payment_intent_id": payment_intent_id},
                 {"$setOnInsert": payment_doc},
                 upsert=True
@@ -137,7 +143,7 @@ class PaymentCreationService:
                 )
 
                 # Fetch the existing payment
-                existing_payment = await database.payments.find_one(
+                existing_payment = await payments_collection.find_one(
                     {"stripe_payment_intent_id": payment_intent_id}
                 )
 
@@ -153,7 +159,7 @@ class PaymentCreationService:
             )
 
             # Fetch the newly created payment
-            new_payment = await database.payments.find_one(
+            new_payment = await payments_collection.find_one(
                 {"stripe_payment_intent_id": payment_intent_id}
             )
 
@@ -172,13 +178,15 @@ class PaymentCreationService:
 
     async def get_payment_by_intent_id(
         self,
-        payment_intent_id: str
+        payment_intent_id: str,
+        db = None
     ) -> Optional[Dict[str, Any]]:
         """
         Retrieve a payment by its Stripe payment intent ID.
 
         Args:
             payment_intent_id: Stripe payment intent ID
+            db: Optional database instance (uses global database if not provided)
 
         Returns:
             Payment document or None if not found
@@ -192,8 +200,11 @@ class PaymentCreationService:
         if not payment_intent_id or not payment_intent_id.strip():
             raise ValueError("payment_intent_id cannot be empty")
 
+        # Use provided db or fallback to global database
+        payments_collection = db.payments if db is not None else database.payments
+
         try:
-            payment = await database.payments.find_one(
+            payment = await payments_collection.find_one(
                 {"stripe_payment_intent_id": payment_intent_id}
             )
             return payment

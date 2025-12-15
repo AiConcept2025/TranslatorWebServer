@@ -628,6 +628,20 @@ async def test_db() -> AsyncIOMotorDatabase:
     except Exception as e:
         pytest.skip(f"Cannot connect to test database: {e}")
 
+    # Ensure required indexes exist for deduplication
+    # (tests may use database before indexes are auto-created by app)
+    try:
+        from pymongo import ASCENDING, IndexModel
+
+        # Create unique index on webhook_events.event_id for deduplication
+        webhook_indexes = [
+            IndexModel([("event_id", ASCENDING)], unique=True, name="event_id_unique")
+        ]
+        await test_database.webhook_events.create_indexes(webhook_indexes)
+    except Exception as e:
+        # Log but don't fail - indexes may already exist
+        pass
+
     yield test_database
 
     # Cleanup: Close connection

@@ -889,17 +889,44 @@ This is a minimal test email from the translation service.
 
         try:
             # Render invoice email template
+            from bson import Decimal128
+            from datetime import datetime
+
             invoice_number = invoice_data.get('invoice_number', 'N/A')
             company_name = invoice_data.get('company_name', 'N/A')
-            invoice_date = invoice_data.get('invoice_date', 'N/A')
-            due_date = invoice_data.get('due_date', 'N/A')
+            invoice_date_raw = invoice_data.get('invoice_date', 'N/A')
+            due_date_raw = invoice_data.get('due_date', 'N/A')
             total_amount = invoice_data.get('total_amount', 0.0)
             line_items = invoice_data.get('line_items', [])
             subtotal = invoice_data.get('subtotal', 0.0)
             tax_amount = invoice_data.get('tax_amount', 0.0)
 
+            # Format dates as date-only strings (e.g., "December 14, 2025")
+            invoice_date = 'N/A'
+            due_date = 'N/A'
+
+            if isinstance(invoice_date_raw, datetime):
+                invoice_date = invoice_date_raw.strftime('%B %d, %Y')
+            elif isinstance(invoice_date_raw, str) and invoice_date_raw != 'N/A':
+                try:
+                    dt = datetime.fromisoformat(invoice_date_raw.replace('Z', '+00:00'))
+                    invoice_date = dt.strftime('%B %d, %Y')
+                except ValueError:
+                    invoice_date = invoice_date_raw
+
+            if isinstance(due_date_raw, datetime):
+                due_date = due_date_raw.strftime('%B %d, %Y')
+            elif isinstance(due_date_raw, str) and due_date_raw != 'N/A':
+                try:
+                    dt = datetime.fromisoformat(due_date_raw.replace('Z', '+00:00'))
+                    due_date = dt.strftime('%B %d, %Y')
+                except ValueError:
+                    due_date = due_date_raw
+
+            logger.info(f"Formatted invoice_date: {invoice_date}")
+            logger.info(f"Formatted due_date: {due_date}")
+
             # Convert Decimal128 to float in line_items for template rendering
-            from bson import Decimal128
             processed_line_items = []
             for item in line_items:
                 processed_item = item.copy()
@@ -909,7 +936,18 @@ This is a minimal test email from the translation service.
                         value = processed_item[key]
                         if isinstance(value, Decimal128):
                             processed_item[key] = float(value.to_decimal())
+                        elif isinstance(value, int):
+                            processed_item[key] = float(value) if key != 'quantity' else value
                 processed_line_items.append(processed_item)
+
+            logger.info(f"Processed {len(processed_line_items)} line items")
+            for idx, item in enumerate(processed_line_items):
+                logger.info(
+                    f"  Line {idx+1}: {item.get('description', 'N/A')} | "
+                    f"Qty: {item.get('quantity', 0)} | "
+                    f"Price: ${item.get('unit_price', 0):.2f} | "
+                    f"Amount: ${item.get('amount', 0):.2f}"
+                )
 
             # Convert Decimal128 to float for totals, handle None
             if isinstance(total_amount, Decimal128):
@@ -926,6 +964,8 @@ This is a minimal test email from the translation service.
                 tax_amount = float(tax_amount.to_decimal())
             elif tax_amount is None:
                 tax_amount = 0.0
+
+            logger.info(f"Subtotal: ${subtotal:.2f}, Tax: ${tax_amount:.2f}, Total: ${total_amount:.2f}")
 
             # Template context
             context = {

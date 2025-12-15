@@ -10,12 +10,14 @@ from datetime import datetime
 import logging
 
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.enums import TA_RIGHT, TA_CENTER
+from reportlab.lib.enums import TA_RIGHT, TA_CENTER, TA_LEFT
 from bson import Decimal128
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,28 @@ def _to_float(value: Any) -> float:
             return 0.0
     else:
         return 0.0
+
+
+def _format_date(date_value: Any) -> str:
+    """
+    Format date value as human-readable date string (e.g., "December 14, 2025").
+
+    Args:
+        date_value: datetime object or ISO string
+
+    Returns:
+        Formatted date string or 'N/A'
+    """
+    if isinstance(date_value, datetime):
+        return date_value.strftime('%B %d, %Y')
+    elif isinstance(date_value, str) and date_value != 'N/A':
+        try:
+            dt = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+            return dt.strftime('%B %d, %Y')
+        except ValueError:
+            return date_value
+    else:
+        return 'N/A'
 
 
 def generate_invoice_pdf(invoice_dict: Dict[str, Any], payment_link_url: Optional[str] = None) -> BytesIO:
@@ -87,17 +111,50 @@ def generate_invoice_pdf(invoice_dict: Dict[str, Any], payment_link_url: Optiona
     # Get styles
     styles = getSampleStyleSheet()
 
-    # Header: Invoice Title
-    title_style = styles['Heading1']
-    title_style.alignment = TA_CENTER
+    # Company Header: Brand identity
+    company_header_style = ParagraphStyle(
+        'CompanyHeader',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#2196F3'),
+        alignment=TA_CENTER,
+        spaceAfter=6
+    )
+    company_info_style = ParagraphStyle(
+        'CompanyInfo',
+        parent=styles['Normal'],
+        fontSize=10,
+        alignment=TA_CENTER,
+        spaceAfter=12
+    )
+
+    elements.append(Paragraph(settings.company_name, company_header_style))
+    company_contact = f"{settings.company_email} | {settings.company_phone}"
+    elements.append(Paragraph(company_contact, company_info_style))
+    elements.append(Spacer(1, 0.2 * inch))
+
+    # Invoice Title
+    title_style = ParagraphStyle(
+        'InvoiceTitle',
+        parent=styles['Heading1'],
+        fontSize=20,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#333333')
+    )
     elements.append(Paragraph("INVOICE", title_style))
     elements.append(Spacer(1, 0.3 * inch))
 
     # Invoice metadata section
     invoice_number = invoice_dict.get('invoice_number', 'N/A')
     company_name = invoice_dict.get('company_name', 'N/A')
-    invoice_date = invoice_dict.get('invoice_date', 'N/A')
-    due_date = invoice_dict.get('due_date', 'N/A')
+    invoice_date_raw = invoice_dict.get('invoice_date', 'N/A')
+    due_date_raw = invoice_dict.get('due_date', 'N/A')
+
+    # Format dates as human-readable strings
+    invoice_date = _format_date(invoice_date_raw)
+    due_date = _format_date(due_date_raw)
+
+    logger.info(f"[PDF_GENERATION] Formatted dates - Invoice: {invoice_date}, Due: {due_date}")
 
     metadata = [
         ['Invoice Number:', invoice_number],
@@ -203,14 +260,16 @@ def generate_invoice_pdf(invoice_dict: Dict[str, Any], payment_link_url: Optiona
         Click the link above or visit the URL to pay securely via credit card, debit card, or bank account.<br/>
         <i>Powered by Stripe</i>
         """
+        logger.info(f"[PDF_GENERATION] Payment link included: {payment_link_url}")
     else:
-        # Fallback instructions
-        payment_text = """
+        # Fallback instructions using company settings
+        payment_text = f"""
         <b>Payment Methods:</b><br/>
         Please contact our billing department for payment options:<br/><br/>
-        Email: billing@company.com<br/>
-        Phone: (555) 123-4567
+        Email: {settings.company_email}<br/>
+        Phone: {settings.company_phone}
         """
+        logger.warning(f"[PDF_GENERATION] No payment link available, using fallback instructions")
 
     payment_para = Paragraph(payment_text, styles['Normal'])
     elements.append(payment_para)

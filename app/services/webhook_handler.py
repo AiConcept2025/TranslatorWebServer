@@ -269,6 +269,16 @@ class WebhookHandler:
         file_ids_str = metadata.get("file_ids")
         file_ids = file_ids_str.split(",") if file_ids_str else None
 
+        # Extract invoice metadata (from Payment Link)
+        invoice_id_from_metadata = metadata.get("invoice_id")
+        invoice_number_from_metadata = metadata.get("invoice_number")
+
+        if invoice_id_from_metadata:
+            logger.info(
+                f"[WEBHOOK] Payment linked to existing invoice: {invoice_number_from_metadata} "
+                f"(ID: {invoice_id_from_metadata})"
+            )
+
         # Use centralized payment creation service (idempotent, atomic upsert)
         # This prevents race conditions when multiple webhooks arrive concurrently
         try:
@@ -278,7 +288,8 @@ class WebhookHandler:
                 currency=currency,
                 customer_email=customer_email,
                 webhook_event_id=event_id,
-                metadata=metadata or {}
+                metadata=metadata or {},
+                db=self.db  # Pass database instance for test compatibility
             )
 
             if not result["created"]:
@@ -316,23 +327,82 @@ class WebhookHandler:
 
         logger.info(f"[WEBHOOK] Payment processing triggered for {payment_intent_id} (webhook event: {event_id})")
 
-        # Create invoice after payment success
-        try:
-            logger.info(f"[WEBHOOK] Creating invoice for payment {payment_intent_id}")
-            invoice = await create_invoice_from_payment(
-                payment_intent_id=payment_intent_id,
-                payment_data={
-                    "amount": amount,  # Amount in cents
-                    "currency": currency,
-                    "customer_email": customer_email,
-                    "metadata": metadata
-                },
-                db=self.db
-            )
-            logger.info(f"[WEBHOOK] Invoice created: {invoice['invoice_id']}")
-        except Exception as e:
-            logger.error(f"[WEBHOOK] Failed to create invoice for {payment_intent_id}: {e}", exc_info=True)
-            # Don't fail webhook processing if invoice creation fails
+        # Handle invoice: UPDATE existing (Payment Link) or CREATE new (legacy)
+        if invoice_id_from_metadata:
+            # UPDATE existing invoice (Payment Link flow)
+            try:
+                from bson import ObjectId, Decimal128
+                from pymongo import ReturnDocument
+
+                logger.info(
+                    f"[WEBHOOK] Updating existing invoice {invoice_number_from_metadata} "
+                    f"(ID: {invoice_id_from_metadata})"
+                )
+
+                # Convert amount to Decimal128 for MongoDB storage
+                amount_decimal = Decimal128(str(amount_dollars))
+
+                # Update invoice with payment details
+                updated_invoice = await self.db.invoices.find_one_and_update(
+                    {"_id": ObjectId(invoice_id_from_metadata)},
+                    {
+                        "$set": {
+                            "status": "paid",
+                            "stripe_payment_intent_id": payment_intent_id,
+                            "amount_paid": amount_decimal,
+                            "paid_at": datetime.now(timezone.utc)
+                        }
+                    },
+                    return_document=ReturnDocument.AFTER
+                )
+
+                if updated_invoice:
+                    logger.info(
+                        f"[WEBHOOK] ✅ Invoice {invoice_number_from_metadata} updated: "
+                        f"status={updated_invoice['status']}, "
+                        f"amount_paid=${amount_dollars:.2f}, "
+                        f"stripe_payment_intent_id={payment_intent_id}"
+                    )
+                else:
+                    # Invoice not found - this shouldn't happen but handle gracefully
+                    logger.warning(
+                        f"[WEBHOOK] ⚠️ Invoice {invoice_id_from_metadata} not found in database. "
+                        f"This may indicate the invoice was deleted or the ID is invalid. "
+                        f"Skipping invoice update."
+                    )
+
+            except Exception as e:
+                logger.error(
+                    f"[WEBHOOK] ❌ Failed to update invoice {invoice_id_from_metadata}: {e}",
+                    exc_info=True
+                )
+                # Don't fail webhook processing if invoice update fails
+                # Payment record is already created, invoice can be manually reconciled
+
+        else:
+            # CREATE new invoice (legacy flow for payments without invoice metadata)
+            try:
+                logger.info(
+                    f"[WEBHOOK] No invoice_id in payment metadata, creating new invoice "
+                    f"for payment {payment_intent_id}"
+                )
+                invoice = await create_invoice_from_payment(
+                    payment_intent_id=payment_intent_id,
+                    payment_data={
+                        "amount": amount,  # Amount in cents
+                        "currency": currency,
+                        "customer_email": customer_email,
+                        "metadata": metadata
+                    },
+                    db=self.db
+                )
+                logger.info(f"[WEBHOOK] Invoice created: {invoice['invoice_id']}")
+            except Exception as e:
+                logger.error(
+                    f"[WEBHOOK] Failed to create invoice for {payment_intent_id}: {e}",
+                    exc_info=True
+                )
+                # Don't fail webhook processing if invoice creation fails
 
     async def _handle_payment_failed(self, payment_intent: dict):
         """

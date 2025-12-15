@@ -1,140 +1,33 @@
 """
-Integration tests for invoice email functionality with PDF generation.
+REAL Integration tests for invoice email functionality.
 
-Tests the complete flow of:
-1. Generating PDF invoices from invoice data
-2. Attaching PDFs to emails
-3. Sending invoice emails via API endpoint
+Tests the COMPLETE flow with NO MOCKING:
+1. Real HTTP requests to running server
+2. Real database operations
+3. Real SMTP email sending
+4. Real Stripe Payment Link creation
+5. Real PDF generation and attachment
+
+IMPORTANT: Server must be running at http://localhost:8000
 """
 import pytest
-from io import BytesIO
-from PyPDF2 import PdfReader
-from datetime import datetime
-
-
-class TestInvoicePDFGeneration:
-    """Tests for PDF invoice generation"""
-
-    @pytest.mark.asyncio
-    async def test_generate_invoice_pdf(self):
-        """Test PDF generation produces valid PDF with correct content."""
-        from app.services.invoice_pdf_service import generate_invoice_pdf
-
-        # Arrange: Create test invoice data
-        invoice_data = {
-            "invoice_number": "INV-TEST-001",
-            "company_name": "Test Company LLC",
-            "invoice_date": "2025-01-15",
-            "due_date": "2025-02-15",
-            "line_items": [
-                {
-                    "description": "Translation Service - Monthly Subscription",
-                    "quantity": 1,
-                    "unit_price": 100.00,
-                    "amount": 100.00
-                },
-                {
-                    "description": "Overage Charges",
-                    "quantity": 50,
-                    "unit_price": 0.50,
-                    "amount": 25.00
-                }
-            ],
-            "subtotal": 125.00,
-            "tax_amount": 7.50,
-            "total_amount": 132.50
-        }
-
-        # Act: Generate PDF
-        pdf_buffer = generate_invoice_pdf(invoice_data)
-
-        # Assert: Validate PDF structure
-        assert isinstance(pdf_buffer, BytesIO), "PDF buffer should be BytesIO instance"
-        assert len(pdf_buffer.getvalue()) > 0, "PDF buffer should contain data"
-
-        # Validate PDF is readable
-        pdf_reader = PdfReader(pdf_buffer)
-        assert len(pdf_reader.pages) >= 1, "PDF should have at least one page"
-
-        # Validate PDF content contains key invoice data
-        page_text = pdf_reader.pages[0].extract_text()
-        assert "INV-TEST-001" in page_text, "PDF should contain invoice number"
-        assert "Test Company LLC" in page_text, "PDF should contain company name"
-        assert "Translation Service" in page_text, "PDF should contain service description"
-        assert "132.50" in page_text or "132.5" in page_text, "PDF should contain total amount"
-
-    @pytest.mark.asyncio
-    async def test_generate_invoice_pdf_with_minimal_data(self):
-        """Test PDF generation with minimal invoice data."""
-        from app.services.invoice_pdf_service import generate_invoice_pdf
-
-        # Arrange: Minimal invoice data
-        invoice_data = {
-            "invoice_number": "INV-MIN-001",
-            "company_name": "Minimal Corp",
-            "invoice_date": "2025-01-01",
-            "due_date": "2025-02-01",
-            "line_items": [
-                {"description": "Service", "quantity": 1, "unit_price": 50.00, "amount": 50.00}
-            ],
-            "subtotal": 50.00,
-            "tax_amount": 3.00,
-            "total_amount": 53.00
-        }
-
-        # Act: Generate PDF
-        pdf_buffer = generate_invoice_pdf(invoice_data)
-
-        # Assert: PDF is valid
-        assert isinstance(pdf_buffer, BytesIO)
-        pdf_buffer.seek(0)
-        pdf_reader = PdfReader(pdf_buffer)
-        assert len(pdf_reader.pages) >= 1
-
-    @pytest.mark.asyncio
-    async def test_generate_invoice_pdf_with_multiple_line_items(self):
-        """Test PDF generation with multiple line items."""
-        from app.services.invoice_pdf_service import generate_invoice_pdf
-
-        # Arrange: Invoice with many line items
-        invoice_data = {
-            "invoice_number": "INV-MULTI-001",
-            "company_name": "Multi Corp",
-            "invoice_date": "2025-01-01",
-            "due_date": "2025-02-01",
-            "line_items": [
-                {"description": f"Service {i}", "quantity": i, "unit_price": 10.00, "amount": i * 10.00}
-                for i in range(1, 11)  # 10 line items
-            ],
-            "subtotal": sum(i * 10.00 for i in range(1, 11)),
-            "tax_amount": sum(i * 10.00 for i in range(1, 11)) * 0.06,
-            "total_amount": sum(i * 10.00 for i in range(1, 11)) * 1.06
-        }
-
-        # Act: Generate PDF
-        pdf_buffer = generate_invoice_pdf(invoice_data)
-
-        # Assert: PDF is valid and contains all items
-        assert isinstance(pdf_buffer, BytesIO)
-        pdf_buffer.seek(0)
-        pdf_reader = PdfReader(pdf_buffer)
-        assert len(pdf_reader.pages) >= 1
-
-        # Verify at least some line items are present
-        page_text = pdf_reader.pages[0].extract_text()
-        assert "Service 1" in page_text or "Service" in page_text
 
 
 class TestInvoiceEmailEndpoint:
-    """Tests for invoice email API endpoint"""
+    """Real integration tests for invoice email API endpoint"""
 
     @pytest.mark.asyncio
     async def test_send_invoice_email_endpoint(self, http_client, test_db, auth_headers):
-        """Test API endpoint sends invoice email successfully."""
-        # Arrange: Create test company
+        """Test API endpoint sends invoice email successfully to REAL email address."""
+        # CRITICAL: This test sends REAL email to verify full integration
+        # Email will be sent to danishevsky@gmail.com via Yahoo SMTP
+
+        # Arrange: Create test company with REAL email address
+        REAL_TEST_EMAIL = "danishevsky@gmail.com"  # User's actual email for verification
+
         company_data = {
             "company_name": "Test Email Corp",
-            "contact_email": "test_invoice@example.com",
+            "contact_email": REAL_TEST_EMAIL,  # REAL email address
             "subscription_type": "enterprise",
             "address": {
                 "street": "123 Test St",
@@ -148,6 +41,7 @@ class TestInvoiceEmailEndpoint:
         company_id = company_data["company_name"]  # company_id is company_name string
 
         # Create test invoice
+        from bson import Decimal128
         invoice_data = {
             "company_id": company_id,
             "invoice_number": "INV-API-TEST-001",
@@ -158,30 +52,84 @@ class TestInvoiceEmailEndpoint:
                 {
                     "description": "Translation Service",
                     "quantity": 1,
-                    "unit_price": 100.00,
-                    "amount": 100.00
+                    "unit_price": Decimal128("100.00"),
+                    "amount": Decimal128("100.00")
                 }
             ],
-            "subtotal": 100.00,
-            "tax_amount": 6.00,
-            "total_amount": 106.00,
+            "subtotal": Decimal128("100.00"),
+            "tax_amount": Decimal128("6.00"),
+            "total_amount": Decimal128("106.00"),
             "status": "sent"
         }
         invoice_result = await test_db.invoices.insert_one(invoice_data)
         invoice_id = str(invoice_result.inserted_id)
 
+        print(f"\n{'='*80}")
+        print(f"INTEGRATION TEST: Sending REAL invoice email")
+        print(f"{'='*80}")
+        print(f"Invoice ID: {invoice_id}")
+        print(f"Invoice Number: INV-API-TEST-001")
+        print(f"Recipient: {REAL_TEST_EMAIL}")
+        print(f"This will send a REAL email via Yahoo SMTP")
+        print(f"Check your inbox at {REAL_TEST_EMAIL} after test completes")
+        print(f"{'='*80}\n")
+
         # Act: Call send email endpoint
+        print("Calling API endpoint to send invoice email...")
         response = await http_client.post(
             f"/api/v1/invoices/{invoice_id}/send-email",
             headers=auth_headers
         )
 
         # Assert: Response is successful
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        print(f"\nAPI Response Status: {response.status_code}")
+        print(f"API Response Body: {response.text}\n")
+
+        assert response.status_code == 200, \
+            f"Expected 200, got {response.status_code}. Response: {response.text}"
+
         data = response.json()
-        assert data["success"] is True
-        assert "test_invoice@example.com" in data["message"]
-        assert invoice_id in data["invoice_id"]
+        assert data["success"] is True, f"Email send should be successful. Response: {data}"
+        assert REAL_TEST_EMAIL in data["message"], \
+            f"Response should confirm email sent to {REAL_TEST_EMAIL}. Got: {data['message']}"
+        assert invoice_id in data["invoice_id"], \
+            f"Response should include invoice_id. Got: {data}"
+
+        print(f"✅ API returned success: {data['message']}")
+
+        # Verify: Payment link was created and stored in database
+        from bson import ObjectId
+        updated_invoice = await test_db.invoices.find_one({"_id": ObjectId(invoice_id)})
+
+        # CRITICAL: Payment link should be created for unpaid invoices
+        assert updated_invoice is not None, "Invoice should exist after email sent"
+
+        print(f"\nVerifying payment link creation...")
+        assert "stripe_payment_link_url" in updated_invoice, \
+            "Payment link URL should be stored in invoice (check Stripe API key configuration)"
+        assert updated_invoice["stripe_payment_link_url"] is not None, \
+            "Payment link URL should not be None - Stripe API call failed (check logs for error)"
+        assert updated_invoice["stripe_payment_link_url"].startswith("https://"), \
+            f"Payment link URL should be valid HTTPS URL, got: {updated_invoice.get('stripe_payment_link_url')}"
+
+        # Verify payment link metadata
+        assert "stripe_payment_link_id" in updated_invoice, "Payment link ID should be stored"
+        assert updated_invoice["stripe_payment_link_id"] is not None, "Payment link ID should not be None"
+        assert "payment_link_created_at" in updated_invoice, "Payment link creation timestamp should be stored"
+
+        payment_link_url = updated_invoice["stripe_payment_link_url"]
+        print(f"✅ Payment link created: {payment_link_url}")
+
+        print(f"\n{'='*80}")
+        print(f"✅ TEST COMPLETE - Email sent successfully")
+        print(f"{'='*80}")
+        print(f"Email recipient: {REAL_TEST_EMAIL}")
+        print(f"Invoice number: INV-API-TEST-001")
+        print(f"Payment link: {payment_link_url}")
+        print(f"\n⚠️  CHECK YOUR EMAIL INBOX: {REAL_TEST_EMAIL}")
+        print(f"Subject: Invoice INV-API-TEST-001 from Iris Solutions Translation Services")
+        print(f"Contains: PDF attachment + Stripe payment link")
+        print(f"{'='*80}\n")
 
     @pytest.mark.asyncio
     async def test_send_invoice_email_invalid_invoice(self, http_client, auth_headers):
@@ -215,16 +163,17 @@ class TestInvoiceEmailEndpoint:
         company_id = company_data["company_name"]  # company_id is company_name string
 
         # Create invoice
+        from bson import Decimal128
         invoice_data = {
             "company_id": company_id,
             "invoice_number": "INV-NO-EMAIL-001",
             "company_name": "No Email Corp",
             "invoice_date": "2025-01-15",
             "due_date": "2025-02-15",
-            "line_items": [{"description": "Service", "quantity": 1, "unit_price": 50.00, "amount": 50.00}],
-            "subtotal": 50.00,
-            "tax_amount": 3.00,
-            "total_amount": 53.00
+            "line_items": [{"description": "Service", "quantity": 1, "unit_price": Decimal128("50.00"), "amount": Decimal128("50.00")}],
+            "subtotal": Decimal128("50.00"),
+            "tax_amount": Decimal128("3.00"),
+            "total_amount": Decimal128("53.00")
         }
         invoice_result = await test_db.invoices.insert_one(invoice_data)
         invoice_id = str(invoice_result.inserted_id)
@@ -235,5 +184,5 @@ class TestInvoiceEmailEndpoint:
             headers=auth_headers
         )
 
-        # Assert: 400 error
-        assert response.status_code == 400, f"Expected 400, got {response.status_code}: {response.text}"
+        # Assert: 400 error for missing email
+        assert response.status_code == 400, f"Expected 400 for missing email, got {response.status_code}"

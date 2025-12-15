@@ -16,6 +16,7 @@ PyPDF2==3.0.1
 python-docx==1.1.0
 Pillow>=10.4.0
 lxml==4.9.3
+reportlab==4.2.5  # PDF generation for invoices
 
 # Google Drive API
 google-api-python-client==2.108.0
@@ -70,7 +71,6 @@ structlog==23.2.0
 slowapi==0.1.9
 
 # CORS support
-python-cors==1.7.0
 
 # Background tasks
 celery==5.3.4

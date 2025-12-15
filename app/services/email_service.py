@@ -6,6 +6,8 @@ import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
@@ -167,7 +169,8 @@ class EmailService:
         body_text: str,
         from_email: Optional[str] = None,
         from_name: Optional[str] = None,
-        reply_to: Optional[str] = None
+        reply_to: Optional[str] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None
     ) -> MIMEMultipart:
         """
         Build MIME email message with HTML and plain text alternatives.
@@ -181,6 +184,7 @@ class EmailService:
             from_email: Sender email (override)
             from_name: Sender name (override)
             reply_to: Reply-to address (override)
+            attachments: Optional list of attachments, each dict with 'data' (bytes) and 'filename' (str)
 
         Returns:
             MIME multipart message
@@ -213,6 +217,18 @@ class EmailService:
 
         msg.attach(part_text)
         msg.attach(part_html)
+
+        # Attach files if provided
+        if attachments:
+            for attachment in attachments:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(attachment['data'])
+                encoders.encode_base64(part)
+                part.add_header(
+                    'Content-Disposition',
+                    f'attachment; filename="{attachment["filename"]}"'
+                )
+                msg.attach(part)
 
         return msg
 
@@ -844,6 +860,142 @@ This is a minimal test email from the translation service.
         logger.info("=" * 80)
 
         return results
+
+    async def send_invoice_email(
+        self,
+        invoice_data: Dict[str, Any],
+        recipient_email: str,
+        recipient_name: str,
+        pdf_data: bytes,
+        payment_link_url: Optional[str] = None
+    ) -> EmailSendResult:
+        """
+        Send invoice notification email with PDF attachment.
+
+        Args:
+            invoice_data: Invoice document from MongoDB
+            recipient_email: Customer email address
+            recipient_name: Customer name
+            pdf_data: PDF invoice bytes
+
+        Returns:
+            EmailSendResult with send status
+        """
+        logger.info("=" * 80)
+        logger.info("INVOICE EMAIL - Sending invoice email with PDF attachment")
+        logger.info("=" * 80)
+        logger.info(f"Recipient: {recipient_name} <{recipient_email}>")
+        logger.info(f"Invoice: {invoice_data.get('invoice_number', 'N/A')}")
+
+        try:
+            # Render invoice email template
+            invoice_number = invoice_data.get('invoice_number', 'N/A')
+            company_name = invoice_data.get('company_name', 'N/A')
+            invoice_date = invoice_data.get('invoice_date', 'N/A')
+            due_date = invoice_data.get('due_date', 'N/A')
+            total_amount = invoice_data.get('total_amount', 0.0)
+            line_items = invoice_data.get('line_items', [])
+            subtotal = invoice_data.get('subtotal', 0.0)
+            tax_amount = invoice_data.get('tax_amount', 0.0)
+
+            # Convert Decimal128 to float in line_items for template rendering
+            from bson import Decimal128
+            processed_line_items = []
+            for item in line_items:
+                processed_item = item.copy()
+                # Convert Decimal128 values to float
+                for key in ['unit_price', 'amount', 'quantity']:
+                    if key in processed_item:
+                        value = processed_item[key]
+                        if isinstance(value, Decimal128):
+                            processed_item[key] = float(value.to_decimal())
+                processed_line_items.append(processed_item)
+
+            # Convert Decimal128 to float for totals, handle None
+            if isinstance(total_amount, Decimal128):
+                total_amount = float(total_amount.to_decimal())
+            elif total_amount is None:
+                total_amount = 0.0
+
+            if isinstance(subtotal, Decimal128):
+                subtotal = float(subtotal.to_decimal())
+            elif subtotal is None:
+                subtotal = 0.0
+
+            if isinstance(tax_amount, Decimal128):
+                tax_amount = float(tax_amount.to_decimal())
+            elif tax_amount is None:
+                tax_amount = 0.0
+
+            # Template context
+            context = {
+                'customer_name': recipient_name,
+                'invoice_number': invoice_number,
+                'company_name': company_name,
+                'invoice_date': invoice_date,
+                'due_date': due_date,
+                'total_amount': f"{total_amount:.2f}",
+                'line_items': processed_line_items,
+                'subtotal': f"{subtotal:.2f}",
+                'tax_amount': f"{tax_amount:.2f}",
+                'payment_link_url': payment_link_url
+            }
+
+            # Render HTML and text templates
+            body_html = template_service.render_template(
+                'invoice_notification.html',
+                context
+            )
+            body_text = template_service.render_template(
+                'invoice_notification.txt',
+                context
+            )
+
+            # Build email message with attachment
+            msg = self._build_email_message(
+                to_email=recipient_email,
+                to_name=recipient_name,
+                subject=f"Invoice {invoice_number} from {settings.email_from_name}",
+                body_html=body_html,
+                body_text=body_text,
+                attachments=[{
+                    'data': pdf_data,
+                    'filename': f"{invoice_number}.pdf"
+                }]
+            )
+
+            # Send email via SMTP
+            logger.info(f"Connecting to SMTP server: {self.smtp_host}:{self.smtp_port}")
+            smtp = self._create_smtp_connection()
+
+            try:
+                logger.info(f"Sending invoice email to {recipient_email}...")
+                smtp.sendmail(
+                    self.email_from,
+                    [recipient_email],
+                    msg.as_string()
+                )
+                logger.info(f"✅ Invoice email sent successfully to {recipient_email}")
+
+                return EmailSendResult(
+                    success=True,
+                    message=f"Invoice email sent to {recipient_email}",
+                    recipient=recipient_email,
+                    sent_at=datetime.now(timezone.utc).isoformat()
+                )
+
+            finally:
+                smtp.quit()
+                logger.info("SMTP connection closed")
+
+        except Exception as e:
+            logger.error(f"Failed to send invoice email: {e}", exc_info=True)
+            return EmailSendResult(
+                success=False,
+                message="Failed to send invoice email",
+                error=str(e),
+                recipient=recipient_email
+            )
 
 
 # Create singleton instance

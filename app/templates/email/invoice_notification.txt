@@ -1,0 +1,66 @@
+INVOICE {{ invoice_number }}
+
+Hi {{ customer_name }},
+
+Your invoice is ready. Please find the details below:
+
+================================================================================
+INVOICE DETAILS
+================================================================================
+
+Invoice Number: {{ invoice_number }}
+Bill To:        {{ company_name }}
+Invoice Date:   {{ invoice_date }}
+Due Date:       {{ due_date }}
+
+================================================================================
+LINE ITEMS
+================================================================================
+{% for item in line_items %}
+{{ item.description }}
+  Quantity: {{ item.quantity }}  |  Unit Price: ${{ "%.2f"|format(item.unit_price) }}  |  Amount: ${{ "%.2f"|format(item.amount) }}
+{% endfor %}
+
+================================================================================
+SUMMARY
+================================================================================
+
+Subtotal:               ${{ subtotal }}
+Tax (6%):               ${{ tax_amount }}
+----------------------------------------
+Total Amount:           ${{ total_amount }}
+
+================================================================================
+{% if payment_link_url %}
+
+========================================
+💳 PAY INVOICE NOW
+========================================
+
+Pay securely online:
+{{ payment_link_url }}
+
+Secure payment powered by Stripe
+
+{% else %}
+
+========================================
+PAYMENT INSTRUCTIONS
+========================================
+
+To pay this invoice, please contact our billing department
+or use your preferred payment method.
+
+{% endif %}
+================================================================================
+
+A PDF copy of this invoice is attached to this email for your records.
+
+Thank you for your business!
+
+Best regards,
+The Billing Team
+
+---
+This is an automated message. Please do not reply to this email.
+If you have any questions about this invoice, please contact our billing department.

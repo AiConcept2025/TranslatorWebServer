@@ -113,6 +113,11 @@ class InvoiceListItem(BaseModel):
     amount_paid: float = Field(default=0.0, ge=0, description="Amount paid towards this invoice")
     stripe_invoice_id: Optional[str] = Field(None, description="Stripe invoice ID (if applicable)")
 
+    # Payment link fields
+    stripe_payment_link_url: Optional[str] = Field(None, description="Stripe Payment Link URL for customer payment")
+    stripe_payment_link_id: Optional[str] = Field(None, description="Stripe Payment Link ID for reference and idempotency")
+    payment_link_created_at: Optional[str] = Field(None, description="When payment link was created (ISO 8601)")
+
     @computed_field
     @property
     def amount_due(self) -> float:

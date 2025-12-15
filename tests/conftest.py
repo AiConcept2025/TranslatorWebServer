@@ -14,9 +14,8 @@ from typing import Dict, Any
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from dotenv import load_dotenv
 
-# Load test environment variables BEFORE importing app config
-load_dotenv(".env")  # Load base config
-load_dotenv(".env.test", override=True)  # Override with test config
+# Load environment variables from .env BEFORE importing app config
+load_dotenv(".env")  # Load config from .env (same as production)
 
 # CRITICAL: Do NOT import database from app.database.mongodb here!
 # That singleton uses settings.mongodb_database which points to PRODUCTION.
@@ -24,7 +23,7 @@ load_dotenv(".env.test", override=True)  # Override with test config
 
 from tests.test_logger import TestLogger, get_test_headers
 
-# Test database configuration (from .env.test)
+# Test database configuration (from .env)
 TEST_MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://iris:Sveta87201120@localhost:27017/translation_test?authSource=translation")
 TEST_DATABASE_NAME = os.getenv("MONGODB_DATABASE", "translation_test")
 
@@ -57,8 +56,8 @@ def pytest_configure(config):
             f"Current database: {settings.mongodb_database}\n"
             f"Expected: Database name must end with '_test'\n\n"
             f"REQUIRED ACTION:\n"
-            f"  1. Ensure .env.test exists in server/ directory\n"
-            f"  2. Verify MONGODB_DATABASE=translation_test in .env.test\n"
+            f"  1. Ensure .env exists in server/ directory\n"
+            f"  2. Verify MONGODB_DATABASE=translation_test in .env\n"
             f"  3. Run pytest again\n\n"
             f"This safety check prevents accidentally running tests against production data.\n"
             f"{'='*80}\n",
@@ -116,6 +115,56 @@ def pytest_configure(config):
 # ============================================================================
 # Shared Test Fixtures
 # ============================================================================
+
+@pytest.fixture(scope="function")
+async def http_client():
+    """
+    Provides an HTTP client for making requests to the test server.
+
+    CRITICAL: Assumes server is already running at http://localhost:8000.
+    Tests use real HTTP requests, NOT direct function calls.
+
+    Returns:
+        httpx.AsyncClient: Async HTTP client configured for localhost:8000
+    """
+    async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=30.0) as client:
+        yield client
+
+
+@pytest.fixture(scope="function")
+async def auth_headers(http_client):
+    """
+    Get authentication headers for admin user.
+
+    Uses the real login endpoint to obtain a valid session token.
+    Automatically handles authentication for tests that require admin access.
+
+    Returns:
+        dict: {"Authorization": "Bearer {token}"}
+    """
+    # Use the corporate login endpoint to get admin token
+    login_response = await http_client.post(
+        "/login/corporate",
+        json={
+            "companyName": "Iris Trading",
+            "userEmail": "danishevsky@gmail.com",
+            "password": "Sveta87201120!",
+            "userFullName": "Manager User",
+            "loginDateTime": datetime.now(timezone.utc).isoformat()
+        }
+    )
+
+    if login_response.status_code != 200:
+        pytest.skip(f"Failed to authenticate admin user: {login_response.status_code}")
+
+    login_data = login_response.json()
+    session_token = login_data.get("data", {}).get("authToken")
+
+    if not session_token:
+        pytest.skip("No authToken in login response")
+
+    return {"Authorization": f"Bearer {session_token}"}
+
 
 @pytest.fixture(scope="function")
 async def admin_session_token():
@@ -578,6 +627,20 @@ async def test_db() -> AsyncIOMotorDatabase:
         await mongo_client.admin.command('ping')
     except Exception as e:
         pytest.skip(f"Cannot connect to test database: {e}")
+
+    # Ensure required indexes exist for deduplication
+    # (tests may use database before indexes are auto-created by app)
+    try:
+        from pymongo import ASCENDING, IndexModel
+
+        # Create unique index on webhook_events.event_id for deduplication
+        webhook_indexes = [
+            IndexModel([("event_id", ASCENDING)], unique=True, name="event_id_unique")
+        ]
+        await test_database.webhook_events.create_indexes(webhook_indexes)
+    except Exception as e:
+        # Log but don't fail - indexes may already exist
+        pass
 
     yield test_database
 

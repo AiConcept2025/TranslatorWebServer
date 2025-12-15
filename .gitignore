@@ -247,3 +247,4 @@ backups/
 
 # External project files
 app/app-counter
+server_logs.txt

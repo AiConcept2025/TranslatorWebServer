@@ -120,7 +120,12 @@ class Settings(BaseSettings):
     email_reply_to: Optional[str] = None
     email_enabled: bool = True
     email_template_dir: str = "./app/templates/email"
-    translation_service_company: str  # REQUIRED - no default
+
+    # Company Information - REQUIRED for invoices and communications
+    company_name: str  # REQUIRED - no default (e.g., "Iris Solutions")
+    company_email: str  # REQUIRED - no default (e.g., "billing@irissolutions.com")
+    company_phone: str  # REQUIRED - no default (e.g., "(555) 123-4567")
+    translation_service_company: str  # REQUIRED - no default (legacy field)
 
     # Simple validators for basic format checking only
     @field_validator('allowed_file_types')
@@ -233,7 +238,12 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Get cached application settings."""
+    """
+    Get cached application settings.
+
+    Note: Cache is cleared on module reload to ensure settings
+    are re-read when code changes during development.
+    """
     return Settings()
 
 

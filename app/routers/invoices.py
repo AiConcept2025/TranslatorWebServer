@@ -1340,3 +1340,152 @@ async def generate_quarterly_invoice(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate invoice: {str(e)}"
         )
+
+
+@router.post(
+    "/{invoice_id}/send-email",
+    status_code=status.HTTP_200_OK,
+    summary="Send Invoice Email",
+    description="Send invoice email with PDF attachment to customer (Admin only)",
+    responses={
+        200: {
+            "description": "Invoice email sent successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Invoice sent to customer@example.com",
+                        "invoice_id": "674e1234567890abcdef1234"
+                    }
+                }
+            }
+        },
+        400: {"description": "Company email not found or invalid request"},
+        404: {"description": "Invoice not found"},
+        500: {"description": "Failed to send email"}
+    }
+)
+async def send_invoice_email(
+    invoice_id: str = Path(..., description="Invoice ID (MongoDB ObjectId)"),
+    admin: Dict[str, Any] = Depends(get_admin_user)
+):
+    """
+    Send invoice email with PDF attachment to customer.
+
+    **Admin Only**
+
+    This endpoint:
+    1. Retrieves the invoice from database
+    2. Fetches the company to get customer email
+    3. Generates a PDF invoice
+    4. Sends email with PDF attachment
+
+    Args:
+        invoice_id: Invoice MongoDB ObjectId
+        admin: Admin user (injected by auth middleware)
+
+    Returns:
+        JSON response with success status and details
+
+    Raises:
+        HTTPException 400: If company email not found
+        HTTPException 404: If invoice not found
+        HTTPException 500: If email sending fails
+    """
+    logger.info(f"[INVOICE_EMAIL] Admin {admin.get('email')} sending invoice {invoice_id}")
+
+    try:
+        # 1. Fetch invoice from database
+        try:
+            invoice = await database.invoices.find_one({"_id": ObjectId(invoice_id)})
+        except Exception:
+            # Invalid ObjectId format
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid invoice ID format"
+            )
+
+        if not invoice:
+            logger.error(f"[INVOICE_EMAIL] Invoice not found: {invoice_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invoice not found"
+            )
+
+        logger.info(f"[INVOICE_EMAIL] Found invoice: {invoice.get('invoice_number')}")
+
+        # 2. Fetch company for customer email
+        # Handle both company_id and company_name fields (invoices may have either)
+        company_id = invoice.get("company_id") or invoice.get("company_name")
+
+        # Query by company_name (string), not _id (ObjectId)
+        company = await database.company.find_one({"company_name": company_id})
+
+        if not company or not company.get("contact_email"):
+            logger.error(f"[INVOICE_EMAIL] Company email not found for company_id: {company_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Company email not found"
+            )
+
+        customer_email = company["contact_email"]
+        customer_name = company.get("company_name", "Customer")
+        logger.info(f"[INVOICE_EMAIL] Sending to: {customer_name} <{customer_email}>")
+
+        # 3. Create or get Stripe payment link
+        from app.services.stripe_payment_link_service import stripe_payment_link_service
+
+        payment_link_url = await stripe_payment_link_service.create_or_get_payment_link(
+            invoice=invoice,
+            db=database
+        )
+
+        if payment_link_url:
+            logger.info(f"[INVOICE_EMAIL] Payment link created: {payment_link_url}")
+            # Refresh invoice to get updated payment link fields
+            invoice = await database.invoices.find_one({"_id": ObjectId(invoice_id)})
+        else:
+            logger.warning(f"[INVOICE_EMAIL] Payment link not created (invoice paid or Stripe error)")
+
+        # 4. Generate PDF with payment link
+        from app.services.invoice_pdf_service import generate_invoice_pdf
+
+        pdf_buffer = generate_invoice_pdf(invoice, payment_link_url=payment_link_url)
+        logger.info(f"[INVOICE_EMAIL] PDF generated successfully")
+
+        # 5. Send email with PDF attachment and payment link
+        from app.services.email_service import email_service
+
+        result = await email_service.send_invoice_email(
+            invoice_data=invoice,
+            recipient_email=customer_email,
+            recipient_name=customer_name,
+            pdf_data=pdf_buffer.getvalue(),
+            payment_link_url=payment_link_url
+        )
+
+        if not result.success:
+            logger.error(f"[INVOICE_EMAIL] Failed to send email: {result.error}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to send email: {result.error}"
+            )
+
+        logger.info(f"[INVOICE_EMAIL] ✅ Invoice {invoice.get('invoice_number')} sent to {customer_email}")
+
+        return {
+            "success": True,
+            "message": f"Invoice sent to {customer_email}",
+            "invoice_id": invoice_id,
+            "payment_link_url": payment_link_url
+        }
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"[INVOICE_EMAIL] Unexpected error:", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send invoice email: {str(e)}"
+        )

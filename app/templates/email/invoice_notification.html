@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice {{ invoice_number }}</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background-color: #2196F3; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0;">
+        <h1 style="margin: 0;">Invoice {{ invoice_number }}</h1>
+    </div>
+
+    <div style="background-color: #f9f9f9; padding: 30px; border: 1px solid #ddd; border-radius: 0 0 5px 5px;">
+        <div style="font-size: 18px; margin-bottom: 20px;">
+            <p>Hi {{ customer_name }},</p>
+        </div>
+
+        <p>Your invoice is ready. Please find the details below:</p>
+
+        <!-- Invoice Metadata -->
+        <div style="background-color: #e3f2fd; padding: 15px; margin: 20px 0; border-radius: 5px; border-left: 4px solid #2196F3;">
+            <p style="margin: 5px 0;"><strong>Invoice Number:</strong> {{ invoice_number }}</p>
+            <p style="margin: 5px 0;"><strong>Bill To:</strong> {{ company_name }}</p>
+            <p style="margin: 5px 0;"><strong>Invoice Date:</strong> {{ invoice_date }}</p>
+            <p style="margin: 5px 0;"><strong>Due Date:</strong> {{ due_date }}</p>
+        </div>
+
+        <!-- Line Items Table -->
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <thead>
+                <tr style="background-color: #2196F3; color: white;">
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Description</th>
+                    <th style="padding: 12px; text-align: right; border: 1px solid #ddd; width: 60px;">Qty</th>
+                    <th style="padding: 12px; text-align: right; border: 1px solid #ddd; width: 80px;">Price</th>
+                    <th style="padding: 12px; text-align: right; border: 1px solid #ddd; width: 90px;">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in line_items %}
+                <tr style="background-color: {% if loop.index % 2 == 0 %}#f0f0f0{% else %}white{% endif %};">
+                    <td style="padding: 10px; border: 1px solid #ddd;">{{ item.description }}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; text-align: right;">{{ item.quantity }}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; text-align: right;">${{ "%.2f"|format(item.unit_price) }}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${{ "%.2f"|format(item.amount) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Summary -->
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #ddd;">
+            <table style="width: 100%; margin-top: 10px;">
+                <tr>
+                    <td style="text-align: right; padding: 5px 0;"><strong>Subtotal:</strong></td>
+                    <td style="text-align: right; padding: 5px 0; width: 120px; padding-left: 20px;">${{ subtotal }}</td>
+                </tr>
+                <tr>
+                    <td style="text-align: right; padding: 5px 0;"><strong>Tax (6%):</strong></td>
+                    <td style="text-align: right; padding: 5px 0; width: 120px; padding-left: 20px;">${{ tax_amount }}</td>
+                </tr>
+                <tr style="font-size: 18px; color: #2196F3;">
+                    <td style="text-align: right; padding: 10px 0; border-top: 2px solid #333;"><strong>Total Amount:</strong></td>
+                    <td style="text-align: right; padding: 10px 0; border-top: 2px solid #333; width: 120px; padding-left: 20px;"><strong>${{ total_amount }}</strong></td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Payment Link Button -->
+        {% if payment_link_url %}
+        <div style="margin-top: 30px; margin-bottom: 20px; text-align: center;">
+            <a href="{{ payment_link_url }}"
+               style="display: inline-block; background-color: #4CAF50; color: white; padding: 16px 48px; text-decoration: none; border-radius: 6px; font-size: 18px; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.2); transition: background-color 0.3s;">
+                💳 Pay Invoice Now
+            </a>
+            <p style="margin-top: 12px; color: #666; font-size: 14px;">
+                Secure payment powered by Stripe
+            </p>
+        </div>
+        {% else %}
+        <div style="margin-top: 30px; margin-bottom: 20px; padding: 16px; background-color: #f5f5f5; border-left: 4px solid #999; border-radius: 4px;">
+            <p style="margin: 0; font-size: 14px; color: #555;">
+                📧 To pay this invoice, please contact our billing department or use your preferred payment method.
+            </p>
+        </div>
+        {% endif %}
+
+        <div style="margin-top: 30px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ff9800; border-radius: 3px;">
+            <p style="margin: 0;">📎 A PDF copy of this invoice is attached to this email for your records.</p>
+        </div>
+
+        <div style="margin-top: 20px; font-style: italic;">
+            <p>Thank you for your business!</p>
+            <p>Best regards,<br>
+            The Billing Team</p>
+        </div>
+    </div>
+
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 14px;">
+        <p><small>This is an automated message. Please do not reply to this email.</small></p>
+        <p><small>If you have any questions about this invoice, please contact our billing department.</small></p>
+    </div>
+</body>
+</html>

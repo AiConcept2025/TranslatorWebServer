@@ -133,12 +133,13 @@ class StripePaymentLinkService:
 
             logger.info(f"[PAYMENT_LINK] Created Stripe Price: {price.id} for invoice {invoice_number}")
 
-            # 5. Create Stripe Payment Link
+            # 5. Create Stripe Payment Link (restricted to card payments only for enterprise invoices)
             payment_link = stripe.PaymentLink.create(
                 line_items=[{
                     "price": price.id,
                     "quantity": 1
                 }],
+                payment_method_types=["card"],  # Only allow credit/debit card payments
                 metadata={
                     "invoice_id": invoice_id,
                     "invoice_number": invoice_number

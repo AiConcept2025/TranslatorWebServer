@@ -18,6 +18,7 @@ from app.models.invoice import (
     InvoiceUpdateResponse,
     InvoiceListItem
 )
+from app.utils.serialization import serialize_for_json
 from app.middleware.auth_middleware import get_admin_user
 from app.services.invoice_generation_service import invoice_generation_service, InvoiceGenerationError
 
@@ -366,35 +367,12 @@ async def get_company_invoices(
         # Convert ObjectIds and datetime objects to JSON-serializable format
         logger.info(f"[INVOICES DEBUG] ========== STARTING SERIALIZATION ==========")
         for idx, invoice in enumerate(invoices):
-            invoice["_id"] = str(invoice["_id"])
+            logger.info(f"[INVOICES DEBUG] Document {idx + 1}: Serializing invoice {invoice.get('invoice_number', 'N/A')}")
 
-            # Convert subscription_id if it's an ObjectId (for legacy data)
-            if "subscription_id" in invoice and isinstance(invoice["subscription_id"], ObjectId):
-                logger.info(f"[INVOICES DEBUG] Document {idx + 1}: Converting subscription_id from ObjectId to string: {invoice['subscription_id']}")
-                invoice["subscription_id"] = str(invoice["subscription_id"])
-            elif "subscription_id" in invoice:
-                logger.info(f"[INVOICES DEBUG] Document {idx + 1}: subscription_id is already a string: {invoice['subscription_id']} (type: {type(invoice['subscription_id']).__name__})")
+            # Serialize ALL datetime/ObjectId/Decimal128 fields recursively
+            invoices[idx] = serialize_for_json(invoice)
 
-            # Convert Decimal128 fields to float (for MongoDB Decimal128 types)
-            from bson.decimal128 import Decimal128
-            for key, value in list(invoice.items()):
-                if isinstance(value, Decimal128):
-                    logger.info(f"[INVOICES DEBUG] Document {idx + 1}: Converting {key} from Decimal128 to float")
-                    invoice[key] = float(value.to_decimal())
-
-            # Convert datetime fields to ISO format strings
-            datetime_fields = ["invoice_date", "due_date", "created_at"]
-            for field in datetime_fields:
-                if field in invoice and hasattr(invoice[field], "isoformat"):
-                    invoice[field] = invoice[field].isoformat()
-
-            # Convert datetime in payment_applications array
-            if "payment_applications" in invoice and isinstance(invoice["payment_applications"], list):
-                for payment_app in invoice["payment_applications"]:
-                    if "applied_date" in payment_app and hasattr(payment_app["applied_date"], "isoformat"):
-                        payment_app["applied_date"] = payment_app["applied_date"].isoformat()
-
-            logger.info(f"[INVOICES DEBUG] Document {idx + 1} serialized successfully")
+            logger.info(f"[INVOICES DEBUG] Document {idx + 1}: Serialization complete")
 
         logger.info(f"[INVOICES DEBUG] ========== SERIALIZATION COMPLETE ==========")
         logger.info(f"[INVOICES DEBUG] Total invoices after serialization: {len(invoices)}")
@@ -886,9 +864,9 @@ async def update_invoice(
         update_dict = update_data.model_dump(exclude_unset=True)
         logger.info(f"📨 Update Data: {update_dict}")
 
-        # Check if invoice exists (query by invoice_id field, not _id)
+        # Check if invoice exists (query by MongoDB _id)
         logger.info(f"🔄 Checking if invoice exists: {invoice_id}")
-        existing_invoice = await database.invoices.find_one({"invoice_id": invoice_id})
+        existing_invoice = await database.invoices.find_one({"_id": ObjectId(invoice_id)})
         if not existing_invoice:
             logger.warning(f"❌ Invoice not found: {invoice_id}")
             raise HTTPException(
@@ -982,7 +960,7 @@ async def update_invoice(
         logger.info(f"🔄 Updating invoice in database...")
         logger.info(f"📨 Final update data keys: {list(update_dict.keys())}")
         result = await database.invoices.update_one(
-            {"invoice_id": invoice_id},
+            {"_id": ObjectId(invoice_id)},
             {"$set": update_dict}
         )
 
@@ -992,7 +970,7 @@ async def update_invoice(
             logger.info(f"✅ Invoice updated: modified_count={result.modified_count}")
 
         # Fetch updated invoice
-        updated_invoice = await database.invoices.find_one({"invoice_id": invoice_id})
+        updated_invoice = await database.invoices.find_one({"_id": ObjectId(invoice_id)})
 
         # Serialize for JSON response
         updated_invoice["_id"] = str(updated_invoice["_id"])
@@ -1180,10 +1158,17 @@ async def list_invoices(
                 if "period_end" in bp and hasattr(bp["period_end"], "isoformat"):
                     bp["period_end"] = bp["period_end"].isoformat()
 
-            # Convert Decimal128 if present
+            # Convert Decimal128 if present (top-level fields)
             for key, value in list(invoice.items()):
                 if isinstance(value, Decimal128):
                     invoice[key] = float(value.to_decimal())
+
+            # Convert Decimal128 in line_items array (nested)
+            if "line_items" in invoice and isinstance(invoice["line_items"], list):
+                for line_item in invoice["line_items"]:
+                    for key, value in list(line_item.items()):
+                        if isinstance(value, Decimal128):
+                            line_item[key] = float(value.to_decimal())
 
         logger.info(f"✅ Returning {len(invoices)} invoices")
 
@@ -1343,6 +1328,122 @@ async def generate_quarterly_invoice(
 
 
 @router.post(
+    "/generate-monthly",
+    status_code=status.HTTP_200_OK,
+    response_model=InvoiceCreateResponse,
+    summary="Generate Monthly Invoice",
+    description="Generate a monthly invoice for a subscription with line items (Admin only)",
+    responses={
+        200: {
+            "description": "Monthly invoice generated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Month 3 invoice generated successfully",
+                        "data": {
+                            "invoice_number": "INV-2025-M03-abc123",
+                            "company_name": "Acme Corporation",
+                            "total_amount": 525.00,
+                            "status": "sent"
+                        }
+                    }
+                }
+            }
+        },
+        400: {"description": "Invalid subscription or month"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not authorized (admin only)"},
+        500: {"description": "Internal server error"}
+    }
+)
+async def generate_monthly_invoice(
+    subscription_id: str = Query(..., description="Subscription ID"),
+    month: int = Query(..., ge=1, le=12, description="Month number (1-12)"),
+    admin: Dict[str, Any] = Depends(get_admin_user)
+):
+    """
+    Generate a monthly invoice with line items for a subscription.
+
+    **Admin Only**
+
+    This endpoint creates an invoice for a specific month of a subscription,
+    including:
+    - Base subscription charges for that month
+    - Overage charges (units used beyond allocation)
+    - Billing period information
+    - Itemized line items
+
+    Args:
+        subscription_id: Subscription ObjectId
+        month: Month number (1=Jan, 2=Feb, ..., 12=Dec)
+        admin: Admin user (injected by auth middleware)
+
+    Returns:
+        InvoiceCreateResponse with generated invoice data
+
+    Raises:
+        HTTPException 400: If subscription not found or month invalid
+        HTTPException 401: If not authenticated
+        HTTPException 403: If not admin
+        HTTPException 500: If invoice generation fails
+    """
+    logger.info(f"[API] Admin {admin.get('email')} generating month {month} invoice for subscription {subscription_id}")
+
+    try:
+        # Generate invoice using service
+        invoice_doc = await invoice_generation_service.generate_monthly_invoice(
+            subscription_id=subscription_id,
+            month=month
+        )
+
+        logger.info(f"[API] Invoice generated: {invoice_doc.get('invoice_number')}")
+
+        # Serialize for JSON response
+        invoice_doc["_id"] = str(invoice_doc["_id"])
+
+        # Convert datetime fields to ISO format
+        datetime_fields = ["invoice_date", "due_date", "created_at", "updated_at"]
+        for field in datetime_fields:
+            if field in invoice_doc and hasattr(invoice_doc[field], "isoformat"):
+                invoice_doc[field] = invoice_doc[field].isoformat()
+
+        # Convert billing_period datetimes
+        if "billing_period" in invoice_doc and invoice_doc["billing_period"]:
+            bp = invoice_doc["billing_period"]
+            if "period_start" in bp and hasattr(bp["period_start"], "isoformat"):
+                bp["period_start"] = bp["period_start"].isoformat()
+            if "period_end" in bp and hasattr(bp["period_end"], "isoformat"):
+                bp["period_end"] = bp["period_end"].isoformat()
+
+        # Create InvoiceListItem for response
+        invoice_item = InvoiceListItem(**invoice_doc)
+
+        response_payload = {
+            "success": True,
+            "message": f"Month {month} invoice generated successfully",
+            "data": invoice_item
+        }
+
+        logger.info(f"[API] Returning invoice: {invoice_doc['invoice_number']}")
+
+        return InvoiceCreateResponse(**response_payload)
+
+    except InvoiceGenerationError as e:
+        logger.error(f"[API] Invoice generation error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"[API] Unexpected error generating invoice:", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate invoice: {str(e)}"
+        )
+
+
+@router.post(
     "/{invoice_id}/send-email",
     status_code=status.HTTP_200_OK,
     summary="Send Invoice Email",
@@ -1417,18 +1518,40 @@ async def send_invoice_email(
         # 2. Fetch company for customer email
         # Handle both company_id and company_name fields (invoices may have either)
         company_id = invoice.get("company_id") or invoice.get("company_name")
+        logger.info(f"[INVOICE_EMAIL] Looking up company with company_name: {company_id}")
 
         # Query by company_name (string), not _id (ObjectId)
         company = await database.company.find_one({"company_name": company_id})
 
-        if not company or not company.get("contact_email"):
-            logger.error(f"[INVOICE_EMAIL] Company email not found for company_id: {company_id}")
+        if not company:
+            logger.error(f"[INVOICE_EMAIL] Company record not found in database for company_name: {company_id}")
+            logger.error(f"[INVOICE_EMAIL] Invoice company_id field: {invoice.get('company_id')}")
+            logger.error(f"[INVOICE_EMAIL] Invoice company_name field: {invoice.get('company_name')}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Company email not found"
+                detail=f"Company not found: {company_id}"
             )
 
-        customer_email = company["contact_email"]
+        # Check both contact_email (new format) and contact_person.email (legacy format)
+        contact_email = company.get("contact_email")
+        if not contact_email:
+            # Fallback to contact_person.email for backward compatibility
+            contact_person = company.get("contact_person", {})
+            contact_email = contact_person.get("email") if isinstance(contact_person, dict) else None
+            if contact_email:
+                logger.info(f"[INVOICE_EMAIL] Using email from contact_person.email (legacy format)")
+
+        if not contact_email:
+            logger.error(f"[INVOICE_EMAIL] Company '{company_id}' found but no email configured")
+            logger.error(f"[INVOICE_EMAIL] Checked: contact_email (top-level) and contact_person.email (nested)")
+            logger.error(f"[INVOICE_EMAIL] Company record fields: {list(company.keys())}")
+            logger.error(f"[INVOICE_EMAIL] Company _id: {company.get('_id')}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Company email not configured for: {company_id}"
+            )
+
+        customer_email = contact_email
         customer_name = company.get("company_name", "Customer")
         logger.info(f"[INVOICE_EMAIL] Sending to: {customer_name} <{customer_email}>")
 
@@ -1445,7 +1568,20 @@ async def send_invoice_email(
             # Refresh invoice to get updated payment link fields
             invoice = await database.invoices.find_one({"_id": ObjectId(invoice_id)})
         else:
-            logger.warning(f"[INVOICE_EMAIL] Payment link not created (invoice paid or Stripe error)")
+            # Check if invoice is paid (acceptable reason for no payment link)
+            invoice_status = invoice.get("status")
+            if invoice_status == "paid":
+                logger.info(f"[INVOICE_EMAIL] No payment link needed - invoice already paid")
+            else:
+                # Unpaid invoice without payment link - FAIL FAST
+                logger.error(
+                    f"[INVOICE_EMAIL] Payment link creation failed for UNPAID invoice. "
+                    f"Status: {invoice_status}, Invoice: {invoice_id}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Payment link creation failed. Cannot send invoice without payment method for unpaid invoice."
+                )
 
         # 4. Generate PDF with payment link
         from app.services.invoice_pdf_service import generate_invoice_pdf

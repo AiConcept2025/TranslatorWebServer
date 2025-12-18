@@ -311,14 +311,13 @@ class TestInvoicePaymentLinkIntegration:
         auth_headers
     ):
         """
-        Test graceful degradation when Stripe API fails.
+        Test strict validation when payment link creation fails for UNPAID invoice.
 
-        Flow:
-        1. Mock Stripe API to raise error
+        NEW BEHAVIOR (Strict/Fail Fast):
+        1. Create UNPAID invoice with invalid total_amount (causes payment link failure)
         2. Send invoice email
-        3. Verify email still sends (200 OK)
-        4. Verify payment_link_url is None in response
-        5. Verify invoice not updated with payment link
+        3. Verify endpoint returns HTTP 500 (cannot send unpaid invoice without payment method)
+        4. Verify error message indicates payment link failure
         """
         # Arrange: Create test company
         company_data = {
@@ -337,7 +336,7 @@ class TestInvoicePaymentLinkIntegration:
         }
         await test_db.company.insert_one(company_data)
 
-        # Create test invoice
+        # Create UNPAID invoice with INVALID total_amount (None) - naturally causes payment link failure
         invoice_data = {
             "company_id": "TEST-StripeError-Corp-004",
             "company_name": "TEST-StripeError-Corp-004",
@@ -354,38 +353,27 @@ class TestInvoicePaymentLinkIntegration:
             ],
             "subtotal": 200.00,
             "tax_amount": 12.00,
-            "total_amount": 212.00,
-            "status": "sent",
+            "total_amount": None,  # ❌ INVALID - causes payment link creation to fail
+            "status": "sent",  # UNPAID - requires payment link
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc)
         }
         invoice_result = await test_db.invoices.insert_one(invoice_data)
         invoice_id = str(invoice_result.inserted_id)
 
-        # Act: Send invoice email with Stripe API error
-        with patch('stripe.Price.create') as mock_price:
-            import stripe
-            mock_price.side_effect = stripe.APIError("Stripe service unavailable")
-
-            response = await http_client.post(
-                f"/api/v1/invoices/{invoice_id}/send-email",
-                headers=auth_headers
-            )
-
-        # Assert: Email still sends successfully (graceful degradation)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        data = response.json()
-        assert data["success"] is True
-
-        # Payment link should be None due to Stripe error
-        assert data.get("payment_link_url") is None
-
-        # Verify: Invoice NOT updated with payment link
-        updated_invoice = await test_db.invoices.find_one(
-            {"_id": ObjectId(invoice_id)}
+        # Act: Send invoice email (payment link will fail due to invalid amount)
+        response = await http_client.post(
+            f"/api/v1/invoices/{invoice_id}/send-email",
+            headers=auth_headers
         )
-        assert "stripe_payment_link_url" not in updated_invoice
-        assert "stripe_payment_link_id" not in updated_invoice
+
+        # Assert: Strict validation - UNPAID invoice without payment link → HTTP 500
+        assert response.status_code == 500, f"Expected 500 (strict validation), got {response.status_code}: {response.text}"
+
+        data = response.json()
+        error_message = data.get("error", {}).get("message", "")
+        assert "Payment link creation failed" in error_message, \
+            f"Expected payment link failure message, got: {error_message}"
 
         # Cleanup
         await test_db.company.delete_one({"company_name": "TEST-StripeError-Corp-004"})
@@ -494,13 +482,13 @@ class TestInvoicePaymentLinkIntegration:
         auth_headers
     ):
         """
-        Test that invoices with invalid amounts don't create payment links.
+        Test that UNPAID invoices with invalid amounts fail with HTTP 500.
 
-        Flow:
-        1. Create invoice with None total_amount
+        NEW BEHAVIOR (Strict/Fail Fast):
+        1. Create UNPAID invoice with None total_amount (invalid)
         2. Send invoice email
-        3. Verify payment_link_url is None
-        4. Verify email still sends successfully
+        3. Verify HTTP 500 (cannot send unpaid invoice without payment method)
+        4. Verify error message indicates payment link failure
         """
         # Arrange: Create test company
         company_data = {
@@ -519,7 +507,7 @@ class TestInvoicePaymentLinkIntegration:
         }
         await test_db.company.insert_one(company_data)
 
-        # Create invoice with INVALID amount
+        # Create UNPAID invoice with INVALID amount (None)
         invoice_data = {
             "company_id": "TEST-InvalidAmount-Corp-006",
             "company_name": "TEST-InvalidAmount-Corp-006",
@@ -529,34 +517,27 @@ class TestInvoicePaymentLinkIntegration:
             "line_items": [],
             "subtotal": 0.00,
             "tax_amount": 0.00,
-            "total_amount": None,  # INVALID AMOUNT
-            "status": "sent",
+            "total_amount": None,  # ❌ INVALID AMOUNT - causes payment link failure
+            "status": "sent",  # UNPAID - requires payment link
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc)
         }
         invoice_result = await test_db.invoices.insert_one(invoice_data)
         invoice_id = str(invoice_result.inserted_id)
 
-        # Act: Send invoice email
-        with patch('stripe.Price.create') as mock_price, \
-             patch('stripe.PaymentLink.create') as mock_link:
+        # Act: Send invoice email (will fail due to invalid amount)
+        response = await http_client.post(
+            f"/api/v1/invoices/{invoice_id}/send-email",
+            headers=auth_headers
+        )
 
-            response = await http_client.post(
-                f"/api/v1/invoices/{invoice_id}/send-email",
-                headers=auth_headers
-            )
+        # Assert: Strict validation - UNPAID invoice with invalid amount → HTTP 500
+        assert response.status_code == 500, f"Expected 500 (strict validation), got {response.status_code}: {response.text}"
 
-            # Stripe API should NOT be called (invalid amount)
-            mock_price.assert_not_called()
-            mock_link.assert_not_called()
-
-        # Assert: Email sends successfully despite invalid amount
-        assert response.status_code == 200
         data = response.json()
-        assert data["success"] is True
-
-        # Payment link should be None
-        assert data.get("payment_link_url") is None
+        error_message = data.get("error", {}).get("message", "")
+        assert "Payment link creation failed" in error_message, \
+            f"Expected payment link failure message, got: {error_message}"
 
         # Cleanup
         await test_db.company.delete_one({"company_name": "TEST-InvalidAmount-Corp-006"})

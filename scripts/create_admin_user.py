@@ -23,7 +23,7 @@ MONGO_URI = "mongodb://iris:Sveta87201120@localhost:27017/translation?authSource
 DB_NAME = "translation"
 
 # User details
-USER_EMAIL = "danishevsky@gmail.com"
+USER_EMAIL = "danishevsky@yahoo.com"
 USER_NAME = "Vladimir Danishevsky"
 USER_PASSWORD = "Sveta87201120!"
 COMPANY_NAME = "Iris Trading"

@@ -42,16 +42,19 @@ def serialize_transaction_for_json(txn: dict) -> dict:
     - ObjectId → string
     - Decimal128 → float
     - datetime → ISO 8601 string (all fields at all levels)
+    - Field name mapping for API consistency:
+      - price_per_unit → cost_per_unit
+      - total_price → total_cost
+      - units_count → number_of_units
 
     Args:
         txn: Transaction document from MongoDB
 
     Returns:
-        JSON-serializable dict
+        JSON-serializable dict with frontend-compatible field names
 
     Note:
-        This function is backward compatible - it preserves all existing fields
-        and only converts non-JSON-serializable types to their string/float equivalents.
+        Maps database field names to match API documentation and frontend TypeScript interfaces.
     """
     import copy
     from bson import ObjectId
@@ -76,7 +79,20 @@ def serialize_transaction_for_json(txn: dict) -> dict:
     txn = copy.deepcopy(txn)
 
     # Recursively serialize all values
-    return {key: serialize_value(value) for key, value in txn.items()}
+    serialized = {key: serialize_value(value) for key, value in txn.items()}
+
+    # Map database field names to API field names for consistency
+    field_mappings = {
+        'price_per_unit': 'cost_per_unit',
+        'total_price': 'total_cost',
+        'units_count': 'number_of_units'
+    }
+
+    for db_field, api_field in field_mappings.items():
+        if db_field in serialized:
+            serialized[api_field] = serialized.pop(db_field)
+
+    return serialized
 
 router = APIRouter(prefix="/api/v1/user-transactions", tags=["User Transaction Payments"])
 

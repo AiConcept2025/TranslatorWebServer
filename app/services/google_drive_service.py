@@ -380,6 +380,18 @@ class GoogleDriveService:
 
         logging.info(f"File uploaded successfully: {file.get('id')}")
 
+        # Set file permissions to allow anyone with link to view
+        try:
+            await self._set_file_permission_with_retry(
+                file_id=file.get('id'),
+                role='reader',
+                type_='anyone'
+            )
+            logging.info(f"Set public read permission for file: {file.get('id')}")
+        except Exception as e:
+            logging.warning(f"Failed to set public permission for file {file.get('id')}: {e}")
+            # Continue even if permission setting fails - file is still uploaded
+
         file_info = {
             'file_id': file.get('id'),
             'filename': file.get('name'),
@@ -445,6 +457,18 @@ class GoogleDriveService:
         file = await self._upload_file_with_retry(file_metadata, media)
 
         logging.info(f"File uploaded successfully: {file.get('id')}")
+
+        # Set file permissions to allow anyone with link to view
+        try:
+            await self._set_file_permission_with_retry(
+                file_id=file.get('id'),
+                role='reader',
+                type_='anyone'
+            )
+            logging.info(f"Set public read permission for file: {file.get('id')}")
+        except Exception as e:
+            logging.warning(f"Failed to set public permission for file {file.get('id')}: {e}")
+            # Continue even if permission setting fails - file is still uploaded
 
         file_info = {
             'file_id': file.get('id'),
@@ -885,6 +909,42 @@ class GoogleDriveService:
         )
 
         return file
+
+    @retry_on_ssl_error(max_retries=5, initial_delay=1.0, backoff_factor=2.0, max_delay=30.0)
+    async def _set_file_permission_with_retry(
+        self,
+        file_id: str,
+        role: str = 'reader',
+        type_: str = 'anyone'
+    ) -> Dict[str, Any]:
+        """
+        Set file permissions in Google Drive with SSL error retry logic.
+
+        Args:
+            file_id: File ID to set permissions for
+            role: Permission role ('reader', 'writer', 'commenter')
+            type_: Permission type ('user', 'group', 'domain', 'anyone')
+
+        Returns:
+            Permission metadata
+
+        Raises:
+            GoogleDriveError: If permission setting fails after retries
+        """
+        # Run synchronous Google Drive API call in thread pool
+        # Retry decorator will handle SSL errors automatically
+        permission = await asyncio.to_thread(
+            lambda: self.service.permissions().create(
+                fileId=file_id,
+                body={
+                    'type': type_,
+                    'role': role
+                },
+                fields='id'
+            ).execute()
+        )
+
+        return permission
 
     @retry_on_ssl_error(max_retries=5, initial_delay=1.0, backoff_factor=2.0, max_delay=30.0)
     async def _update_file_metadata_with_retry(

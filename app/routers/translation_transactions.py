@@ -25,7 +25,8 @@ def serialize_translation_transaction_for_json(txn: dict) -> dict:
     """
     Convert MongoDB translation transaction to JSON-serializable dict.
 
-    Handles ObjectId, Decimal128, and datetime fields, including nested documents array.
+    Uses the recursive serialize_for_json utility to handle ALL ObjectId, Decimal128,
+    and datetime fields, including nested documents array.
     Follows CLAUDE.md Rule #1: MongoDB → JSON Serialization.
 
     Args:
@@ -34,35 +35,11 @@ def serialize_translation_transaction_for_json(txn: dict) -> dict:
     Returns:
         dict: JSON-serializable transaction with all types converted
     """
-    # Convert ObjectId → string
-    if "_id" in txn:
-        txn["_id"] = str(txn["_id"])
+    from app.utils.serialization import serialize_for_json
 
-    # Convert Decimal128 → float
-    for key, value in list(txn.items()):
-        if isinstance(value, Decimal128):
-            txn[key] = float(value.to_decimal())
-
-    # Convert top-level datetime → ISO strings
-    datetime_fields = ["created_at", "updated_at"]
-    for field in datetime_fields:
-        if field in txn and hasattr(txn[field], "isoformat"):
-            txn[field] = txn[field].isoformat()
-
-    # ⚠️ CRITICAL: Convert nested documents array datetime fields
-    # This prevents "Object of type datetime is not JSON serializable" errors
-    if "documents" in txn and isinstance(txn["documents"], list):
-        for doc in txn["documents"]:
-            doc_datetime_fields = [
-                "uploaded_at",
-                "translated_at",
-                "processing_started_at"
-            ]
-            for field in doc_datetime_fields:
-                if field in doc and doc[field] is not None and hasattr(doc[field], "isoformat"):
-                    doc[field] = doc[field].isoformat()
-
-    return txn
+    # Use recursive serialization to handle ALL ObjectId/datetime/Decimal128 fields
+    # This handles: _id, subscription_id, and any other ObjectId fields
+    return serialize_for_json(txn)
 
 
 @router.get(

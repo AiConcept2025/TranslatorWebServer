@@ -17,7 +17,7 @@ import asyncio
 from app.config import settings
 
 # Import routers
-from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit, dashboard, webhooks, enterprise_documents
+from app.routers import languages, upload, auth, subscriptions, translate_user, payments, test_helpers, user_transactions, invoices, translation_transactions, company_users, orders, companies, submit, dashboard, webhooks, enterprise_documents, contact
 from app.routers import payment_simplified as payment
 
 # Import middleware and utilities
@@ -122,6 +122,7 @@ app.include_router(companies.router)  # Company management API
 app.include_router(orders.router)  # Orders management API
 app.include_router(dashboard.router)  # Dashboard metrics API
 app.include_router(enterprise_documents.router)  # Enterprise documents portal API
+app.include_router(contact.router)  # Contact form API
 app.include_router(auth.router)
 app.include_router(subscriptions.router)
 app.include_router(translate_user.router)
